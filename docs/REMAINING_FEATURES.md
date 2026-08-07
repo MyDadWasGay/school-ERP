@@ -8,9 +8,9 @@ scope enforcement, audited CRUD workspaces for all planned modules, and
 dedicated core workflows for students, admissions, attendance, exams, finance,
 documents, analytics, user access, HR/payroll, communication, library,
 transport, hostel/canteen, inventory/procurement, health, safety, and
-facilities, activities, alumni, and CMS/forms. The items below
-are the remaining features still needed to move each domain to full
-functionality and to complete rollout gates.
+facilities, activities, alumni, and CMS/forms. The items below are the deeper
+extensions, automation, and external rollout evidence still needed beyond the
+implemented first-build boundary.
 
 ## Execution update — 2026-08-07
 
@@ -24,10 +24,12 @@ incident controls; invitation/session hardening; durable rate limiting; health
 probes; CI/Docker deployment; and deployment/operations runbooks.
 
 The remaining items below are still intentionally open, especially provider
-delivery, broad domain workflows, reports/imports, portal depth, accessibility,
-load, security, and staging verification. Durable job storage/retry/dead-letter
-handling and guarded local backup/restore tooling are implemented; deploying a
-worker and configuring provider backups remain rollout work.
+delivery, deeper domain workflows, scheduled reports, non-student imports,
+portal subpages, accessibility, load, security, and staging verification.
+Durable job storage/retry/dead-letter handling, guarded local backup/restore,
+report exports, student-import progress/errors, signed webhook intake, and
+public CMS routes are implemented; deploying a worker and configuring provider
+backups remain rollout work.
 
 The 2026-08-07 execution also implemented: employee register and immutable
 payroll snapshots; campus/role-targeted in-app messages and delivery logs;
@@ -37,10 +39,13 @@ menus and student transactions; procurement requisition/purchase-order state
 transitions with atomic goods receipts; asset register, assignment/return,
 maintenance, and depreciation lifecycle; and sensitive health profiles/clinic
 visits; visitor/gate-pass, incident, evacuation, facility booking, maintenance,
-and complaint workflows; clubs and student achievements; privacy-aware alumni
-profiles, events, mentorship, and jobs; and CMS pages/media/forms/submissions.
-Those acceptance slices are no longer P0 scaffolds, although their deeper
-extensions remain listed below.
+and complaint workflows; clubs, memberships, sports teams/fixtures, and
+student achievements; privacy-aware alumni profiles, events, registrations,
+donations, mentorship, and jobs; CMS pages/media/forms/submissions with public
+routes; dedicated reports and exports; student import progress/error handling;
+scoped portal snapshots; and API-key/webhook boundaries. Those acceptance
+slices are no longer P0 scaffolds, although their deeper extensions remain
+listed below.
 
 ## Priority guide
 
@@ -55,36 +60,21 @@ extensions remain listed below.
 
 ### Foundation and access
 
-- Add dedicated update/archive flows for organizations and campuses.
-- Add dependency-aware archive/delete rules for academic years, classes,
+- Complete dependency-aware archive/delete review for academic years, classes,
   sections, and subjects.
-- Add dedicated role, permission, and access-scope management screens instead
-  of relying on the generic settings workspace.
-- Add class-section scope editing and delegated-access management to the
-  broader settings workflow, including dependency warnings.
+- Expand dedicated role, permission, access-scope, and delegated-access screens
+  with dependency warnings beyond the current audited settings workflows.
 
 ### Admissions
 
-- Build follow-up tasks and lead pipeline transitions.
-- Store and manage source/campaign data and lost-reason outcomes.
-- Add admission test and interview scheduling, attendance, scoring, and
-  outcome tracking.
 - Add document upload, verification, rejection reasons, and applicant
   completeness indicators.
-- Build a live seat matrix by campus, academic year, class, and section.
-- Add admission and conversion reports with audited exports.
+- Add richer admission conversion drill-downs and source-linked alerts to the
+  existing pipeline and report service.
 
 ### Student information system
 
-- Add guardian CRUD, multiple guardian linking/unlinking, custody notes, and
-  primary-guardian changes.
-- Add enrollment transfer workflows that close the previous enrollment and
-  preserve a complete class/section history.
 - Add roll-number reassignment, house assignment, and student photo upload.
-- Add medical profile and sensitive health-summary screens with stricter
-  permissions.
-- Add certificate templates, certificate issuing, immutable certificate
-  numbers, downloadable certificates, and QR verification.
 - Add dedicated attendance, fee, result, and document history views within the
   student profile rather than only linking to module workspaces.
 
@@ -100,15 +90,12 @@ extensions remain listed below.
 ### Attendance and discipline
 
 - Add staff attendance, leave types, leave requests, balances, and approvals.
-- Add discipline incidents, merits/demerits, and restricted wellbeing records.
 - Add bulk and period-wise marking UI for the remaining attendance modes.
 - Add low-attendance alert generation, attendance reports, and parent absence
   notification records.
 
 ### Examination and assessment
 
-- Add exam type, scheme, grade-rule, planning, schedule, room, and invigilator
-  management.
 - Add bulk marks import, moderation, approval, report cards, and export.
 - Add question bank, online-test setup, attempts, auto/manual evaluation, and
   attempt history.
@@ -117,8 +104,6 @@ extensions remain listed below.
 
 - Add fee heads, fee structures, installments, assignments, concessions, and
   late-fee rules.
-- Add receipts, refunds/reversals linked to original payments, defaulters, and
-  financial reports.
 - Add chart of accounts, expenses, bank accounts, reconciliation, donations,
   and immutable ledger review screens.
 
@@ -163,13 +148,9 @@ extensions remain listed below.
 
 - Add units, locations, opening stock, supplier UI, and stock counts to the
   existing item/movement workflow.
-- Make receipts, issues, transfers, returns, adjustments, consumption, and
-  serial/batch/expiry tracking the only valid quantity-changing operations.
 - Add vendor UI, supplier reconciliation, stock counts, and richer receipt/
   issue/transfer/return reporting to the existing inventory and procurement
   workflows.
-- Add asset assignments, maintenance tickets, depreciation, and lifecycle
-  accounting.
 
 ### Health, safety, and facilities (remaining extensions)
 
@@ -182,51 +163,44 @@ extensions remain listed below.
 
 ### Activities, sports, alumni, and community
 
-- Add houses, points, club memberships, sports teams, fixtures, scores, and
-  registrations linked to student timelines.
-- Add alumni donations, richer event registrations, and directory moderation
-  workflows to the existing alumni records.
+- Add houses, points, fixture scores, and registrations linked to student
+  timelines.
+- Add directory moderation workflows to the existing alumni records.
 
 ### Website, forms, and CMS
 
-- Add news/gallery/media variants, Cloudinary metadata validation, and public
-  publishing routes to the existing CMS page/media workflow.
-- Add form consent/survey fields, public form routes, and enquiry creation from
-  an admissions form to the existing JSON form/submission workflow.
+- Add news/gallery/media variants and deeper Cloudinary metadata validation to
+  the existing CMS page/media workflow.
+- Add consent/survey field types and moderation/reporting to the existing public
+  JSON form/submission workflow.
 
 ## P1 - platform and reporting completion
 
 ### Reports, alerts, and MIS
 
-- Add dedicated report services and exports for admissions, attendance,
-  finance/defaulters, exams, payroll, inventory, library, transport, hostel,
-  and communication delivery.
 - Add scheduled reports and report history.
 - Add source-linked alerts for low attendance, overdue fees, missing marks,
   expiring documents, vehicle/employee expiry, low stock, capacity limits, and
   incomplete workflows.
 - Add analytics drill-down pages for admissions, attendance, finance,
-  academics, and operations rather than generic workspaces.
+  academics, and operations beyond the current bounded report workspace.
 
 ### Integrations and automation
 
-- Add persistent integration configuration screens for every adapter.
-- Add webhook event storage, signature validation, retry status, manual
-  exception handling, and integration logs.
-- Add scheduled-job interfaces and job history.
-- Add API-key management with hashing, rotation, revocation, and audit logs.
+- Add webhook retry status, manual exception handling, and scheduled-job
+  interfaces on top of the current durable job and integration log boundary.
+- Add API-key rotation policy and consumer authentication helpers for selected
+  external APIs.
 - Replace mock payment, notification, hardware-attendance, GPS, LMS, and
   calendar providers with selected production providers and run end-to-end
   webhook tests.
 
 ### Import and export
 
-- Complete Excel and PDF export services alongside the existing scoped export
-  foundation.
-- Add import/export job tables, progress/status, row-level errors, retry, and
-  downloadable error reports.
-- Add validated imports for students, employees, fees, marks, inventory, and
-  other agreed high-volume datasets.
+- Complete PDF export and background large-export jobs alongside the current
+  audited CSV/XLSX/HTML report exports.
+- Add validated imports for employees, fees, marks, inventory, and other agreed
+  high-volume datasets; student import progress/errors are implemented.
 
 ### Portals
 
@@ -236,8 +210,10 @@ extensions remain listed below.
   PTM, notices, documents, and support views.
 - Add student timetable, assignments, resources, exams, certificates,
   activities, and support views.
-- Add portal-specific loading, empty, error, and offline states and verify all
-  linked-child/own-record/teacher-assignment boundaries with integration tests.
+- Extend the current scoped snapshots with the dedicated subpages above and
+  verify all linked-child/own-record/teacher-assignment boundaries with
+  authenticated integration tests. Loading, empty, error, and offline states
+  are implemented for the current dashboards.
 
 ### Testing and quality
 
@@ -266,8 +242,9 @@ extensions remain listed below.
   tests with representative data.
 - Configure Cloudinary private delivery, retention, backups, and restore
   procedures.
-- Add structured logging, metrics, tracing, error tracking, alert routing,
-  backup restore drills, and incident runbooks.
+- Extend the implemented structured logging, health probes, and incident
+  runbooks with metrics, tracing, error tracking, alert routing, and provider
+  backup restore drills.
 - Run browser/device compatibility, accessibility, penetration, performance,
   disaster-recovery, and data-migration checks before production cutover.
 - Obtain operational sign-off for payment reconciliation, notification
@@ -275,15 +252,13 @@ extensions remain listed below.
 
 ## Recommended execution order
 
-1. Finish foundation dependency-aware CRUD and student guardian/transfer/
-   certificate workflows.
-2. Implement academic, attendance-discipline, exam, and finance domain
-   services because the portals and most reports depend on them.
-3. Implement library, transport, hostel, inventory/procurement, health/safety,
-   HR/payroll, and communication workflows.
-4. Replace generic report/module screens with dedicated report queries, alerts,
-   and exports.
-5. Complete real integration adapters, import/export jobs, portals, and full
-   integration/E2E testing.
-6. Execute staging, security, observability, backup, and provider rollout
-   gates.
+1. Finish the remaining domain extensions: academic depth, student profile
+   history, finance accounting, and operational reporting.
+2. Add scheduled reports/alerts, non-student imports, PDF/background exports,
+   and portal subpages.
+3. Complete selected provider adapters, webhook retry/exception workflows, and
+   consumer API authentication.
+4. Expand authenticated integration and Playwright coverage beyond the current
+   local smoke and tenant-isolation tests.
+5. Execute staging, security, observability, accessibility, load, backup, and
+   provider rollout gates.

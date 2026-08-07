@@ -164,3 +164,45 @@ The following supersedes the earlier first-slice verification notes above:
   local backup/restore tooling. Student CSV imports are bounded to 1,000 rows;
   batches over 250 rows are encrypted and queued for the separately deployed
   worker, while smaller batches retain row-level synchronous results.
+
+## Final execution addendum — 2026-08-07
+
+The final implementation pass closed the remaining first-build slices that had
+been called out as reports/imports, portal depth, sports/community extensions,
+and integration boundaries:
+
+- Added migration `0029_import_progress`, `0030_integration_boundary_guards`,
+  and `0031_community_extensions`.
+- Added scoped report services and audited CSV/XLSX/HTML exports for the major
+  operational datasets; student imports now retain progress and downloadable
+  row-level errors across queued work.
+- Added teacher/student/parent portal snapshots with linked/assigned data
+  boundaries and loading, error, empty, and offline states.
+- Added hashed API-key issuance/revocation, signed and deduplicated webhook
+  intake, encrypted payload storage, and integration logs.
+- Added club memberships, sports teams/fixtures, alumni registrations and
+  donations, and public CMS pages/forms with validated optional admissions
+  enquiry creation.
+
+Final local verification passed:
+
+- `npm.cmd run typecheck`
+- `npm.cmd run lint`
+- `npm.cmd test` — 23 files, 64 tests passed.
+- `npx.cmd drizzle-kit check`
+- `npm.cmd run build` — 111 generated pages.
+- `npm.cmd run test:e2e` — 3 Playwright smoke tests passed; the Windows run
+  completed in 276.7 seconds including the production build.
+- `npm.cmd run check:config` and `npm.cmd run check:secrets`.
+- Disposable SQLite migration, inspection, backup, and restore — 32 migrations
+  and 211 tables before and after restore; the configured Turso target was not
+  modified.
+
+This is implementation-complete for staging handoff, not a production
+certification. The remaining decision gates require real Firebase/Turso/
+Cloudinary/provider staging, authenticated multi-tenant workflow evidence,
+privileged-user MFA, hosted CI execution, provider backup/retention policy,
+observability and alert routing, accessibility/browser/device checks,
+load/concurrency testing, penetration testing, disaster-recovery evidence, and
+operational sign-off for payment, notification, payroll, health-data, and
+retention controls.
