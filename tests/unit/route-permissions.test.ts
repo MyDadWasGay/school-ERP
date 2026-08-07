@@ -12,7 +12,7 @@ describe("route permission mapping", () => {
 
   it("represents every planned route exactly once", () => {
     const routes = modules.flatMap((module) => module.routes);
-    expect(routes).toHaveLength(166);
+    expect(routes).toHaveLength(167);
     expect(new Set(routes).size).toBe(routes.length);
     expect(routes.every((route) => permissionForPath(route).endsWith(":read"))).toBe(true);
     expect(isConfiguredRoute("/library/issue-return")).toBe(true);

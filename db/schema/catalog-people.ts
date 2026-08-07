@@ -21,3 +21,4 @@ export const activityRegistrations = catalogTable("activity_registrations", "act
 export const alumniEvents = catalogTable("alumni_events", "alumni_event");
 export const mentorships = catalogTable("mentorships", "mentorship");
 export const jobBoardPosts = catalogTable("job_board_posts", "job_post");
+export const alumniDonations = catalogTable("alumni_donations", "donation");

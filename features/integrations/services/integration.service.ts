@@ -1,12 +1,14 @@
 import "server-only";
 
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { integrationConfigs, integrationLogs } from "@/db/schema";
+import { apiKeys, integrationConfigs, integrationLogs, webhookEvents } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
-import { encryptSecret } from "@/lib/security/secret-box";
+import { decryptSecret, encryptSecret } from "@/lib/security/secret-box";
+import { createId } from "@/lib/utils/ids";
 import type { CurrentUser } from "@/lib/auth/types";
-import type { IntegrationConfigInput } from "../schemas/integration.schema";
+import type { ApiKeyCreateInput, IntegrationConfigInput } from "../schemas/integration.schema";
 
 export async function saveIntegrationConfig(user: CurrentUser, input: IntegrationConfigInput) {
   const encrypted = encryptSecret(JSON.stringify(input.config));
@@ -53,4 +55,93 @@ export async function listIntegrationLogs(user: CurrentUser) {
     user.campusId ? eq(integrationLogs.campusId, user.campusId) : undefined,
   )).orderBy(desc(integrationLogs.createdAt)).limit(100);
   return rows.map((row) => ({ ...row, createdAt: row.createdAt.toLocaleString() }));
+}
+
+export async function createApiKey(user: CurrentUser, input: ApiKeyCreateInput) {
+  const rawKey = `serp_${randomBytes(32).toString("base64url")}`;
+  const prefix = rawKey.slice(0, 16);
+  const hash = createHash("sha256").update(rawKey).digest("hex");
+  const [row] = await getDb().insert(apiKeys).values({
+    id: createId("api_key"),
+    organizationId: user.organizationId,
+    campusId: user.campusId,
+    name: input.name,
+    code: prefix,
+    detailsJson: JSON.stringify({ hash, lastFour: rawKey.slice(-4), scopes: ["webhooks:receive"], issuedAt: new Date().toISOString() }),
+    status: "active",
+    createdBy: user.id,
+    updatedBy: user.id,
+  }).returning();
+  if (!row) throw new AppError("DATABASE_ERROR", "Unable to create API key.", 500);
+  return { id: row.id, name: row.name, prefix, secret: rawKey };
+}
+
+export async function listApiKeys(user: CurrentUser) {
+  const rows = await getDb().select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.code, status: apiKeys.status, createdAt: apiKeys.createdAt, updatedAt: apiKeys.updatedAt }).from(apiKeys).where(and(
+    eq(apiKeys.organizationId, user.organizationId),
+    user.campusId ? eq(apiKeys.campusId, user.campusId) : undefined,
+  )).orderBy(desc(apiKeys.createdAt));
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toLocaleString(), updatedAt: row.updatedAt.toLocaleString() }));
+}
+
+export async function setApiKeyStatus(user: CurrentUser, id: string, status: "active" | "revoked") {
+  const [row] = await getDb().update(apiKeys).set({ status, updatedAt: new Date(), updatedBy: user.id }).where(and(
+    eq(apiKeys.id, id),
+    eq(apiKeys.organizationId, user.organizationId),
+    user.campusId ? eq(apiKeys.campusId, user.campusId) : undefined,
+  )).returning({ id: apiKeys.id, name: apiKeys.name, status: apiKeys.status });
+  if (!row) throw new AppError("NOT_FOUND", "API key not found.", 404);
+  return row;
+}
+
+export async function listWebhookEvents(user: CurrentUser) {
+  const rows = await getDb().select({ id: webhookEvents.id, provider: webhookEvents.name, eventId: webhookEvents.referenceId, eventCode: webhookEvents.code, status: webhookEvents.status, createdAt: webhookEvents.createdAt }).from(webhookEvents).where(and(
+    eq(webhookEvents.organizationId, user.organizationId),
+    user.campusId ? eq(webhookEvents.campusId, user.campusId) : undefined,
+  )).orderBy(desc(webhookEvents.createdAt)).limit(100);
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toLocaleString() }));
+}
+
+function safeSignatureEquals(actual: string, expected: string) {
+  const normalizedActual = actual.trim().replace(/^sha256=/i, "").toLowerCase();
+  const normalizedExpected = expected.toLowerCase();
+  const actualBuffer = Buffer.from(normalizedActual, "utf8");
+  const expectedBuffer = Buffer.from(normalizedExpected, "utf8");
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+export async function receiveWebhook(input: { organizationId: string; campusId?: string; provider: string; eventId: string; eventType: string; signature: string; body: string }) {
+  const config = await getDb().query.integrationConfigs.findFirst({ where: and(
+    eq(integrationConfigs.organizationId, input.organizationId),
+    eq(integrationConfigs.provider, input.provider),
+    eq(integrationConfigs.status, "configured"),
+    input.campusId ? eq(integrationConfigs.campusId, input.campusId) : undefined,
+  ) });
+  if (!config) throw new AppError("NOT_FOUND", "Configured integration was not found.", 404);
+  let providerConfig: Record<string, string>;
+  try { providerConfig = JSON.parse(decryptSecret(config.configJson)) as Record<string, string>; } catch { throw new AppError("CONFIGURATION_ERROR", "Integration configuration cannot be read.", 503); }
+  const webhookSecret = providerConfig.webhookSecret?.trim();
+  if (!webhookSecret) throw new AppError("CONFIGURATION_ERROR", "This integration has no webhook secret configured.", 503);
+  const expectedSignature = createHmac("sha256", webhookSecret).update(input.body, "utf8").digest("hex");
+  const signatureValid = safeSignatureEquals(input.signature, expectedSignature);
+  const eventCode = `${input.provider}:${input.eventId}`;
+  const existing = await getDb().query.webhookEvents.findFirst({ where: and(
+    eq(webhookEvents.organizationId, input.organizationId),
+    eq(webhookEvents.code, eventCode),
+  ) });
+  if (existing) return { duplicate: true as const, accepted: existing.status !== "rejected", id: existing.id };
+  const status = signatureValid ? "received" : "rejected";
+  const [event] = await getDb().insert(webhookEvents).values({
+    id: createId("webhook"), organizationId: input.organizationId, campusId: config.campusId,
+    name: input.provider, code: eventCode, referenceId: input.eventId,
+    detailsJson: encryptSecret(JSON.stringify({ eventType: input.eventType, signatureValid, body: input.body, receivedAt: new Date().toISOString() })),
+    status, createdBy: null, updatedBy: null,
+  }).returning();
+  await getDb().insert(integrationLogs).values({
+    id: createId("integration_log"), organizationId: input.organizationId, campusId: config.campusId,
+    provider: input.provider, eventType: input.eventType, payloadJson: JSON.stringify({ eventId: input.eventId, signatureValid }),
+    error: signatureValid ? null : "Webhook signature validation failed.", status: signatureValid ? "received" : "failed",
+  });
+  if (!signatureValid) throw new AppError("FORBIDDEN", "Webhook signature validation failed.", 401);
+  return { duplicate: false as const, accepted: true as const, id: event?.id ?? eventCode };
 }

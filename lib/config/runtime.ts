@@ -1,6 +1,8 @@
 export type RuntimeEnvironment = Record<string, string | undefined>;
 
-const coreKeys = ["TURSO_DATABASE_URL", "APP_ENCRYPTION_SECRET", "INTERNAL_JOB_SECRET", "NEXT_PUBLIC_APP_URL"] as const;
+import { resolveAppUrl } from "@/lib/config/app-url";
+
+const coreKeys = ["TURSO_DATABASE_URL", "APP_ENCRYPTION_SECRET", "INTERNAL_JOB_SECRET"] as const;
 const productionKeys = [
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
@@ -20,10 +22,12 @@ export function missingRuntimeConfiguration(environment: RuntimeEnvironment = pr
   if (databaseUrl && !databaseUrl.startsWith("file:") && !environment.TURSO_AUTH_TOKEN?.trim()) missing.push("TURSO_AUTH_TOKEN");
   if ((environment.APP_ENCRYPTION_SECRET?.trim().length ?? 0) < 32) missing.push("APP_ENCRYPTION_SECRET(>=32)");
   if ((environment.INTERNAL_JOB_SECRET?.trim().length ?? 0) < 32) missing.push("INTERNAL_JOB_SECRET(>=32)");
+  const appUrl = resolveAppUrl(environment);
+  if (!appUrl) missing.push("NEXT_PUBLIC_APP_URL");
   const production = environment.CONFIG_ENV === "production" || (environment.NODE_ENV === "production" && environment.CONFIG_ENV !== "ci");
   if (production) {
     missing.push(...productionKeys.filter((key) => !environment[key]?.trim()).map(String));
-    if (!(environment.NEXT_PUBLIC_APP_URL?.trim() ?? "").startsWith("https://")) missing.push("NEXT_PUBLIC_APP_URL(https)");
+    if (!appUrl.startsWith("https://")) missing.push("NEXT_PUBLIC_APP_URL(https)");
   }
   return [...new Set(missing)];
 }

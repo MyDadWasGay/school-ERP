@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { resolveAppUrl } from "@/lib/config/app-url";
 
 export function createInvitationToken() {
   const rawToken = randomBytes(32).toString("base64url");
@@ -10,7 +11,7 @@ export function hashInvitationToken(rawToken: string) {
 }
 
 export function invitationUrl(rawToken: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const baseUrl = resolveAppUrl();
   if (!baseUrl) throw new Error("NEXT_PUBLIC_APP_URL is required to create invitation links.");
   return `${baseUrl.replace(/\/$/, "")}/invite/accept?token=${encodeURIComponent(rawToken)}`;
 }

@@ -80,6 +80,7 @@ export async function resolvePermittedStudentIds(user: CurrentUser) {
       const rows = await getDb().select({ studentId: enrollments.studentId }).from(enrollments).where(and(
         eq(enrollments.organizationId, user.organizationId),
         eq(enrollments.status, "active"),
+        user.campusId ? eq(enrollments.campusId, user.campusId) : undefined,
         enrollmentScope,
       ));
       permittedIds = rows.map(({ studentId }) => studentId);

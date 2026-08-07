@@ -58,6 +58,21 @@ contents; the source scan intentionally excludes local `.env` files.
 `/api/health/ready` also fails closed when core configuration is missing, and
 production readiness additionally requires Firebase and Cloudinary values.
 
+## Vercel
+
+This repository deploys to Vercel as a standard Next.js app. Use the Vercel
+project environment variables for the same secrets described above, and keep
+the job worker and schema migrations outside the web deployment.
+
+For production deployments, set `NEXT_PUBLIC_APP_URL` to the canonical HTTPS
+domain you want in invitation links. Preview deployments can omit it; when
+`VERCEL_ENV=preview`, invitation links and readiness checks fall back to the
+Vercel preview host via `VERCEL_URL`.
+
+Use Vercel for the web app and API routes only. Continue running migrations as
+a separate release step and run `npm run jobs:worker` as a separate service or
+scheduler.
+
 ## Rollback
 
 Application rollback is safe only when the previous image understands the

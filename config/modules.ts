@@ -36,7 +36,7 @@ export const modules: ModuleDefinition[] = [
     "/facilities/bookings", "/facilities/maintenance", "/facilities/complaints",
   ] },
   { key: "community", label: "Community", description: "Activities, sports, alumni and public engagement", permission: "activities:read", routes: [
-    "/activities/houses", "/activities/clubs", "/activities/sports", "/activities/competitions", "/activities/achievements",
+    "/activities/houses", "/activities/clubs", "/activities/clubs/memberships", "/activities/sports", "/activities/competitions", "/activities/achievements",
     "/alumni/profiles", "/alumni/events", "/alumni/mentorship", "/alumni/jobs", "/alumni/donations",
     "/cms/pages", "/cms/media", "/cms/news", "/cms/galleries", "/cms/forms", "/cms/submissions", "/cms/settings",
   ] },
@@ -53,6 +53,7 @@ export function isConfiguredRoute(pathname: string) {
 }
 
 export function permissionForPath(pathname: string) {
+  if (pathname.startsWith("/settings/api-keys")) return "integrations:read";
   const segment = pathname.split("/").filter(Boolean)[0] ?? "dashboard";
   const permissionModule = {
     dashboard: "analytics",

@@ -309,9 +309,14 @@ describe("database tenant integrity", () => {
   it("keeps community and CMS records tenant-scoped and publication-safe", async () => {
     await client.batch([
       { sql: "INSERT INTO clubs (id, organization_id, campus_id, name, coordinator_user_id, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", args: ["club-a", "org-a", "campus-a", "Science Club", "user-a", now, now, "active"] },
+      { sql: "INSERT INTO club_memberships (id, organization_id, campus_id, name, reference_id, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["membership-a", "org-a", "campus-a", "Student A", "club-a", "{\"studentId\":\"student-a\"}", now, now, "active"] },
+      { sql: "INSERT INTO sports_teams (id, organization_id, campus_id, name, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", args: ["team-a", "org-a", "campus-a", "Athletics A", "{\"sport\":\"track\"}", now, now, "active"] },
+      { sql: "INSERT INTO sports_fixtures (id, organization_id, campus_id, name, reference_id, effective_at, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["fixture-a", "org-a", "campus-a", "Athletics A vs B", "team-a", now, "{}", now, now, "planned"] },
       { sql: "INSERT INTO student_achievements (id, organization_id, campus_id, student_id, title, achieved_on, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["achievement-a", "org-a", "campus-a", "student-a", "Science prize", now, now, now, "active"] },
       { sql: "INSERT INTO alumni_profiles (id, organization_id, campus_id, student_id, name, graduation_year, directory_visible, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["alumni-a", "org-a", "campus-a", "student-a", "Alumni A", "2020", 1, now, now, "active"] },
       { sql: "INSERT INTO alumni_events (id, organization_id, campus_id, name, effective_at, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["alumni-event-a", "org-a", "campus-a", "Reunion", now, "{}", now, now, "planned"] },
+      { sql: "INSERT INTO event_registrations (id, organization_id, campus_id, name, reference_id, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["event-registration-a", "org-a", "campus-a", "Attendee A", "alumni-event-a", "{}", now, now, "registered"] },
+      { sql: "INSERT INTO alumni_donations (id, organization_id, campus_id, name, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", args: ["donation-a", "org-a", "campus-a", "Donor A", "{\"amountMinor\":1000}", now, now, "received"] },
       { sql: "INSERT INTO mentorships (id, organization_id, campus_id, name, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", args: ["mentorship-a", "org-a", "campus-a", "Mentor to mentee", "{}", now, now, "requested"] },
       { sql: "INSERT INTO job_board_posts (id, organization_id, campus_id, name, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", args: ["job-post-a", "org-a", "campus-a", "Teacher role", "{}", now, now, "draft"] },
       { sql: "INSERT INTO cms_pages (id, organization_id, campus_id, slug, title, body, seo_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args: ["cms-page-a", "org-a", "campus-a", "about-school", "About", "Body", "{}", now, now, "draft"] },
@@ -322,6 +327,22 @@ describe("database tenant integrity", () => {
     await expectRejected(() => client.execute({
       sql: "INSERT INTO student_achievements (id, organization_id, campus_id, student_id, title, achieved_on, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       args: ["achievement-cross", "org-b", "campus-b", "student-a", "Cross", now, now, now, "active"],
+    }));
+    await expectRejected(() => client.execute({
+      sql: "INSERT INTO club_memberships (id, organization_id, campus_id, name, reference_id, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      args: ["membership-cross", "org-b", "campus-b", "Cross", "club-a", "{\"studentId\":\"student-a\"}", now, now, "active"],
+    }));
+    await expectRejected(() => client.execute({
+      sql: "INSERT INTO sports_fixtures (id, organization_id, campus_id, name, reference_id, effective_at, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      args: ["fixture-cross", "org-a", "campus-b", "Cross", "team-a", now, "{}", now, now, "planned"],
+    }));
+    await expectRejected(() => client.execute({
+      sql: "INSERT INTO event_registrations (id, organization_id, campus_id, name, reference_id, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      args: ["event-registration-cross", "org-b", "campus-b", "Cross", "alumni-event-a", "{}", now, now, "registered"],
+    }));
+    await expectRejected(() => client.execute({
+      sql: "INSERT INTO alumni_donations (id, organization_id, campus_id, name, details_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      args: ["donation-cross", "org-a", "campus-b", "Cross", "{}", now, now, "received"],
     }));
     await expectRejected(() => client.execute({
       sql: "INSERT INTO cms_pages (id, organization_id, campus_id, slug, title, body, seo_json, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

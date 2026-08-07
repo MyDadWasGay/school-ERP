@@ -8,3 +8,11 @@ export const integrationConfigSchema = z.object({
 export type IntegrationConfigInput = z.infer<typeof integrationConfigSchema>;
 
 export const integrationStatusSchema = z.object({ id: z.string().min(1), status: z.enum(["configured", "disabled"]) });
+
+export const apiKeyCreateSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+});
+
+export const apiKeyStatusSchema = z.object({ id: z.string().min(1), status: z.enum(["active", "revoked"]) });
+
+export type ApiKeyCreateInput = z.infer<typeof apiKeyCreateSchema>;
