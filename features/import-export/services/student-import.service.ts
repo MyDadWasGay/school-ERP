@@ -76,6 +76,25 @@ async function processParsedStudentImport(user: CurrentUser, parsed: StudentImpo
 export async function runStudentImport(user: CurrentUser, csv: string, options: StudentImportOptions = {}) {
   const parsed = parseStudentCsv(csv);
   if (parsed.totalRows > MAX_IMPORT_ROWS) throw new AppError("VALIDATION_ERROR", `Imports are limited to ${MAX_IMPORT_ROWS} rows per request.`, 422);
+  if (options.existingImportJobId) {
+    const existingJob = await getDb().query.importJobs.findFirst({ where: and(
+      eq(importJobs.id, options.existingImportJobId),
+      eq(importJobs.organizationId, user.organizationId),
+      eq(importJobs.entityType, "students"),
+      user.campusId ? eq(importJobs.campusId, user.campusId) : undefined,
+    ) });
+    if (!existingJob) throw new AppError("NOT_FOUND", "Queued import job not found.", 404);
+    const result = await processParsedStudentImport(user, parsed, existingJob.id);
+    await writeAuditLog(user, {
+      action: "import",
+      module: "students",
+      entityType: "import_job",
+      entityId: result.job.id,
+      campusId: result.job.campusId,
+      metadata: { entityType: "students", totalRows: parsed.totalRows, errorRows: result.errors.length, queued: true },
+    });
+    return { queued: false as const, job: result.job, importJobId: result.job.id, importedRows: result.importedRows, errors: result.errors };
+  }
   if (parsed.totalRows > MAX_SYNCHRONOUS_ROWS && options.queueLarge !== false) {
     if (options.idempotencyKey) {
       const existingRun = await getDb().query.jobRuns.findFirst({ where: and(eq(jobRuns.organizationId, user.organizationId), eq(jobRuns.idempotencyKey, options.idempotencyKey)) });
