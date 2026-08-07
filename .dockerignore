@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.env*
+*.db
+*.db-shm
+*.db-wal
+test-results
+.tmp-validation
+debug.log

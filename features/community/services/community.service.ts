@@ -1,0 +1,67 @@
+import "server-only";
+
+import { and, asc, desc, eq, inArray, type AnyColumn } from "drizzle-orm";
+import { getDb } from "@/db/client";
+import { alumniEvents, alumniProfiles, clubs, cmsMedia, cmsPages, formSubmissions, forms, jobBoardPosts, mentorships, studentAchievements, students, users } from "@/db/schema";
+import { AppError } from "@/lib/errors/app-error";
+import type { CurrentUser } from "@/lib/auth/types";
+import { createId } from "@/lib/utils/ids";
+import type { AchievementInput, AlumniEventInput, AlumniProfileInput, ClubInput, CmsFormInput, CmsMediaInput, CmsPageInput, FormSubmissionInput, JobBoardPostInput, MentorshipInput } from "../schemas/community.schema";
+
+function campusScope(user: CurrentUser, column: AnyColumn) {
+  if (user.campusIds?.length) return inArray(column, user.campusIds);
+  return user.campusId ? eq(column, user.campusId) : undefined;
+}
+
+async function getStudent(user: CurrentUser, id: string) {
+  const row = await getDb().query.students.findFirst({ where: and(eq(students.id, id), eq(students.organizationId, user.organizationId), campusScope(user, students.campusId), eq(students.status, "active")) });
+  if (!row) throw new AppError("NOT_FOUND", "Student not found in your scope.", 404);
+  return row;
+}
+
+async function getForm(user: CurrentUser, id: string) {
+  const row = await getDb().query.forms.findFirst({ where: and(eq(forms.id, id), eq(forms.organizationId, user.organizationId), campusScope(user, forms.campusId), eq(forms.status, "published")) });
+  if (!row) throw new AppError("NOT_FOUND", "Published form not found in your scope.", 404);
+  return row;
+}
+
+export async function listClubs(user: CurrentUser) { return getDb().select().from(clubs).where(and(eq(clubs.organizationId, user.organizationId), campusScope(user, clubs.campusId))).orderBy(asc(clubs.name)).limit(300); }
+export async function createClub(user: CurrentUser, input: ClubInput) {
+  if (input.coordinatorUserId) {
+    const coordinator = await getDb().query.users.findFirst({ where: and(eq(users.id, input.coordinatorUserId), eq(users.organizationId, user.organizationId), campusScope(user, users.campusId), eq(users.status, "active")) });
+    if (!coordinator) throw new AppError("NOT_FOUND", "Coordinator is not an active user in your scope.", 404);
+  }
+  const [row] = await getDb().insert(clubs).values({ id: createId("club"), organizationId: user.organizationId, campusId: user.campusId, name: input.name, coordinatorUserId: input.coordinatorUserId || null, status: "active", createdBy: user.id, updatedBy: user.id }).returning();
+  if (!row) throw new AppError("DATABASE_ERROR", "Unable to create club.", 500);
+  return row;
+}
+
+export async function listAchievements(user: CurrentUser) { return getDb().select({ id: studentAchievements.id, studentId: studentAchievements.studentId, studentName: students.firstName, title: studentAchievements.title, achievedOn: studentAchievements.achievedOn, status: studentAchievements.status }).from(studentAchievements).innerJoin(students, and(eq(students.id, studentAchievements.studentId), eq(students.organizationId, user.organizationId))).where(and(eq(studentAchievements.organizationId, user.organizationId), campusScope(user, studentAchievements.campusId))).orderBy(desc(studentAchievements.achievedOn)).limit(500); }
+export async function createAchievement(user: CurrentUser, input: AchievementInput) { const student = await getStudent(user, input.studentId); const [row] = await getDb().insert(studentAchievements).values({ id: createId("achievement"), organizationId: user.organizationId, campusId: student.campusId, studentId: student.id, title: input.title, achievedOn: input.achievedOn, status: "active", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to record achievement.", 500); return row; }
+
+export async function listAlumniProfiles(user: CurrentUser) { return getDb().select().from(alumniProfiles).where(and(eq(alumniProfiles.organizationId, user.organizationId), campusScope(user, alumniProfiles.campusId))).orderBy(asc(alumniProfiles.name)).limit(500); }
+export async function createAlumniProfile(user: CurrentUser, input: AlumniProfileInput) { const studentId = input.studentId || null; let campusId: string | null = user.campusId ?? null; if (studentId) { const student = await getStudent(user, studentId); campusId = student.campusId; } const [row] = await getDb().insert(alumniProfiles).values({ id: createId("alumni"), organizationId: user.organizationId, campusId, studentId, name: input.name, graduationYear: input.graduationYear, directoryVisible: input.directoryVisible, status: "active", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create alumni profile.", 500); return row; }
+
+export async function listAlumniEvents(user: CurrentUser) { return getDb().select().from(alumniEvents).where(and(eq(alumniEvents.organizationId, user.organizationId), campusScope(user, alumniEvents.campusId))).orderBy(desc(alumniEvents.effectiveAt)).limit(300); }
+export async function createAlumniEvent(user: CurrentUser, input: AlumniEventInput) { const [row] = await getDb().insert(alumniEvents).values({ id: createId("alumni_event"), organizationId: user.organizationId, campusId: user.campusId, name: input.name, effectiveAt: input.startsAt, detailsJson: JSON.stringify({ details: input.details }), status: "planned", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create alumni event.", 500); return row; }
+
+export async function listMentorships(user: CurrentUser) { return getDb().select().from(mentorships).where(and(eq(mentorships.organizationId, user.organizationId), campusScope(user, mentorships.campusId))).orderBy(desc(mentorships.createdAt)).limit(300); }
+export async function createMentorship(user: CurrentUser, input: MentorshipInput) { const [row] = await getDb().insert(mentorships).values({ id: createId("mentorship"), organizationId: user.organizationId, campusId: user.campusId, name: `${input.mentorName} → ${input.menteeName}`, detailsJson: JSON.stringify({ mentorName: input.mentorName, menteeName: input.menteeName, details: input.details }), status: "requested", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create mentorship request.", 500); return row; }
+
+export async function listJobBoardPosts(user: CurrentUser) { return getDb().select().from(jobBoardPosts).where(and(eq(jobBoardPosts.organizationId, user.organizationId), campusScope(user, jobBoardPosts.campusId))).orderBy(desc(jobBoardPosts.createdAt)).limit(300); }
+export async function createJobBoardPost(user: CurrentUser, input: JobBoardPostInput) { const [row] = await getDb().insert(jobBoardPosts).values({ id: createId("job_post"), organizationId: user.organizationId, campusId: user.campusId, name: input.title, detailsJson: JSON.stringify({ company: input.company, details: input.details }), status: "draft", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create job post.", 500); return row; }
+
+export async function listCmsPages(user: CurrentUser) { return getDb().select().from(cmsPages).where(and(eq(cmsPages.organizationId, user.organizationId), campusScope(user, cmsPages.campusId))).orderBy(desc(cmsPages.updatedAt)).limit(300); }
+export async function createCmsPage(user: CurrentUser, input: CmsPageInput) { const existing = await getDb().query.cmsPages.findFirst({ where: and(eq(cmsPages.organizationId, user.organizationId), eq(cmsPages.slug, input.slug)) }); if (existing) throw new AppError("CONFLICT", "That page slug is already in use.", 409); const [row] = await getDb().insert(cmsPages).values({ id: createId("cms_page"), organizationId: user.organizationId, campusId: user.campusId, slug: input.slug, title: input.title, body: input.body, seoJson: JSON.stringify({ title: input.seoTitle || null, description: input.seoDescription || null }), status: "draft", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create CMS page.", 500); return row; }
+const pageTransitions: Record<string, string[]> = { draft: ["published", "archived"], published: ["archived"], archived: ["draft"] };
+export async function transitionCmsPage(user: CurrentUser, id: string, toStatus: string) { const row = await getDb().query.cmsPages.findFirst({ where: and(eq(cmsPages.id, id), eq(cmsPages.organizationId, user.organizationId), campusScope(user, cmsPages.campusId)) }); if (!row) throw new AppError("NOT_FOUND", "CMS page not found.", 404); if (!pageTransitions[row.status]?.includes(toStatus)) throw new AppError("CONFLICT", `Cannot move page from ${row.status} to ${toStatus}.`, 409); const [updated] = await getDb().update(cmsPages).set({ status: toStatus, updatedAt: new Date(), updatedBy: user.id }).where(and(eq(cmsPages.id, row.id), eq(cmsPages.status, row.status))).returning(); if (!updated) throw new AppError("CONFLICT", "CMS page changed before publication.", 409); return updated; }
+
+export async function listCmsMedia(user: CurrentUser) { return getDb().select().from(cmsMedia).where(and(eq(cmsMedia.organizationId, user.organizationId), campusScope(user, cmsMedia.campusId))).orderBy(desc(cmsMedia.createdAt)).limit(300); }
+export async function createCmsMedia(user: CurrentUser, input: CmsMediaInput) { const [row] = await getDb().insert(cmsMedia).values({ id: createId("cms_media"), organizationId: user.organizationId, campusId: user.campusId, name: input.name, detailsJson: JSON.stringify({ mediaType: input.mediaType, secureUrl: input.secureUrl, publicId: input.publicId || null }), status: "draft", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to register CMS media.", 500); return row; }
+export async function transitionCmsMedia(user: CurrentUser, id: string, toStatus: string) { const row = await getDb().query.cmsMedia.findFirst({ where: and(eq(cmsMedia.id, id), eq(cmsMedia.organizationId, user.organizationId), campusScope(user, cmsMedia.campusId)) }); if (!row) throw new AppError("NOT_FOUND", "CMS media not found.", 404); if (!pageTransitions[row.status]?.includes(toStatus)) throw new AppError("CONFLICT", `Cannot move media from ${row.status} to ${toStatus}.`, 409); const [updated] = await getDb().update(cmsMedia).set({ status: toStatus, updatedAt: new Date(), updatedBy: user.id }).where(and(eq(cmsMedia.id, row.id), eq(cmsMedia.status, row.status))).returning(); if (!updated) throw new AppError("CONFLICT", "CMS media changed before publication.", 409); return updated; }
+
+export async function listCmsForms(user: CurrentUser) { return getDb().select().from(forms).where(and(eq(forms.organizationId, user.organizationId), campusScope(user, forms.campusId))).orderBy(desc(forms.updatedAt)).limit(300); }
+export async function createCmsForm(user: CurrentUser, input: CmsFormInput) { try { JSON.parse(input.fieldsJson); } catch { throw new AppError("VALIDATION_ERROR", "Form fields must be valid JSON.", 400); } const [row] = await getDb().insert(forms).values({ id: createId("form"), organizationId: user.organizationId, campusId: user.campusId, name: input.name, detailsJson: input.fieldsJson, status: "draft", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create form.", 500); return row; }
+export async function transitionCmsForm(user: CurrentUser, id: string, toStatus: string) { const row = await getDb().query.forms.findFirst({ where: and(eq(forms.id, id), eq(forms.organizationId, user.organizationId), campusScope(user, forms.campusId)) }); if (!row) throw new AppError("NOT_FOUND", "Form not found.", 404); if (!pageTransitions[row.status]?.includes(toStatus)) throw new AppError("CONFLICT", `Cannot move form from ${row.status} to ${toStatus}.`, 409); const [updated] = await getDb().update(forms).set({ status: toStatus, updatedAt: new Date(), updatedBy: user.id }).where(and(eq(forms.id, row.id), eq(forms.status, row.status))).returning(); if (!updated) throw new AppError("CONFLICT", "Form changed before publication.", 409); return updated; }
+export async function listFormSubmissions(user: CurrentUser) { return getDb().select({ id: formSubmissions.id, formId: formSubmissions.formId, payloadJson: formSubmissions.payloadJson, createdAt: formSubmissions.createdAt, status: formSubmissions.status }).from(formSubmissions).innerJoin(forms, and(eq(forms.id, formSubmissions.formId), eq(forms.organizationId, user.organizationId))).where(and(eq(formSubmissions.organizationId, user.organizationId), campusScope(user, formSubmissions.campusId))).orderBy(desc(formSubmissions.createdAt)).limit(500); }
+export async function createFormSubmission(user: CurrentUser, input: FormSubmissionInput) { const form = await getForm(user, input.formId); try { JSON.parse(input.payloadJson); } catch { throw new AppError("VALIDATION_ERROR", "Submission payload must be valid JSON.", 400); } const [row] = await getDb().insert(formSubmissions).values({ id: createId("form_submission"), organizationId: user.organizationId, campusId: form.campusId, formId: form.id, payloadJson: input.payloadJson, status: "received", createdBy: user.id, updatedBy: user.id }).returning(); if (!row) throw new AppError("DATABASE_ERROR", "Unable to create form submission.", 500); return row; }

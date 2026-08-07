@@ -1,0 +1,23 @@
+import { catalogTable } from "./catalog-shared";
+
+export const employeeDocuments = catalogTable("employee_documents", "employee_document");
+export const jobApplicants = catalogTable("job_applicants", "job_applicant");
+export const onboardingTasks = catalogTable("onboarding_tasks", "onboarding");
+export const salaryStructures = catalogTable("salary_structures", "salary_structure");
+export const salaryComponents = catalogTable("salary_components", "salary_component");
+export const payslips = catalogTable("payslips", "payslip");
+export const staffAppraisals = catalogTable("staff_appraisals", "appraisal");
+export const trainingEvents = catalogTable("training_events", "training");
+export const messageTemplates = catalogTable("message_templates", "message_template");
+export const messageRecipients = catalogTable("message_recipients", "message_recipient");
+export const events = catalogTable("events", "event");
+export const eventRegistrations = catalogTable("event_registrations", "event_registration");
+export const ptmSlots = catalogTable("ptm_slots", "ptm_slot");
+export const ptmBookings = catalogTable("ptm_bookings", "ptm_booking");
+export const clubsMemberships = catalogTable("club_memberships", "club_membership");
+export const sportsTeams = catalogTable("sports_teams", "sports_team");
+export const sportsFixtures = catalogTable("sports_fixtures", "fixture");
+export const activityRegistrations = catalogTable("activity_registrations", "activity_registration");
+export const alumniEvents = catalogTable("alumni_events", "alumni_event");
+export const mentorships = catalogTable("mentorships", "mentorship");
+export const jobBoardPosts = catalogTable("job_board_posts", "job_post");

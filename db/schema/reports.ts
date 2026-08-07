@@ -1,0 +1,4 @@
+import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
+export const reports = sqliteTable("reports", { id: idColumn("report"), ...tenantColumns(), name: text("name").notNull(), reportType: text("report_type").notNull(), definitionJson: text("definition_json").notNull(), ...auditColumns(), status: statusColumn() }, (table) => [index("reports_org_idx").on(table.organizationId)]);
+export const alerts = sqliteTable("alerts", { id: idColumn("alert"), ...tenantColumns(), type: text("type").notNull(), title: text("title").notNull(), sourceType: text("source_type"), sourceId: text("source_id"), ...auditColumns(), status: statusColumn("open") }, (table) => [index("alerts_org_status_idx").on(table.organizationId, table.status)]);

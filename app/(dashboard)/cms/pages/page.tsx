@@ -1,0 +1,9 @@
+import { PageHeader } from "@/components/common/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CmsPageForm, CmsTransitionButton } from "@/features/community/components/community-workspace";
+import { listCmsPages } from "@/features/community/services/community.service";
+import { requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/rbac/permissions";
+
+export default async function CmsPagesPage() { const user = await requirePermission("cms:read"); const pages = await listCmsPages(user); return <div className="space-y-6"><PageHeader title="CMS pages" description="Draft, publish, and archive tenant-scoped content with SEO metadata and audit events." />{hasPermission(user, "cms:create") ? <Card><CardHeader><CardTitle>Create page draft</CardTitle></CardHeader><CardContent><CmsPageForm /></CardContent></Card> : null}<Card><CardHeader><CardTitle>Page register</CardTitle></CardHeader><CardContent>{pages.length ? <div className="space-y-3">{pages.map((page) => <div key={page.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><div><p className="font-medium">{page.title}</p><p className="text-xs text-muted-foreground">/{page.slug}</p></div><div className="flex items-center gap-3"><Badge variant={page.status === "published" ? "success" : "secondary"}>{page.status}</Badge>{hasPermission(user, "cms:publish") && page.status === "draft" ? <CmsTransitionButton kind="page" id={page.id} toStatus="published" /> : null}{hasPermission(user, "cms:publish") && page.status === "published" ? <CmsTransitionButton kind="page" id={page.id} toStatus="archived" /> : null}</div></div>)}</div> : <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No CMS pages found.</p>}</CardContent></Card></div>; }

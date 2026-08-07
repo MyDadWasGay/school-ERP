@@ -1,0 +1,4 @@
+"use client";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+export function ConfirmDialog({ label = "Delete", description = "This action cannot be undone.", onConfirm }: { label?: string; description?: string; onConfirm: () => void }) { const [open, setOpen] = useState(false); return open ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl"><h2 className="font-semibold">Confirm action</h2><p className="mt-2 text-sm text-muted-foreground">{description}</p><div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button variant="destructive" onClick={() => { onConfirm(); setOpen(false); }}>{label}</Button></div></div></div> : <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>{label}</Button>; }

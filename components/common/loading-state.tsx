@@ -1,0 +1,1 @@
+export function LoadingState() { return <div className="space-y-3" aria-label="Loading"><div className="h-10 animate-pulse rounded-lg bg-muted" /><div className="h-48 animate-pulse rounded-lg bg-muted" /></div>; }

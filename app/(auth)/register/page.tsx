@@ -1,0 +1,2 @@
+import { SchoolSetupForm } from "@/features/auth/components/school-setup-form";
+export default function RegisterPage() { return <div><div className="mb-8"><p className="text-sm font-medium text-primary">First-time school setup</p><h1 className="mt-2 text-3xl font-bold">Create your school</h1><p className="mt-2 text-sm text-muted-foreground">Create the school workspace and its first Super administrator in one guided step.</p></div><SchoolSetupForm /></div>; }

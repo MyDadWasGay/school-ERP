@@ -1,0 +1,4 @@
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
+export const clubs = sqliteTable("clubs", { id: idColumn("club"), ...tenantColumns(), name: text("name").notNull(), coordinatorUserId: text("coordinator_user_id"), ...auditColumns(), status: statusColumn() }, (table) => [index("clubs_org_idx").on(table.organizationId)]);
+export const studentAchievements = sqliteTable("student_achievements", { id: idColumn("achievement"), ...tenantColumns(), studentId: text("student_id").notNull(), title: text("title").notNull(), achievedOn: integer("achieved_on", { mode: "timestamp" }).notNull(), ...auditColumns(), status: statusColumn() }, (table) => [index("achievements_student_idx").on(table.organizationId, table.studentId)]);

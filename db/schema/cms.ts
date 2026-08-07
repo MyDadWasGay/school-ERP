@@ -1,0 +1,4 @@
+import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
+export const cmsPages = sqliteTable("cms_pages", { id: idColumn("cms_page"), ...tenantColumns(), slug: text("slug").notNull(), title: text("title").notNull(), body: text("body").notNull(), seoJson: text("seo_json"), ...auditColumns(), status: statusColumn("draft") }, (table) => [index("cms_pages_org_status_idx").on(table.organizationId, table.status)]);
+export const formSubmissions = sqliteTable("form_submissions", { id: idColumn("form_submission"), ...tenantColumns(), formId: text("form_id").notNull(), payloadJson: text("payload_json").notNull(), ...auditColumns(), status: statusColumn("received") }, (table) => [index("form_submissions_form_idx").on(table.organizationId, table.formId)]);

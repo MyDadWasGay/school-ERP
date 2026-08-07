@@ -1,0 +1,67 @@
+const domainModules = [
+  "organizations", "campuses", "users", "settings", "admissions", "students", "academics",
+  "attendance", "exams", "fees", "accounts", "hr", "payroll", "portals", "communication",
+  "library", "transport", "hostel", "canteen", "inventory", "assets", "procurement", "health",
+  "safety", "facilities", "activities", "alumni", "cms", "reports", "analytics", "alerts",
+  "data_quality", "integrations", "audit_logs", "documents",
+] as const;
+
+const standardActions = [
+  "read", "create", "update", "delete", "approve", "reject", "export", "import",
+  "view_sensitive", "configure",
+] as const;
+
+export const permissions: Record<string, string> = Object.fromEntries(
+  domainModules.flatMap((module) =>
+    standardActions.map((action) => [`${module}:${action}`, `${module.replaceAll("_", " ")} ${action}`]),
+  ),
+);
+
+Object.assign(permissions, {
+  "attendance:mark": "Mark attendance",
+  "attendance:approve_correction": "Approve attendance correction",
+  "attendance:request_leave": "Request leave",
+  "attendance:approve_leave": "Approve leave",
+  "fees:collect": "Collect fees",
+  "fees:refund": "Refund fees",
+  "exams:enter_marks": "Enter marks",
+  "exams:publish_result": "Publish results",
+  "reports:export_sensitive": "Export sensitive reports",
+  "settings:update": "Update settings",
+  "integrations:manage": "Manage integrations",
+  "cms:publish": "Publish CMS content",
+});
+
+export const permissionKeys = Object.keys(permissions);
+const read = (...modules: string[]) => modules.map((module) => `${module}:read`);
+
+export const rolePermissionDefaults: Record<string, string[]> = {
+  super_admin: permissionKeys,
+  management: permissionKeys.filter((permission) => !permission.startsWith("organizations:")),
+  principal: permissionKeys.filter((permission) =>
+    !permission.startsWith("organizations:") &&
+    !permission.startsWith("integrations:") &&
+    !permission.endsWith(":delete"),
+  ),
+  office_staff: [
+    ...read("settings", "campuses", "admissions", "students", "communication", "reports", "portals", "documents"),
+    "admissions:create", "admissions:update", "students:create", "students:update",
+    "communication:create", "communication:update", "reports:export", "documents:create",
+  ],
+  teacher: [
+    ...read("academics", "attendance", "exams", "students", "communication", "portals", "documents", "payroll"),
+    "academics:create", "academics:update", "attendance:mark", "attendance:request_leave", "exams:enter_marks",
+    "communication:create", "documents:create",
+  ],
+  accountant: [
+    ...read("fees", "accounts", "payroll", "reports", "students"),
+    "fees:collect", "fees:refund", "fees:create", "fees:update", "accounts:create",
+    "accounts:update", "reports:export",
+  ],
+  librarian: [...read("library", "students", "reports"), "library:create", "library:update"],
+  transport_staff: [...read("transport", "students", "reports"), "transport:create", "transport:update", "transport:export"],
+  hostel_warden: [...read("hostel", "canteen", "students", "attendance", "reports"), "hostel:create", "hostel:update", "canteen:create", "canteen:update"],
+  parent: [...read("students", "attendance", "exams", "fees", "academics", "communication", "portals", "documents", "transport"), "attendance:request_leave"],
+  student: [...read("students", "attendance", "exams", "academics", "communication", "portals", "documents", "activities"), "attendance:request_leave"],
+  alumni: [...read("alumni", "activities", "communication", "portals")],
+};

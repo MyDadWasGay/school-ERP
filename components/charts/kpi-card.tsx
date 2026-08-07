@@ -1,0 +1,3 @@
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+export function KpiCard({ title, value, detail, trend }: { title: string; value: string; detail?: string; trend?: "up" | "down" }) { return <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{value}</div>{detail ? <div className={`mt-1 flex items-center gap-1 text-xs ${trend === "down" ? "text-red-600" : "text-emerald-600"}`}>{trend === "down" ? <ArrowDownRight className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}{detail}</div> : null}</CardContent></Card>; }

@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function VerifyEmailPage() { return <div><h1 className="text-3xl font-bold">Verify your email</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">Check your inbox for the Firebase verification message. Once verified, sign in again. Your school administrator must also provision your ERP role unless you created the school’s first account.</p><Link href="/login" className="mt-8 inline-block text-sm font-medium text-primary hover:underline">Back to sign in</Link></div>; }

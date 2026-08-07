@@ -1,0 +1,38 @@
+name: School ERP CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      TURSO_DATABASE_URL: file:ci.db
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_NAME: School ERP CI
+      APP_ENCRYPTION_SECRET: ci-only-encryption-secret-32-characters
+      INTERNAL_JOB_SECRET: ci-only-job-secret-32-characters
+      CONFIG_ENV: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:config
+      - run: npm run check:secrets
+      - run: npm run db:migrate
+      - run: npm exec drizzle-kit check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:e2e
+        env:
+          SKIP_E2E_BUILD: "1"

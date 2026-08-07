@@ -1,0 +1,21 @@
+import { catalogTable } from "./catalog-shared";
+
+export const holidays = catalogTable("holidays", "holiday");
+export const schoolCalendarEvents = catalogTable("school_calendar_events", "calendar");
+export const streams = catalogTable("streams", "stream");
+export const batches = catalogTable("batches", "batch");
+export const subjectGroups = catalogTable("subject_groups", "subject_group");
+export const gradingScales = catalogTable("grading_scales", "grading");
+export const customFields = catalogTable("custom_fields", "custom_field");
+export const customForms = catalogTable("custom_forms", "custom_form");
+export const workflowDefinitions = catalogTable("workflow_definitions", "workflow");
+export const apiKeys = catalogTable("api_keys", "api_key");
+export const consentRecords = catalogTable("consent_records", "consent");
+export const retentionPolicies = catalogTable("retention_policies", "retention");
+export const importJobRows = catalogTable("import_job_rows", "import_row");
+export const exportJobs = catalogTable("export_jobs", "export_job");
+export const reportDefinitions = catalogTable("report_definitions", "report_definition");
+export const scheduledReports = catalogTable("scheduled_reports", "scheduled_report");
+export const webhookEvents = catalogTable("webhook_events", "webhook");
+export const automationJobs = catalogTable("automation_jobs", "automation");
+export const supportTickets = catalogTable("support_tickets", "support");
