@@ -8,5 +8,7 @@ CREATE TABLE IF NOT EXISTS `rate_limit_buckets` (
   `created_by` text,
   `updated_by` text
 );
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS `rate_limit_key_unique` ON `rate_limit_buckets` (`key_hash`);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `rate_limit_window_idx` ON `rate_limit_buckets` (`window_start`);

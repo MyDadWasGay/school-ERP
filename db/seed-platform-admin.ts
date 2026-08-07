@@ -1,7 +1,7 @@
 import { loadDatabaseEnv } from "./load-env";
 import { getDb } from "./client";
 import { platformAdmins } from "./schema";
-import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin";
+import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { createId } from "@/lib/utils/ids";
 
 loadDatabaseEnv();
