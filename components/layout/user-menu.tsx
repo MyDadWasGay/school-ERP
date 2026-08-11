@@ -10,7 +10,9 @@ import { isFirebaseClientConfigured } from "@/lib/env-public";
 export function UserMenu({ name }: { name: string }) {
   const [open, setOpen] = useState(false);
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    const csrfCookie = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("school_erp_csrf="));
+    const csrfToken = csrfCookie ? decodeURIComponent(csrfCookie.slice("school_erp_csrf=".length)) : "";
+    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include", headers: { "X-CSRF-Token": csrfToken } });
     if (isFirebaseClientConfigured()) await signOut(getFirebaseAuth()).catch(() => undefined);
     window.location.assign("/login");
   }

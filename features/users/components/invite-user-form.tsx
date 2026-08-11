@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { browserApiFetch } from "@/lib/api-client/browser";
 import { provisionRoles } from "../schemas/provision.schema";
 
 export function InviteUserForm({ campuses }: { campuses: Array<{ id: string; name: string }> }) {
@@ -22,11 +23,11 @@ export function InviteUserForm({ campuses }: { campuses: Array<{ id: string; nam
     setMessage("");
     setInviteLink("");
     try {
-      const response = await fetch("/api/users/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-      const payload = await response.json() as { error?: string; inviteLink?: string };
-      if (!response.ok) throw new Error(payload.error ?? "Unable to invite user.");
+      const response = await browserApiFetch("/api/v1/users/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const payload = await response.json() as { data?: { inviteLink?: string }; error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? "Unable to invite user.");
       setMessage("Invitation created. Send this one-time activation link to the person.");
-      setInviteLink(payload.inviteLink ?? "");
+      setInviteLink(payload.data?.inviteLink ?? "");
       setForm((current) => ({ ...current, email: "", displayName: "" }));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to invite user.");

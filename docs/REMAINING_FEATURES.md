@@ -47,6 +47,14 @@ scoped portal snapshots; and API-key/webhook boundaries. Those acceptance
 slices are no longer P0 scaffolds, although their deeper extensions remain
 listed below.
 
+The 2026-08-09 completion pass also implemented: binary PDF report downloads;
+analytics drill-down routes for admissions, attendance, finance, academics and
+operations; an audited organization donation register; tenant/campus-scoped
+inventory supplier and procurement vendor masters; and an exam-schedules route
+cut over to the clash-protected exam-planning workflow. These are local
+implementation results; provider, staging, load and rollout evidence remains
+covered by the P1/P2 gates below.
+
 ## Priority guide
 
 - **P0 - domain completion:** needed before calling the relevant module fully
@@ -146,9 +154,9 @@ listed below.
 
 ### Inventory, assets, and procurement (remaining extensions)
 
-- Add units, locations, opening stock, supplier UI, and stock counts to the
+- Add units, locations, opening stock, and stock counts to the
   existing item/movement workflow.
-- Add vendor UI, supplier reconciliation, stock counts, and richer receipt/
+- Add supplier reconciliation, stock counts, and richer receipt/
   issue/transfer/return reporting to the existing inventory and procurement
   workflows.
 
@@ -178,7 +186,8 @@ listed below.
 
 ### Reports, alerts, and MIS
 
-- Add scheduled reports and report history.
+- Add scheduled reports and report history. The bounded analytics drill-down
+  pages and synchronous report exports are implemented.
 - Add source-linked alerts for low attendance, overdue fees, missing marks,
   expiring documents, vehicle/employee expiry, low stock, capacity limits, and
   incomplete workflows.
@@ -197,8 +206,8 @@ listed below.
 
 ### Import and export
 
-- Complete PDF export and background large-export jobs alongside the current
-  audited CSV/XLSX/HTML report exports.
+- Complete background large-export jobs alongside the current audited
+  CSV/XLSX/PDF report exports.
 - Add validated imports for employees, fees, marks, inventory, and other agreed
   high-volume datasets; student import progress/errors are implemented.
 

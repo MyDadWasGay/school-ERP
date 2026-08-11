@@ -1,5 +1,3 @@
-import "server-only";
-
 import { logger } from "@/lib/observability/logger";
 import {
   claimNextJob,
@@ -44,4 +42,3 @@ export async function runNextJob(workerId: string) {
     return { status: failed?.status === "dead_letter" ? "dead_letter" as const : "failed" as const, jobId: job.id, jobType: job.jobType, attempts: job.attempts, requeued };
   }
 }
-

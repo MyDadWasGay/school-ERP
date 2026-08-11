@@ -2,6 +2,7 @@ export const APP_NAME = "School ERP";
 export const PLATFORM_ADMIN_ROLE = "PLATFORM_ADMIN" as const;
 export const SESSION_COOKIE = "school_erp_session";
 export const ACTIVE_CAMPUS_COOKIE = "school_erp_active_campus";
+export const CSRF_COOKIE = "school_erp_csrf";
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
 export const ATTENDANCE_DIRECT_EDIT_HOURS = 24;

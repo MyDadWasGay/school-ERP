@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DigitalResourceForm } from "@/features/library/components/library-workspace";
-import { listDigitalResources } from "@/features/library/services/library.service";
+import { listDigitalResources } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

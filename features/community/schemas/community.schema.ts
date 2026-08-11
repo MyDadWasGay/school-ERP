@@ -13,14 +13,28 @@ export const achievementSchema = z.object({
   achievedOn: dateInput,
 });
 
-export const clubMembershipSchema = z.object({ clubId: z.string().min(1), studentId: z.string().min(1) });
-export const sportsTeamSchema = z.object({ name: z.string().trim().min(2).max(160), sport: z.string().trim().min(2).max(80) });
-export const sportsFixtureSchema = z.object({ teamId: z.string().min(1), opponent: z.string().trim().min(2).max(160), startsAt: dateInput, venue: z.string().trim().min(2).max(200) });
+export const clubMembershipSchema = z.object({
+  clubId: z.string().min(1),
+  studentId: z.string().min(1),
+});
+export const sportsTeamSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  sport: z.string().trim().min(2).max(80),
+});
+export const sportsFixtureSchema = z.object({
+  teamId: z.string().min(1),
+  opponent: z.string().trim().min(2).max(160),
+  startsAt: dateInput,
+  venue: z.string().trim().min(2).max(200),
+});
 
 export const alumniProfileSchema = z.object({
   name: z.string().trim().min(2).max(160),
   studentId: z.string().trim().max(120).optional(),
-  graduationYear: z.string().trim().regex(/^\d{4}$/, "Graduation year must use YYYY format."),
+  graduationYear: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "Graduation year must use YYYY format."),
   directoryVisible: z.boolean(),
 });
 
@@ -42,8 +56,17 @@ export const jobBoardPostSchema = z.object({
   details: z.string().trim().min(2).max(1_000),
 });
 
-export const alumniEventRegistrationSchema = z.object({ eventId: z.string().min(1), attendeeName: z.string().trim().min(2).max(160), email: z.string().email().max(320) });
-export const alumniDonationSchema = z.object({ donorName: z.string().trim().min(2).max(160), email: z.string().email().max(320).optional(), amountMinor: z.coerce.number().int().positive().max(100_000_000), purpose: z.string().trim().min(2).max(300) });
+export const alumniEventRegistrationSchema = z.object({
+  eventId: z.string().min(1),
+  attendeeName: z.string().trim().min(2).max(160),
+  email: z.string().email().max(320),
+});
+export const alumniDonationSchema = z.object({
+  donorName: z.string().trim().min(2).max(160),
+  email: z.string().email().max(320).optional(),
+  amountMinor: z.coerce.number().int().positive().max(100_000_000),
+  purpose: z.string().trim().min(2).max(300),
+});
 
 export const communityTransitionSchema = z.object({
   id: z.string().min(1),
@@ -51,7 +74,13 @@ export const communityTransitionSchema = z.object({
 });
 
 export const cmsPageSchema = z.object({
-  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must use lowercase letters, numbers, and hyphens."),
+  slug: z
+    .string()
+    .trim()
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Slug must use lowercase letters, numbers, and hyphens.",
+    ),
   title: z.string().trim().min(2).max(160),
   body: z.string().trim().min(2).max(100_000),
   seoTitle: z.string().trim().max(160).optional(),
@@ -61,13 +90,31 @@ export const cmsPageSchema = z.object({
 export const cmsMediaSchema = z.object({
   name: z.string().trim().min(2).max(160),
   mediaType: z.enum(["image", "video", "document"]),
-  secureUrl: z.string().url().max(2_000),
-  publicId: z.string().trim().max(300).optional(),
+  secureUrl: z
+    .string()
+    .url()
+    .max(2_000)
+    .refine(
+      (url) => new URL(url).hostname === "res.cloudinary.com",
+      "CMS media must be hosted by Cloudinary.",
+    ),
+  publicId: z.string().trim().min(1).max(300),
 });
 
 export const cmsFieldSchema = z.object({
-  name: z.string().trim().regex(/^[a-zA-Z][a-zA-Z0-9_]{1,63}$/),
-  type: z.enum(["text", "email", "number", "date", "textarea", "checkbox", "select"]),
+  name: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z][a-zA-Z0-9_]{1,63}$/),
+  type: z.enum([
+    "text",
+    "email",
+    "number",
+    "date",
+    "textarea",
+    "checkbox",
+    "select",
+  ]),
   required: z.boolean().default(false),
   options: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
 });
@@ -94,9 +141,13 @@ export type AlumniProfileInput = z.infer<typeof alumniProfileSchema>;
 export type AlumniEventInput = z.infer<typeof alumniEventSchema>;
 export type MentorshipInput = z.infer<typeof mentorshipSchema>;
 export type JobBoardPostInput = z.infer<typeof jobBoardPostSchema>;
-export type AlumniEventRegistrationInput = z.infer<typeof alumniEventRegistrationSchema>;
+export type AlumniEventRegistrationInput = z.infer<
+  typeof alumniEventRegistrationSchema
+>;
 export type AlumniDonationInput = z.infer<typeof alumniDonationSchema>;
-export type CommunityTransitionInput = z.infer<typeof communityTransitionSchema>;
+export type CommunityTransitionInput = z.infer<
+  typeof communityTransitionSchema
+>;
 export type CmsPageInput = z.infer<typeof cmsPageSchema>;
 export type CmsMediaInput = z.infer<typeof cmsMediaSchema>;
 export type CmsFormInput = z.infer<typeof cmsFormSchema>;

@@ -3,13 +3,18 @@ import { getAuth, type Auth } from "firebase-admin/auth";
 
 let adminAuth: Auth | undefined;
 
-export function getFirebaseAdminAuth() {
-  if (adminAuth) return adminAuth;
+export function getFirebaseAdminApp() {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   if (!projectId || !clientEmail || !privateKey) return undefined;
-  const app: App = getApps()[0] ?? initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  return getApps()[0] ?? initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+}
+
+export function getFirebaseAdminAuth() {
+  if (adminAuth) return adminAuth;
+  const app: App | undefined = getFirebaseAdminApp();
+  if (!app) return undefined;
   adminAuth = getAuth(app);
   return adminAuth;
 }

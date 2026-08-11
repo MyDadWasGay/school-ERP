@@ -1,7 +1,6 @@
-import "server-only";
 import { and, eq } from "drizzle-orm";
 import type { UserRecord } from "firebase-admin/auth";
-import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin";
+import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { getDb } from "@/db/client";
 import { campuses, invitationTokens, userCampusScopes, users } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";

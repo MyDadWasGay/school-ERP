@@ -1,49 +1,26 @@
 import "server-only";
-
-import { and, eq, gt, isNull } from "drizzle-orm";
-import { platformAdmins, platformSessionLogs } from "@/db/schema";
-import { getDb } from "@/db/client";
+import { SchoolErpApiError } from "@/lib/api-client/client";
+import { createServerApiClient } from "@/lib/api-client/server";
 import { AppError } from "@/lib/errors/app-error";
-import { PLATFORM_ADMIN_ROLE } from "@/config/constants";
-import { readSessionIdentity } from "./session";
-
-export type PlatformAdmin = {
-  id: string;
-  firebaseUid: string;
-  email: string;
-  displayName: string;
-  emailVerified: boolean;
-  role: typeof PLATFORM_ADMIN_ROLE;
-};
-
-export async function getPlatformAdminByFirebaseUid(uid: string): Promise<PlatformAdmin | null> {
-  const row = await getDb().query.platformAdmins.findFirst({
-    where: eq(platformAdmins.firebaseUid, uid),
-  });
-  if (!row || row.status !== "active") return null;
-  return {
-    id: row.id,
-    firebaseUid: row.firebaseUid,
-    email: row.email,
-    displayName: row.displayName,
-    emailVerified: row.emailVerified,
-    role: PLATFORM_ADMIN_ROLE,
-  };
-}
+export {
+  type PlatformAdmin,
+} from "./platform-context";
 
 export async function getCurrentPlatformAdmin() {
-  const session = await readSessionIdentity();
-  if (!session) return null;
-  const admin = await getPlatformAdminByFirebaseUid(session.uid);
-  if (!admin) return null;
-  const activeSession = await getDb().query.platformSessionLogs.findFirst({ where: and(
-    eq(platformSessionLogs.platformAdminId, admin.id),
-    eq(platformSessionLogs.firebaseSessionId, session.fingerprint),
-    eq(platformSessionLogs.status, "active"),
-    isNull(platformSessionLogs.revokedAt),
-    gt(platformSessionLogs.expiresAt, new Date()),
-  ) });
-  return activeSession ? admin : null;
+  try {
+    const api = await createServerApiClient();
+    const result = await api.call<{
+      id: string;
+      email: string;
+      displayName: string;
+      emailVerified: boolean;
+      role: "platform_admin";
+    }>("GET", "/api/v1/platform/me");
+    return { ...result.data, firebaseUid: "" };
+  } catch (error) {
+    if (error instanceof SchoolErpApiError && [401, 403].includes(error.status)) return null;
+    return null;
+  }
 }
 
 export async function requirePlatformAdmin() {

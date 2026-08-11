@@ -1,15 +1,335 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
 
-export const feeHeads = sqliteTable("fee_heads", { id: idColumn("fee_head"), ...tenantColumns(), name: text("name").notNull(), code: text("code").notNull(), ...auditColumns(), status: statusColumn() }, (table) => [uniqueIndex("fee_heads_org_code_unique").on(table.organizationId, table.code)]);
-export const feeStructures = sqliteTable("fee_structures", { id: idColumn("fee_structure"), ...tenantColumns(), academicYearId: text("academic_year_id").notNull(), classId: text("class_id"), name: text("name").notNull(), version: integer("version").notNull().default(1), effectiveFrom: integer("effective_from", { mode: "timestamp" }).notNull(), ...auditColumns(), status: statusColumn("draft") }, (table) => [index("fee_structures_scope_idx").on(table.organizationId, table.academicYearId, table.classId)]);
-export const feeInstallments = sqliteTable("fee_installments", { id: idColumn("installment"), ...tenantColumns(), feeStructureId: text("fee_structure_id").notNull(), feeHeadId: text("fee_head_id").notNull(), name: text("name").notNull(), amountMinor: integer("amount_minor").notNull(), dueOn: integer("due_on", { mode: "timestamp" }).notNull(), ...auditColumns(), status: statusColumn() }, (table) => [index("fee_installments_structure_idx").on(table.organizationId, table.feeStructureId)]);
-export const feeInvoices = sqliteTable("fee_invoices", { id: idColumn("invoice"), ...tenantColumns(), studentId: text("student_id").notNull(), academicYearId: text("academic_year_id"), invoiceNumber: text("invoice_number").notNull(), issuedOn: integer("issued_on", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()), dueOn: integer("due_on", { mode: "timestamp" }).notNull(), totalMinor: integer("total_minor").notNull(), balanceMinor: integer("balance_minor").notNull(), currency: text("currency").notNull().default("INR"), ...auditColumns(), status: statusColumn("open") }, (table) => [uniqueIndex("invoices_org_number_unique").on(table.organizationId, table.invoiceNumber), index("invoices_student_idx").on(table.organizationId, table.studentId, table.status)]);
-export const feeInvoiceItems = sqliteTable("fee_invoice_items", { id: idColumn("invoice_item"), ...tenantColumns(), invoiceId: text("invoice_id").notNull(), feeHeadId: text("fee_head_id"), description: text("description").notNull(), quantity: integer("quantity").notNull().default(1), unitAmountMinor: integer("unit_amount_minor").notNull(), totalMinor: integer("total_minor").notNull(), ...auditColumns(), status: statusColumn() }, (table) => [index("invoice_items_invoice_idx").on(table.organizationId, table.invoiceId)]);
-export const feePayments = sqliteTable("fee_payments", { id: idColumn("payment"), ...tenantColumns(), invoiceId: text("invoice_id").notNull(), studentId: text("student_id").notNull(), receiptNumber: text("receipt_number").notNull(), idempotencyKey: text("idempotency_key").notNull(), amountMinor: integer("amount_minor").notNull(), method: text("method").notNull(), providerReference: text("provider_reference"), paidAt: integer("paid_at", { mode: "timestamp" }).notNull(), ...auditColumns(), status: statusColumn("posted") }, (table) => [uniqueIndex("payments_org_receipt_unique").on(table.organizationId, table.receiptNumber), uniqueIndex("payments_org_idempotency_unique").on(table.organizationId, table.idempotencyKey), index("payments_invoice_idx").on(table.organizationId, table.invoiceId)]);
-export const feeReceipts = sqliteTable("fee_receipts", { id: idColumn("receipt"), ...tenantColumns(), paymentId: text("payment_id").notNull(), receiptNumber: text("receipt_number").notNull(), issuedAt: integer("issued_at", { mode: "timestamp" }).notNull(), issuedBy: text("issued_by").notNull(), ...auditColumns(), status: statusColumn("issued") }, (table) => [uniqueIndex("receipts_payment_unique").on(table.paymentId), uniqueIndex("receipts_org_number_unique").on(table.organizationId, table.receiptNumber)]);
-export const feeRefunds = sqliteTable("fee_refunds", { id: idColumn("refund"), ...tenantColumns(), paymentId: text("payment_id").notNull(), amountMinor: integer("amount_minor").notNull(), reason: text("reason").notNull(), refundedAt: integer("refunded_at", { mode: "timestamp" }), refundedBy: text("refunded_by"), ...auditColumns(), status: statusColumn("pending") }, (table) => [index("refunds_payment_idx").on(table.organizationId, table.paymentId)]);
-export const ledgerEntries = sqliteTable("ledger_entries", { id: idColumn("ledger"), ...tenantColumns(), referenceType: text("reference_type").notNull(), referenceId: text("reference_id").notNull(), account: text("account").notNull(), debitMinor: integer("debit_minor").notNull().default(0), creditMinor: integer("credit_minor").notNull().default(0), postedAt: integer("posted_at", { mode: "timestamp" }).notNull(), ...auditColumns(), status: statusColumn("posted") }, (table) => [index("ledger_reference_idx").on(table.organizationId, table.referenceType, table.referenceId)]);
-export const chartOfAccounts = sqliteTable("chart_of_accounts", { id: idColumn("account"), ...tenantColumns(), code: text("code").notNull(), name: text("name").notNull(), accountType: text("account_type").notNull(), parentId: text("parent_id"), ...auditColumns(), status: statusColumn() }, (table) => [uniqueIndex("accounts_org_code_unique").on(table.organizationId, table.code)]);
-export const expenses = sqliteTable("expenses", { id: idColumn("expense"), ...tenantColumns(), accountId: text("account_id").notNull(), vendorId: text("vendor_id"), description: text("description").notNull(), amountMinor: integer("amount_minor").notNull(), incurredOn: integer("incurred_on", { mode: "timestamp" }).notNull(), ...auditColumns(), status: statusColumn("draft") }, (table) => [index("expenses_scope_idx").on(table.organizationId, table.incurredOn, table.status)]);
-export const bankAccounts = sqliteTable("bank_accounts", { id: idColumn("bank_account"), ...tenantColumns(), name: text("name").notNull(), accountMask: text("account_mask"), currency: text("currency").notNull().default("INR"), ...auditColumns(), status: statusColumn() }, (table) => [index("bank_accounts_org_idx").on(table.organizationId, table.status)]);
+export const feeHeads = sqliteTable(
+  "fee_heads",
+  {
+    id: idColumn("fee_head"),
+    ...tenantColumns(),
+    name: text("name").notNull(),
+    code: text("code").notNull(),
+    ...auditColumns(),
+    status: statusColumn(),
+  },
+  (table) => [
+    uniqueIndex("fee_heads_org_code_unique").on(
+      table.organizationId,
+      table.code,
+    ),
+  ],
+);
+export const feeStructures = sqliteTable(
+  "fee_structures",
+  {
+    id: idColumn("fee_structure"),
+    ...tenantColumns(),
+    academicYearId: text("academic_year_id").notNull(),
+    classId: text("class_id"),
+    name: text("name").notNull(),
+    version: integer("version").notNull().default(1),
+    effectiveFrom: integer("effective_from", { mode: "timestamp" }).notNull(),
+    ...auditColumns(),
+    status: statusColumn("draft"),
+  },
+  (table) => [
+    index("fee_structures_scope_idx").on(
+      table.organizationId,
+      table.academicYearId,
+      table.classId,
+    ),
+  ],
+);
+export const feeInstallments = sqliteTable(
+  "fee_installments",
+  {
+    id: idColumn("installment"),
+    ...tenantColumns(),
+    feeStructureId: text("fee_structure_id").notNull(),
+    feeHeadId: text("fee_head_id").notNull(),
+    name: text("name").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    dueOn: integer("due_on", { mode: "timestamp" }).notNull(),
+    ...auditColumns(),
+    status: statusColumn(),
+  },
+  (table) => [
+    index("fee_installments_structure_idx").on(
+      table.organizationId,
+      table.feeStructureId,
+    ),
+  ],
+);
+export const feeInvoices = sqliteTable(
+  "fee_invoices",
+  {
+    id: idColumn("invoice"),
+    ...tenantColumns(),
+    studentId: text("student_id").notNull(),
+    academicYearId: text("academic_year_id"),
+    invoiceNumber: text("invoice_number").notNull(),
+    issuedOn: integer("issued_on", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    dueOn: integer("due_on", { mode: "timestamp" }).notNull(),
+    totalMinor: integer("total_minor").notNull(),
+    balanceMinor: integer("balance_minor").notNull(),
+    currency: text("currency").notNull().default("INR"),
+    ...auditColumns(),
+    status: statusColumn("open"),
+  },
+  (table) => [
+    uniqueIndex("invoices_org_number_unique").on(
+      table.organizationId,
+      table.invoiceNumber,
+    ),
+    index("invoices_student_idx").on(
+      table.organizationId,
+      table.studentId,
+      table.status,
+    ),
+  ],
+);
+export const feeInvoiceItems = sqliteTable(
+  "fee_invoice_items",
+  {
+    id: idColumn("invoice_item"),
+    ...tenantColumns(),
+    invoiceId: text("invoice_id").notNull(),
+    feeHeadId: text("fee_head_id"),
+    description: text("description").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    unitAmountMinor: integer("unit_amount_minor").notNull(),
+    totalMinor: integer("total_minor").notNull(),
+    ...auditColumns(),
+    status: statusColumn(),
+  },
+  (table) => [
+    index("invoice_items_invoice_idx").on(
+      table.organizationId,
+      table.invoiceId,
+    ),
+  ],
+);
+export const feePayments = sqliteTable(
+  "fee_payments",
+  {
+    id: idColumn("payment"),
+    ...tenantColumns(),
+    invoiceId: text("invoice_id").notNull(),
+    studentId: text("student_id").notNull(),
+    receiptNumber: text("receipt_number").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    method: text("method").notNull(),
+    providerReference: text("provider_reference"),
+    paidAt: integer("paid_at", { mode: "timestamp" }).notNull(),
+    ...auditColumns(),
+    status: statusColumn("posted"),
+  },
+  (table) => [
+    uniqueIndex("payments_org_receipt_unique").on(
+      table.organizationId,
+      table.receiptNumber,
+    ),
+    uniqueIndex("payments_org_idempotency_unique").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("payments_invoice_idx").on(table.organizationId, table.invoiceId),
+  ],
+);
+export const feeReceipts = sqliteTable(
+  "fee_receipts",
+  {
+    id: idColumn("receipt"),
+    ...tenantColumns(),
+    paymentId: text("payment_id").notNull(),
+    receiptNumber: text("receipt_number").notNull(),
+    issuedAt: integer("issued_at", { mode: "timestamp" }).notNull(),
+    issuedBy: text("issued_by").notNull(),
+    ...auditColumns(),
+    status: statusColumn("issued"),
+  },
+  (table) => [
+    uniqueIndex("receipts_payment_unique").on(table.paymentId),
+    uniqueIndex("receipts_org_number_unique").on(
+      table.organizationId,
+      table.receiptNumber,
+    ),
+  ],
+);
+export const feeRefunds = sqliteTable(
+  "fee_refunds",
+  {
+    id: idColumn("refund"),
+    ...tenantColumns(),
+    paymentId: text("payment_id").notNull(),
+    idempotencyKey: text("idempotency_key"),
+    amountMinor: integer("amount_minor").notNull(),
+    reason: text("reason").notNull(),
+    provider: text("provider"),
+    providerRefundId: text("provider_refund_id"),
+    providerStatus: text("provider_status"),
+    failureDescription: text("failure_description"),
+    refundedAt: integer("refunded_at", { mode: "timestamp" }),
+    refundedBy: text("refunded_by"),
+    ...auditColumns(),
+    status: statusColumn("pending"),
+  },
+  (table) => [
+    index("refunds_payment_idx").on(table.organizationId, table.paymentId),
+    uniqueIndex("refunds_org_idempotency_unique").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex("refunds_provider_id_unique").on(
+      table.provider,
+      table.providerRefundId,
+    ),
+  ],
+);
+export const ledgerEntries = sqliteTable(
+  "ledger_entries",
+  {
+    id: idColumn("ledger"),
+    ...tenantColumns(),
+    referenceType: text("reference_type").notNull(),
+    referenceId: text("reference_id").notNull(),
+    account: text("account").notNull(),
+    debitMinor: integer("debit_minor").notNull().default(0),
+    creditMinor: integer("credit_minor").notNull().default(0),
+    postedAt: integer("posted_at", { mode: "timestamp" }).notNull(),
+    ...auditColumns(),
+    status: statusColumn("posted"),
+  },
+  (table) => [
+    index("ledger_reference_idx").on(
+      table.organizationId,
+      table.referenceType,
+      table.referenceId,
+    ),
+  ],
+);
+export const chartOfAccounts = sqliteTable(
+  "chart_of_accounts",
+  {
+    id: idColumn("account"),
+    ...tenantColumns(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    accountType: text("account_type").notNull(),
+    parentId: text("parent_id"),
+    ...auditColumns(),
+    status: statusColumn(),
+  },
+  (table) => [
+    uniqueIndex("accounts_org_code_unique").on(
+      table.organizationId,
+      table.code,
+    ),
+  ],
+);
+export const expenses = sqliteTable(
+  "expenses",
+  {
+    id: idColumn("expense"),
+    ...tenantColumns(),
+    accountId: text("account_id").notNull(),
+    vendorId: text("vendor_id"),
+    description: text("description").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    incurredOn: integer("incurred_on", { mode: "timestamp" }).notNull(),
+    ...auditColumns(),
+    status: statusColumn("draft"),
+  },
+  (table) => [
+    index("expenses_scope_idx").on(
+      table.organizationId,
+      table.incurredOn,
+      table.status,
+    ),
+  ],
+);
+export const bankAccounts = sqliteTable(
+  "bank_accounts",
+  {
+    id: idColumn("bank_account"),
+    ...tenantColumns(),
+    name: text("name").notNull(),
+    accountMask: text("account_mask"),
+    currency: text("currency").notNull().default("INR"),
+    ...auditColumns(),
+    status: statusColumn(),
+  },
+  (table) => [
+    index("bank_accounts_org_idx").on(table.organizationId, table.status),
+  ],
+);
+
+export const donations = sqliteTable(
+  "donations",
+  {
+    id: idColumn("donation"),
+    ...tenantColumns(),
+    donorName: text("donor_name").notNull(),
+    donorEmail: text("donor_email"),
+    amountMinor: integer("amount_minor").notNull(),
+    purpose: text("purpose").notNull(),
+    paymentReference: text("payment_reference"),
+    receivedAt: integer("received_at", { mode: "timestamp" }).notNull(),
+    ...auditColumns(),
+    status: statusColumn("received"),
+  },
+  (table) => [index("donations_scope_idx").on(table.organizationId, table.campusId, table.receivedAt)],
+);
+
+export const paymentProviderOrders = sqliteTable(
+  "payment_provider_orders",
+  {
+    id: idColumn("provider_order"),
+    ...tenantColumns(),
+    provider: text("provider").notNull(),
+    invoiceId: text("invoice_id").notNull(),
+    studentId: text("student_id").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull(),
+    receipt: text("receipt").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    providerOrderId: text("provider_order_id"),
+    providerPaymentId: text("provider_payment_id"),
+    failureCode: text("failure_code"),
+    failureDescription: text("failure_description"),
+    paidAt: integer("paid_at", { mode: "timestamp" }),
+    ...auditColumns(),
+    status: statusColumn("creating"),
+  },
+  (table) => [
+    uniqueIndex("provider_orders_org_idempotency_unique").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex("provider_orders_provider_order_unique").on(
+      table.provider,
+      table.providerOrderId,
+    ),
+    uniqueIndex("provider_orders_provider_payment_unique").on(
+      table.provider,
+      table.providerPaymentId,
+    ),
+    uniqueIndex("provider_orders_org_receipt_unique").on(
+      table.organizationId,
+      table.receipt,
+    ),
+    index("provider_orders_invoice_status_idx").on(
+      table.organizationId,
+      table.invoiceId,
+      table.status,
+    ),
+  ],
+);

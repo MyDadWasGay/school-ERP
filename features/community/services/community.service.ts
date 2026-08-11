@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, desc, eq, inArray, type AnyColumn } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { admissionsEnquiries, alumniDonations, alumniEvents, alumniProfiles, clubs, clubsMemberships, cmsMedia, cmsPages, eventRegistrations, formSubmissions, forms, jobBoardPosts, mentorships, organizations, sportsFixtures, sportsTeams, studentAchievements, students, users } from "@/db/schema";

@@ -1,4 +1,3 @@
-import "server-only";
 import { and, count, eq, gte, sql, sum } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {

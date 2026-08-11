@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
@@ -15,7 +13,7 @@ import {
 } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
 import { hasPermission } from "@/lib/rbac/permissions";
-import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin";
+import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { AppError } from "@/lib/errors/app-error";
 import { normalizePagination } from "@/lib/utils/pagination";
 import type {

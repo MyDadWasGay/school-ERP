@@ -1,5 +1,3 @@
-import "server-only";
-
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { permissions, rolePermissions, roles } from "@/db/schema";

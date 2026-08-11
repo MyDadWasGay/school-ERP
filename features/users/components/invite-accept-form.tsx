@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { browserApiFetch } from "@/lib/api-client/browser";
 
 export function InviteAcceptForm({ token }: { token: string }) {
   const [details, setDetails] = useState<{ email: string; displayName: string; role: string }>();
@@ -12,10 +13,11 @@ export function InviteAcceptForm({ token }: { token: string }) {
   const [verificationLink, setVerificationLink] = useState("");
   useEffect(() => {
     if (!token) { setMessage("This invitation link is incomplete."); return; }
-    fetch(`/api/users/invite/validate?token=${encodeURIComponent(token)}`).then(async (response) => {
-      const payload = await response.json() as { email?: string; displayName?: string; role?: string };
-      if (!response.ok || !payload.email || !payload.displayName || !payload.role) throw new Error("This invitation is invalid, expired, or already used.");
-      setDetails({ email: payload.email, displayName: payload.displayName, role: payload.role });
+    browserApiFetch(`/api/v1/users/invite/validate?token=${encodeURIComponent(token)}`).then(async (response) => {
+      const payload = await response.json() as { data?: { email?: string; displayName?: string; role?: string }; error?: { message?: string } };
+      const data = payload.data;
+      if (!response.ok || !data?.email || !data.displayName || !data.role) throw new Error(payload.error?.message ?? "This invitation is invalid, expired, or already used.");
+      setDetails({ email: data.email, displayName: data.displayName, role: data.role });
       setMessage("");
     }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "This invitation could not be verified."));
   }, [token]);
@@ -23,10 +25,10 @@ export function InviteAcceptForm({ token }: { token: string }) {
     event.preventDefault();
     if (password !== confirmation) { setMessage("Passwords do not match."); return; }
     setMessage("Activating account...");
-    const response = await fetch("/api/users/invite/accept", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) });
-    const payload = await response.json() as { error?: string; verificationLink?: string };
-    if (!response.ok) { setMessage(payload.error ?? "Unable to activate account."); return; }
-    setVerificationLink(payload.verificationLink ?? "");
+    const response = await browserApiFetch("/api/v1/users/invite/accept", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) });
+    const payload = await response.json() as { data?: { verificationLink?: string }; error?: { message?: string } };
+    if (!response.ok) { setMessage(payload.error?.message ?? "Unable to activate account."); return; }
+    setVerificationLink(payload.data?.verificationLink ?? "");
     setMessage("Account activated. Verify your email before signing in.");
   }
   if (!details) return <p role="status" className="rounded-md bg-muted p-3 text-sm">{message}</p>;

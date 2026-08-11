@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { getAdmissionSeatMatrix } from "@/features/admissions/services/admissions.service";
+import { getAdmissionSeatMatrix } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function AdmissionSeatMatrixPage() {

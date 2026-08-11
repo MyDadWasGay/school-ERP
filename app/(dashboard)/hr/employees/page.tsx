@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmployeeForm } from "@/features/hr/components/hr-workspace";
-import { listEmployees } from "@/features/hr/services/hr.service";
+import { listEmployees } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

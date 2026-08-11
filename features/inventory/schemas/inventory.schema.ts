@@ -13,6 +13,17 @@ export const stockMovementSchema = z.object({
   reference: z.string().trim().max(160).optional(),
 });
 
+export const supplierSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  contactEmail: z.string().trim().email().max(320).optional().or(z.literal("")),
+  phone: z.string().trim().max(40).optional().or(z.literal("")),
+});
+
+export const supplierUpdateSchema = supplierSchema.extend({
+  id: z.string().min(1),
+});
+
 export type InventoryItemInput = z.infer<typeof inventoryItemSchema>;
 export type StockMovementInput = z.infer<typeof stockMovementSchema>;
-
+export type SupplierInput = z.infer<typeof supplierSchema>;
+export type SupplierUpdateInput = z.infer<typeof supplierUpdateSchema>;

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApplicationReviewList } from "@/features/admissions/components/application-review-list";
-import { listApprovalQueue } from "@/features/admissions/services/admissions.service";
+import { listApprovalQueue } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

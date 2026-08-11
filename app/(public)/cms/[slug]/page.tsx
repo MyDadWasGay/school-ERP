@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getPublicCmsPage } from "@/features/community/services/community.service";
+import { getPublicCmsPage } from "@/lib/api-client/server-queries";
 
 export default async function PublicCmsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = await searchParams;

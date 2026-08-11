@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JobBoardPostForm } from "@/features/community/components/community-workspace";
-import { listJobBoardPosts } from "@/features/community/services/community.service";
+import { listJobBoardPosts } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

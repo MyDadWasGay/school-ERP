@@ -1,9 +1,7 @@
-import "server-only";
-
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { auditLogs, invitationTokens, organizations, users } from "@/db/schema";
-import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin";
+import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { AppError } from "@/lib/errors/app-error";
 import { hashInvitationToken } from "@/lib/auth/invitation-token";
 import type { InvitationAcceptInput } from "../schemas/invitation.schema";

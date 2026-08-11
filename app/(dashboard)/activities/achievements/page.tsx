@@ -1,8 +1,8 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AchievementForm } from "@/features/community/components/community-workspace";
-import { listAchievements } from "@/features/community/services/community.service";
-import { listStudents } from "@/features/students/services/students.service";
+import { listAchievements } from "@/lib/api-client/server-queries";
+import { listStudents } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

@@ -24,9 +24,9 @@ export function ReportsWorkspace({ selected, definition, rows }: { selected: Rep
       <CardHeader className="flex flex-row items-center justify-between gap-4">
         <div><CardTitle>{definition.label}</CardTitle><p className="mt-1 text-sm text-muted-foreground">Showing up to 500 rows from the active organization/campus scope.</p></div>
         <div className="flex flex-wrap gap-2">
-          <a className="inline-flex h-10 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium hover:bg-accent" href={`/api/exports?report=${selected}&format=csv`}>CSV</a>
-          <a className="inline-flex h-10 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium hover:bg-accent" href={`/api/exports?report=${selected}&format=xlsx`}>Excel</a>
-          <a className="inline-flex h-10 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium hover:bg-accent" href={`/api/exports?report=${selected}&format=html`}>Print HTML</a>
+          <a className="inline-flex h-10 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium hover:bg-accent" href={`/api/v1/exports?report=${selected}&format=csv`}>CSV</a>
+          <a className="inline-flex h-10 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium hover:bg-accent" href={`/api/v1/exports?report=${selected}&format=xlsx`}>Excel</a>
+          <a className="inline-flex h-10 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium hover:bg-accent" href={`/api/v1/exports?report=${selected}&format=pdf`}>PDF</a>
         </div>
       </CardHeader>
       <CardContent>

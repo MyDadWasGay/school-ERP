@@ -13,6 +13,9 @@ export const employeeSchema = z.object({
   jobTitle: optionalText(120),
   linkedUserId: optionalText(80),
   salaryMinor: z.coerce.number().int().min(0).max(2_000_000_000),
+  allowanceMinor: z.coerce.number().int().min(0).max(2_000_000_000).default(0),
+  fixedDeductionMinor: z.coerce.number().int().min(0).max(2_000_000_000).default(0),
+  deductionRateBps: z.coerce.number().int().min(0).max(10_000).default(0),
 });
 
 export const payrollRunSchema = z.object({

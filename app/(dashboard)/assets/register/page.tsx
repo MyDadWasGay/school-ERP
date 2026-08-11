@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssetForm, AssetStatusButton } from "@/features/assets/components/asset-workspace";
-import { listAllAssets } from "@/features/assets/services/asset.service";
+import { listAllAssets } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

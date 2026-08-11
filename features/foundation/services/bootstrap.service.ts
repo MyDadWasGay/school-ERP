@@ -1,4 +1,3 @@
-import "server-only";
 import { getDb } from "@/db/client";
 import { academicYears, campuses, organizations, userCampusScopes, users } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";

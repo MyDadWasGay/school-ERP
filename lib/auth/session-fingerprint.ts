@@ -1,4 +1,3 @@
-import "server-only";
 import { createHash } from "node:crypto";
 
 export function sessionFingerprint(sessionCookie: string) {

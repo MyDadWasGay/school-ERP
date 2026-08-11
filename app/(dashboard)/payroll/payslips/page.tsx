@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { listPayslips } from "@/features/hr/services/hr.service";
+import { listPayslips } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function PayslipsPage() {

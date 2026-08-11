@@ -2,8 +2,8 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GoodsReceiptForm } from "@/features/procurement/components/procurement-workspace";
-import { listGoodsReceipts, listPurchaseOrders } from "@/features/procurement/services/procurement.service";
-import { listInventoryItems } from "@/features/inventory/services/inventory.service";
+import { listGoodsReceipts, listPurchaseOrders } from "@/lib/api-client/server-queries";
+import { listInventoryItems } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

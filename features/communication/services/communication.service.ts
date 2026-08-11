@@ -1,11 +1,10 @@
-import "server-only";
-
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { messages, notificationEvents, users } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
+import { normalizePagination } from "@/lib/utils/pagination";
 import type { MessageInput } from "../schemas/communication.schema";
 
 function audienceFor(input: MessageInput) {
@@ -99,6 +98,59 @@ export async function listNotifications(user: CurrentUser) {
     eq(notificationEvents.recipientUserId, user.id),
     eq(notificationEvents.channel, "in_app"),
   )).orderBy(desc(notificationEvents.sentAt)).limit(100);
+}
+
+export async function listNotificationsPage(
+  user: CurrentUser,
+  input?: { page?: number; pageSize?: number },
+) {
+  const pagination = normalizePagination(input);
+  const where = and(
+    eq(notificationEvents.organizationId, user.organizationId),
+    eq(notificationEvents.recipientUserId, user.id),
+    eq(notificationEvents.channel, "in_app"),
+  );
+  const [rows, totals] = await Promise.all([
+    getDb()
+      .select({
+        id: notificationEvents.id,
+        subject: messages.subject,
+        body: messages.body,
+        sentAt: notificationEvents.sentAt,
+        readAt: notificationEvents.readAt,
+        status: notificationEvents.status,
+      })
+      .from(notificationEvents)
+      .innerJoin(
+        messages,
+        and(
+          eq(messages.id, notificationEvents.messageId),
+          eq(messages.organizationId, user.organizationId),
+        ),
+      )
+      .where(where)
+      .orderBy(desc(notificationEvents.sentAt))
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    getDb()
+      .select({ value: count() })
+      .from(notificationEvents)
+      .where(where),
+  ]);
+  const total = totals[0]?.value ?? 0;
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      sentAt: row.sentAt?.toISOString() ?? null,
+      readAt: row.readAt?.toISOString() ?? null,
+    })),
+    pageInfo: {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      total,
+      pageCount: Math.ceil(total / pagination.pageSize),
+    },
+  };
 }
 
 export async function markNotificationRead(user: CurrentUser, notificationId: string) {

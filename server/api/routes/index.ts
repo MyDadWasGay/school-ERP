@@ -1,0 +1,34 @@
+import type { FastifyPluginAsync } from "fastify";
+import { metaRoutes } from "./meta.routes";
+import { meRoutes } from "./me.routes";
+import { portalRoutes } from "./portal.routes";
+import { studentDataRoutes } from "./student-data.routes";
+import { paymentDocumentRoutes } from "./payment-document.routes";
+import { academicRoutes } from "./academic.routes";
+import { authRoutes } from "./auth.routes";
+import { operationalRoutes } from "./operational.routes";
+import { foundationRoutes } from "./foundation.routes";
+import { lifecycleRoutes } from "./lifecycle.routes";
+import { academicFinanceRoutes } from "./academic-finance.routes";
+import { supportRoutes } from "./support.routes";
+import { operationsRoutes } from "./operations.routes";
+import { communityIntegrationsRoutes } from "./community-integrations.routes";
+import { catalogRoutes } from "./catalog.routes";
+
+export const apiV1Routes: FastifyPluginAsync = async (app) => {
+  await app.register(authRoutes);
+  await app.register(operationalRoutes);
+  await app.register(foundationRoutes);
+  await app.register(lifecycleRoutes);
+  await app.register(academicFinanceRoutes);
+  await app.register(supportRoutes);
+  await app.register(operationsRoutes);
+  await app.register(communityIntegrationsRoutes);
+  await app.register(catalogRoutes);
+  await app.register(metaRoutes);
+  await app.register(meRoutes);
+  await app.register(portalRoutes);
+  await app.register(studentDataRoutes);
+  await app.register(paymentDocumentRoutes);
+  await app.register(academicRoutes);
+};

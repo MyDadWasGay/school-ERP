@@ -2,6 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  async rewrites() {
+    const apiBase = (process.env.API_INTERNAL_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001").replace(/\/$/, "");
+    return [{ source: "/api/v1/:path*", destination: `${apiBase}/api/v1/:path*` }];
+  },
   async headers() {
     return [{
       source: "/(.*)",

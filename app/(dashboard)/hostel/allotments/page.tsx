@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HostelAllotmentForm, CheckoutButton } from "@/features/hostel/components/hostel-workspace";
-import { listHostelAllotments, listHostelBeds, listHostelRooms, listHostelStudents } from "@/features/hostel/services/hostel.service";
+import { listHostelAllotments, listHostelBeds, listHostelRooms, listHostelStudents } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

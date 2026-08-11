@@ -3,15 +3,39 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { OrganizationStatus } from "@/config/organization-status";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
 import { CreateSchoolForm } from "@/features/platform/components/create-school-form";
 import { SchoolActions } from "@/features/platform/components/school-actions";
-import { getPlatformOverview, listPlatformSchools } from "@/features/platform/services/platform.service";
+import { createServerApiClient } from "@/lib/api-client/server";
 
 export default async function PlatformPage({ searchParams }: { searchParams: Promise<{ search?: string }> }) {
   const query = await searchParams;
-  const [overview, schools] = await Promise.all([getPlatformOverview(), listPlatformSchools(query.search)]);
+  const api = await createServerApiClient();
+  const [overviewResponse, schoolsResponse] = await Promise.all([
+    api.call<{
+      totalSchools: number;
+      activeSchools: number;
+      suspendedSchools: number;
+      archivedSchools: number;
+      totalUsers: number;
+      totalTeachers: number;
+      totalStudents: number;
+      totalParents: number;
+      totalStaff: number;
+    }>("GET", "/api/v1/platform/overview"),
+    api.call<Array<{
+      id: string;
+      name: string;
+      slug: string;
+      status: OrganizationStatus;
+      userCount: number;
+      createdAt: string;
+    }>>("GET", `/api/v1/platform/schools${query.search ? `?search=${encodeURIComponent(query.search)}` : ""}`),
+  ]);
+  const overview = overviewResponse.data;
+  const schools = schoolsResponse.data;
   return <div className="space-y-8">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-cyan-300"><ShieldCheck className="h-4 w-4" />Platform operations</div><h1 className="text-3xl font-semibold tracking-tight">Command center</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">Manage schools and platform health without inheriting a school tenant context.</p></div><Badge variant="outline" className="w-fit border-slate-700 text-slate-300">{overview.activeSchools} active schools</Badge></div>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{[

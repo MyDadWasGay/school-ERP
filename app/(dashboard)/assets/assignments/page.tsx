@@ -2,9 +2,9 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssetAssignmentForm, AssetAssignmentStatusButton } from "@/features/assets/components/asset-workspace";
-import { listAssetAssignments, listAssets } from "@/features/assets/services/asset.service";
-import { listStudents } from "@/features/students/services/students.service";
-import { listEmployees } from "@/features/hr/services/hr.service";
+import { listAssetAssignments, listAssets } from "@/lib/api-client/server-queries";
+import { listStudents } from "@/lib/api-client/server-queries";
+import { listEmployees } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

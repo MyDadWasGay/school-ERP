@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FacilityComplaintButton, FacilityComplaintForm } from "@/features/facilities/components/facilities-workspace";
-import { listFacilityComplaints } from "@/features/facilities/services/facilities.service";
+import { listFacilityComplaints } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

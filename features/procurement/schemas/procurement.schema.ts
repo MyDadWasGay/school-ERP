@@ -8,9 +8,10 @@ export const requisitionSchema = z.object({
 
 export const purchaseOrderSchema = z.object({
   requisitionId: z.string().min(1),
-  supplierName: z.string().trim().min(2).max(160),
+  supplierId: z.string().trim().min(1).optional().or(z.literal("")),
+  supplierName: z.string().trim().min(2).max(160).optional().or(z.literal("")),
   amountMinor: z.coerce.number().int().min(0).max(2_000_000_000),
-});
+}).refine((value) => Boolean(value.supplierId || value.supplierName), { message: "Choose a supplier or enter a supplier name.", path: ["supplierId"] });
 
 export const workflowTransitionSchema = z.object({
   id: z.string().min(1),

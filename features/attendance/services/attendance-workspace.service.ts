@@ -1,4 +1,3 @@
-import "server-only";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
@@ -8,7 +7,11 @@ import {
 } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
 import { normalizePagination } from "@/lib/utils/pagination";
-import { listStudents, resolvePermittedStudentIds } from "@/features/students/services/students.service";
+import {
+  getReadableStudent,
+  listStudents,
+  resolvePermittedStudentIds,
+} from "@/features/students/services/students.service";
 
 export async function getAttendanceStudentOptions(user: CurrentUser) {
   const rows = await listStudents(user);
@@ -62,6 +65,60 @@ export async function listAttendancePage(
     })),
     pageInfo: { page: pagination.page, pageSize: pagination.pageSize, total, pageCount: Math.ceil(total / pagination.pageSize) },
     attendanceDate,
+  };
+}
+
+export async function listStudentAttendance(
+  user: CurrentUser,
+  studentId: string,
+  input?: { page?: number; pageSize?: number },
+) {
+  const student = await getReadableStudent(user, studentId);
+  const pagination = normalizePagination(input);
+  const where = and(
+    eq(studentAttendanceRecords.organizationId, user.organizationId),
+    eq(studentAttendanceRecords.studentId, student.id),
+    student.campusId
+      ? eq(studentAttendanceRecords.campusId, student.campusId)
+      : undefined,
+  );
+  const [rows, totals] = await Promise.all([
+    getDb()
+      .select({
+        id: studentAttendanceRecords.id,
+        attendanceDate: studentAttendanceRecords.attendanceDate,
+        period: studentAttendanceRecords.periodKey,
+        state: studentAttendanceRecords.state,
+        note: studentAttendanceRecords.note,
+        updatedAt: studentAttendanceRecords.updatedAt,
+        status: studentAttendanceRecords.status,
+      })
+      .from(studentAttendanceRecords)
+      .where(where)
+      .orderBy(
+        desc(studentAttendanceRecords.attendanceDate),
+        desc(studentAttendanceRecords.updatedAt),
+      )
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    getDb()
+      .select({ value: count() })
+      .from(studentAttendanceRecords)
+      .where(where),
+  ]);
+  const total = totals[0]?.value ?? 0;
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      attendanceDate: row.attendanceDate.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    })),
+    pageInfo: {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      total,
+      pageCount: Math.ceil(total / pagination.pageSize),
+    },
   };
 }
 

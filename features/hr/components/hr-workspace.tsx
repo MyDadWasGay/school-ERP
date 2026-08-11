@@ -23,6 +23,9 @@ export function EmployeeForm() {
       jobTitle: data.get("jobTitle"),
       linkedUserId: data.get("linkedUserId"),
       salaryMinor: data.get("salaryMinor"),
+      allowanceMinor: data.get("allowanceMinor"),
+      fixedDeductionMinor: data.get("fixedDeductionMinor"),
+      deductionRateBps: data.get("deductionRateBps"),
     });
     setMessage(result.ok ? result.message ?? "Employee created." : result.error);
     if (result.ok) event.currentTarget.reset();
@@ -35,6 +38,9 @@ export function EmployeeForm() {
     <div className="space-y-2"><Label htmlFor="employee-email">Work email</Label><Input id="employee-email" name="email" type="email" /></div>
     <div className="space-y-2"><Label htmlFor="employee-salary">Monthly salary (minor units)</Label><Input id="employee-salary" name="salaryMinor" type="number" min="0" defaultValue="0" required /></div>
     <div className="space-y-2"><Label htmlFor="employee-linked-user">Linked portal user ID</Label><Input id="employee-linked-user" name="linkedUserId" placeholder="Optional" /></div>
+    <div className="space-y-2"><Label htmlFor="employee-allowance">Monthly allowance (minor units)</Label><Input id="employee-allowance" name="allowanceMinor" type="number" min="0" defaultValue="0" /></div>
+    <div className="space-y-2"><Label htmlFor="employee-fixed-deduction">Fixed deduction (minor units)</Label><Input id="employee-fixed-deduction" name="fixedDeductionMinor" type="number" min="0" defaultValue="0" /></div>
+    <div className="space-y-2"><Label htmlFor="employee-rate">Configured deduction rate (basis points)</Label><Input id="employee-rate" name="deductionRateBps" type="number" min="0" max="10000" defaultValue="0" /><p className="text-xs text-muted-foreground">100 bps = 1%; statutory rules still require policy review.</p></div>
     <div className="flex items-end justify-between gap-3"><ResultMessage message={message} /><Button>Create employee</Button></div>
   </form>;
 }

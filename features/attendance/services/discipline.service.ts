@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { disciplineIncidents, students } from "@/db/schema";

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { EnquiryForm } from "@/features/admissions/components/enquiry-form";
 import { EnquiryActions } from "@/features/admissions/components/enquiry-actions";
-import { getAdmissionOptions, listEnquiriesPage } from "@/features/admissions/services/admissions.service";
+import { getAdmissionOptions, listEnquiriesPage } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

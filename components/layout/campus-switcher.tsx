@@ -15,9 +15,12 @@ export function CampusSwitcher({
   async function selectCampus(nextCampusId: string) {
     setPending(true);
     try {
-      const response = await fetch("/api/auth/campus", {
+      const csrfCookie = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("school_erp_csrf="));
+      const csrfToken = csrfCookie ? decodeURIComponent(csrfCookie.slice("school_erp_csrf=".length)) : "";
+      const response = await fetch("/api/v1/auth/campus", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({ campusId: nextCampusId }),
       });
       if (response.ok) router.refresh();

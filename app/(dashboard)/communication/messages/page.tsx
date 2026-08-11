@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageForm, PublishMessageButton } from "@/features/communication/components/communication-workspace";
-import { listMessages } from "@/features/communication/services/communication.service";
+import { listMessages } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

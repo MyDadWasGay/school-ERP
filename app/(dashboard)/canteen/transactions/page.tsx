@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CanteenTransactionForm } from "@/features/canteen/components/canteen-workspace";
-import { listCanteenStudents, listCanteenTransactions, listMenus } from "@/features/canteen/services/canteen.service";
+import { listCanteenStudents, listCanteenTransactions, listMenus } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

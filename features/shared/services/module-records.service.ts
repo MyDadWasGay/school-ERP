@@ -1,15 +1,17 @@
-import "server-only";
 import { and, count, desc, eq, like, ne, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { moduleRecords } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
 import { normalizePagination } from "@/lib/utils/pagination";
+import { listCatalogRecordsPage } from "./catalog-records.service";
 
 export async function listModuleRecordsPage(
   user: CurrentUser,
   route: string,
   input?: { search?: string; page?: number; pageSize?: number },
 ) {
+  const catalogResult = await listCatalogRecordsPage(user, route, input);
+  if (catalogResult) return catalogResult;
   const pagination = normalizePagination(input);
   const search = input?.search?.trim();
   const searchCondition = search

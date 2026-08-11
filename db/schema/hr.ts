@@ -13,6 +13,10 @@ export const employees = sqliteTable("employees", {
   managerId: text("manager_id"),
   linkedUserId: text("linked_user_id"),
   salaryMinor: integer("salary_minor").notNull().default(0),
+  /** Tenant-configured payroll inputs. These are not statutory tax rules. */
+  allowanceMinor: integer("allowance_minor").notNull().default(0),
+  fixedDeductionMinor: integer("fixed_deduction_minor").notNull().default(0),
+  deductionRateBps: integer("deduction_rate_bps").notNull().default(0),
   joinedOn: integer("joined_on", { mode: "timestamp" }),
   ...auditColumns(),
   status: statusColumn(),

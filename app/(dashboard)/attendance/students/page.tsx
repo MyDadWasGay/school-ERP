@@ -9,7 +9,7 @@ import { AttendanceMarkForm } from "@/features/attendance/components/attendance-
 import {
   getAttendanceStudentOptions,
   listAttendancePage,
-} from "@/features/attendance/services/attendance-workspace.service";
+} from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

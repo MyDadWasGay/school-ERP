@@ -1,12 +1,56 @@
-import "server-only";
 
 import { and, asc, desc, eq, gte, like, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { alerts, inventoryItems, stockMovements } from "@/db/schema";
+import { alerts, inventoryItems, stockMovements, suppliers } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
-import type { InventoryItemInput, StockMovementInput } from "../schemas/inventory.schema";
+import type { InventoryItemInput, StockMovementInput, SupplierInput, SupplierUpdateInput } from "../schemas/inventory.schema";
+
+function supplierScope(user: CurrentUser) {
+  return and(
+    eq(suppliers.organizationId, user.organizationId),
+    user.campusId ? eq(suppliers.campusId, user.campusId) : undefined,
+  );
+}
+
+export async function listSuppliers(user: CurrentUser) {
+  return getDb().select().from(suppliers).where(and(supplierScope(user), eq(suppliers.status, "active"))).orderBy(asc(suppliers.name)).limit(500);
+}
+
+export async function createSupplier(user: CurrentUser, input: SupplierInput) {
+  const [row] = await getDb().insert(suppliers).values({
+    id: createId("supplier"),
+    organizationId: user.organizationId,
+    campusId: user.campusId,
+    name: input.name,
+    contactEmail: input.contactEmail || null,
+    phone: input.phone || null,
+    status: "active",
+    createdBy: user.id,
+    updatedBy: user.id,
+  }).returning();
+  if (!row) throw new AppError("DATABASE_ERROR", "Unable to create supplier.", 500);
+  return row;
+}
+
+export async function updateSupplier(user: CurrentUser, input: SupplierUpdateInput) {
+  const [row] = await getDb().update(suppliers).set({
+    name: input.name,
+    contactEmail: input.contactEmail || null,
+    phone: input.phone || null,
+    updatedAt: new Date(),
+    updatedBy: user.id,
+  }).where(and(eq(suppliers.id, input.id), supplierScope(user), eq(suppliers.status, "active"))).returning();
+  if (!row) throw new AppError("NOT_FOUND", "Supplier not found.", 404);
+  return row;
+}
+
+export async function archiveSupplier(user: CurrentUser, id: string) {
+  const [row] = await getDb().update(suppliers).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(suppliers.id, id), supplierScope(user), eq(suppliers.status, "active"))).returning();
+  if (!row) throw new AppError("NOT_FOUND", "Supplier not found.", 404);
+  return row;
+}
 
 export async function listInventoryItems(user: CurrentUser, search?: string) {
   const query = search?.trim();
@@ -115,4 +159,3 @@ export async function listStockMovements(user: CurrentUser) {
   )).orderBy(desc(stockMovements.createdAt)).limit(500);
   return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
 }
-

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LibraryReservationForm } from "@/features/library/components/library-workspace";
-import { listLibraryItems, listLibraryReservations } from "@/features/library/services/library.service";
+import { listLibraryItems, listLibraryReservations } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

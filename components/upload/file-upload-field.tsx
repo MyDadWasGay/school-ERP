@@ -1,20 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { saveDocumentMetadataAction } from "@/features/documents/actions/document.actions";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { UploadEntityType } from "@/lib/cloudinary/types";
-
-type SignatureResponse = {
-  timestamp: number;
-  folder: string;
-  type: string;
-  allowed_formats: string;
-  signature: string;
-  apiKey: string;
-  cloudName: string;
-};
+import { createBrowserApiClient } from "@/lib/api-client/browser";
 
 export function FileUploadField({
   label = "Document",
@@ -22,13 +13,17 @@ export function FileUploadField({
   entityId,
   category = "general",
   accept,
+  campusId,
 }: {
   label?: string;
   entityType?: UploadEntityType;
   entityId: string;
   category?: string;
   accept?: string;
+  campusId?: string;
 }) {
+  const router = useRouter();
+  const api = useMemo(() => createBrowserApiClient(campusId), [campusId]);
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -39,14 +34,18 @@ export function FileUploadField({
     setStatus("Requesting secure upload signature…");
     try {
       const extension = file.name.split(".").pop()?.toLowerCase();
-      const resourceType = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw";
-      const response = await fetch("/api/uploads/signature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entityType, entityId, resourceType, format: extension, bytes: file.size }),
+      const resourceType = file.type.startsWith("image/")
+        ? "image"
+        : file.type.startsWith("video/")
+          ? "video"
+          : "raw";
+      const signature = await api.createUploadSignature({
+        entityType,
+        entityId,
+        resourceType,
+        format: extension,
+        bytes: file.size,
       });
-      const signature = await response.json() as SignatureResponse & { error?: string };
-      if (!response.ok) throw new Error(signature.error ?? "Upload permission was denied.");
       setStatus(`Uploading ${file.name}…`);
       const formData = new FormData();
       formData.set("file", file);
@@ -56,25 +55,51 @@ export function FileUploadField({
       formData.set("folder", signature.folder);
       formData.set("type", signature.type);
       formData.set("allowed_formats", signature.allowed_formats);
-      const upload = await fetch(`https://api.cloudinary.com/v1_1/${signature.cloudName}/${resourceType}/upload`, { method: "POST", body: formData });
-      const metadata = await upload.json() as Record<string, unknown>;
-      if (!upload.ok) throw new Error(typeof metadata.error === "object" ? "Cloudinary rejected the upload." : "Upload failed.");
-      const saved = await saveDocumentMetadataAction({
+      const upload = await fetch(
+        `https://api.cloudinary.com/v1_1/${signature.cloudName}/${resourceType}/upload`,
+        { method: "POST", body: formData },
+      );
+      const metadata = (await upload.json()) as Record<string, unknown>;
+      if (!upload.ok)
+        throw new Error(
+          typeof metadata.error === "object"
+            ? "Cloudinary rejected the upload."
+            : "Upload failed.",
+        );
+      const publicId = requiredString(
+        metadata.public_id,
+        "Cloudinary did not return a public ID.",
+      );
+      const secureUrl = requiredString(
+        metadata.secure_url,
+        "Cloudinary did not return a secure URL.",
+      );
+      const uploadedResourceType = metadata.resource_type;
+      if (
+        uploadedResourceType !== "image" &&
+        uploadedResourceType !== "raw" &&
+        uploadedResourceType !== "video"
+      ) {
+        throw new Error("Cloudinary returned an unsupported resource type.");
+      }
+      await api.saveDocumentMetadata({
         entityType,
         entityId,
         category,
-        publicId: metadata.public_id,
-        secureUrl: metadata.secure_url,
-        resourceType: metadata.resource_type,
-        format: metadata.format,
-        bytes: metadata.bytes,
-        width: metadata.width,
-        height: metadata.height,
-        version: metadata.version,
-        originalFilename: metadata.original_filename ?? file.name,
+        publicId,
+        secureUrl,
+        resourceType: uploadedResourceType,
+        format: optionalString(metadata.format),
+        bytes: optionalNumber(metadata.bytes),
+        width: optionalNumber(metadata.width),
+        height: optionalNumber(metadata.height),
+        version: optionalNumber(metadata.version),
+        originalFilename:
+          optionalString(metadata.original_filename) ?? file.name,
       });
-      if (!saved.ok) throw new Error(saved.error);
       setStatus("Upload completed securely.");
+      event.target.value = "";
+      router.refresh();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Upload failed.");
     } finally {
@@ -82,5 +107,36 @@ export function FileUploadField({
     }
   }
 
-  return <div className="space-y-2"><Label htmlFor={`upload-${entityType}-${entityId}`}>{label}</Label><Input id={`upload-${entityType}-${entityId}`} type="file" accept={accept} disabled={pending} onChange={choose} />{status ? <p role="status" className="text-xs text-muted-foreground">{status}</p> : null}</div>;
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`upload-${entityType}-${entityId}`}>{label}</Label>
+      <Input
+        id={`upload-${entityType}-${entityId}`}
+        type="file"
+        accept={accept}
+        disabled={pending}
+        onChange={choose}
+      />
+      {status ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          {status}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function requiredString(value: unknown, message: string) {
+  if (typeof value !== "string" || !value) throw new Error(message);
+  return value;
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function optionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }

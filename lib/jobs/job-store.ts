@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, desc, eq, lt, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { jobRuns } from "@/db/schema";

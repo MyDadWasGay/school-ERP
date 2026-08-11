@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getFirebaseAuth } from "@/lib/auth/firebase-client";
+import { browserApiFetch } from "@/lib/api-client/browser";
 
 export function SchoolSetupForm() {
   const [values, setValues] = useState({ name: "", email: "", password: "", schoolName: "", schoolSlug: "", campusName: "Main Campus", campusCode: "MAIN", campusAddress: "" });
@@ -19,9 +20,9 @@ export function SchoolSetupForm() {
       await updateProfile(credential.user, { displayName: values.name });
       await sendEmailVerification(credential.user);
       const idToken = await credential.user.getIdToken(true);
-      const response = await fetch("/api/setup/bootstrap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken, schoolName: values.schoolName, schoolSlug: values.schoolSlug, campusName: values.campusName, campusCode: values.campusCode, campusAddress: values.campusAddress }) });
-      const payload = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(payload.error ?? "School setup failed. Check the server configuration.");
+      const response = await browserApiFetch("/api/v1/setup/bootstrap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken, schoolName: values.schoolName, schoolSlug: values.schoolSlug, campusName: values.campusName, campusCode: values.campusCode, campusAddress: values.campusAddress }) });
+      const payload = await response.json() as { error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? "School setup failed. Check the server configuration.");
       setSuccess(true);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "School setup failed."); }
     finally { setPending(false); }

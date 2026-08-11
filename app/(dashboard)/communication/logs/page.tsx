@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { listNotificationDelivery } from "@/features/communication/services/communication.service";
+import { listNotificationDelivery } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function CommunicationLogsPage() {

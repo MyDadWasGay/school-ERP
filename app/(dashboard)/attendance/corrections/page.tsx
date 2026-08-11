@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { CorrectionReviewList } from "@/features/attendance/components/correction-review-list";
-import { listAttendanceCorrections } from "@/features/attendance/services/attendance-workspace.service";
+import { listAttendanceCorrections } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

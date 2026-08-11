@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { canteenTransactions, messMenus, students } from "@/db/schema";

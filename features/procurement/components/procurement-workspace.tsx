@@ -16,7 +16,7 @@ export function RequisitionForm() {
 
 export function PurchaseOrderForm({ requisitions }: { requisitions: Array<{ id: string; name: string; code: string | null }> }) {
   const [message, setMessage] = useState("");
-  async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); const result = await createPurchaseOrderAction({ requisitionId: data.get("requisitionId"), supplierName: data.get("supplierName"), amountMinor: data.get("amountMinor") }); setMessage(result.ok ? result.message ?? "Created." : result.error); if (result.ok) event.currentTarget.reset(); }
+  async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); const result = await createPurchaseOrderAction({ requisitionId: data.get("requisitionId"), supplierId: data.get("supplierId"), supplierName: data.get("supplierName"), amountMinor: data.get("amountMinor") }); setMessage(result.ok ? result.message ?? "Created." : result.error); if (result.ok) event.currentTarget.reset(); }
   return <form onSubmit={submit} className="grid gap-4 sm:grid-cols-3" noValidate><div className="space-y-2"><Label htmlFor="po-requisition">Approved requisition</Label><select id="po-requisition" name="requisitionId" className="h-10 w-full rounded-md border bg-background px-3 text-sm" required><option value="">Choose a requisition</option>{requisitions.map((requisition) => <option key={requisition.id} value={requisition.id}>{requisition.code ?? requisition.id} · {requisition.name}</option>)}</select></div><div className="space-y-2"><Label htmlFor="po-supplier">Supplier</Label><Input id="po-supplier" name="supplierName" required /></div><div className="space-y-2"><Label htmlFor="po-amount">Order amount (minor units)</Label><Input id="po-amount" name="amountMinor" type="number" min="0" required /></div><div className="sm:col-span-3 flex items-center justify-between gap-3"><Message value={message} /><Button disabled={!requisitions.length}>Create purchase order</Button></div></form>;
 }
 
@@ -28,6 +28,18 @@ export function ProcurementTransitionButton({ kind, id, toStatus }: { kind: "req
     if (result.ok) window.location.reload();
   }
   return <div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={transition}>{toStatus.replaceAll("_", " ")}</Button><Message value={message} /></div>;
+}
+
+export function PurchaseOrderWithSupplierForm({ requisitions, suppliers }: { requisitions: Array<{ id: string; name: string; code: string | null }>; suppliers: Array<{ id: string; name: string }> }) {
+  const [message, setMessage] = useState("");
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const result = await createPurchaseOrderAction({ requisitionId: data.get("requisitionId"), supplierId: data.get("supplierId"), supplierName: data.get("supplierName"), amountMinor: data.get("amountMinor") });
+    setMessage(result.ok ? result.message ?? "Created." : result.error);
+    if (result.ok) event.currentTarget.reset();
+  }
+  return <form onSubmit={submit} className="grid gap-4 sm:grid-cols-4" noValidate><div className="space-y-2"><Label htmlFor="po-master-requisition">Approved requisition</Label><select id="po-master-requisition" name="requisitionId" className="h-10 w-full rounded-md border bg-background px-3 text-sm" required><option value="">Choose a requisition</option>{requisitions.map((requisition) => <option key={requisition.id} value={requisition.id}>{requisition.code ?? requisition.id} - {requisition.name}</option>)}</select></div><div className="space-y-2"><Label htmlFor="po-master-supplier">Supplier master</Label><select id="po-master-supplier" name="supplierId" className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">Choose supplier</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select><Input id="po-master-supplier-name" name="supplierName" placeholder="Or enter supplier name" className="mt-2" /></div><div className="space-y-2"><Label htmlFor="po-master-amount">Order amount (minor units)</Label><Input id="po-master-amount" name="amountMinor" type="number" min="0" required /></div><div className="sm:col-span-4 flex items-center justify-between gap-3"><Message value={message} /><Button disabled={!requisitions.length}>Create purchase order</Button></div></form>;
 }
 
 type GoodsReceiptOrder = { id: string; name: string; code: string | null };

@@ -1,4 +1,3 @@
-import "server-only";
 import { v2 as cloudinary } from "cloudinary";
 import { AppError } from "@/lib/errors/app-error";
 import { createUploadSignature } from "./signatures";
@@ -29,7 +28,7 @@ export async function verifyCloudinaryAsset(input: {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret) throw new AppError("INTEGRATION_ERROR", "Cloudinary is not configured.", 503);
+  if (!cloudName || !apiKey || !apiSecret) throw new AppError("PROVIDER_NOT_CONFIGURED", "Cloudinary is not configured.", 503);
   cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
   try {
     const asset = await cloudinary.api.resource(input.publicId, {

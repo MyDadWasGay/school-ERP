@@ -2,15 +2,17 @@ import { DashboardChart } from "@/components/charts/dashboard-chart";
 import { ChartCard } from "@/components/charts/chart-card";
 import { KpiCard } from "@/components/charts/kpi-card";
 import { PageHeader } from "@/components/common/page-header";
-import {
-  getDashboardMetrics,
-  getDashboardTrends,
-} from "@/features/reports/services/dashboard.service";
 import { requirePermission } from "@/lib/auth/guards";
+import { createServerApiClient } from "@/lib/api-client/server";
 
 export default async function AnalyticsPage() {
   const user = await requirePermission("analytics:read");
-  const [metrics, trends] = await Promise.all([getDashboardMetrics(user), getDashboardTrends(user)]);
+  void user;
+  const dashboard = (await (await createServerApiClient()).call<{
+    metrics: { attendanceRate: number; collectionRate: number; students: number; openAlerts: number };
+    trends: Array<{ month: string; attendance: number; collection: number }>;
+  }>("GET", "/api/v1/dashboard")).data;
+  const { metrics, trends } = dashboard;
   return <div>
     <PageHeader title="Analytics" description="Aggregated, permission-scoped indicators for management and operations." />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

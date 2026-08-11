@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
 import type { UserRecord } from "firebase-admin/auth";
 import { getDb } from "@/db/client";
@@ -14,11 +12,11 @@ import {
   users,
 } from "@/db/schema";
 import { canTransitionOrganizationStatus, type OrganizationStatus } from "@/config/organization-status";
-import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin";
+import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { AppError } from "@/lib/errors/app-error";
 import { createId } from "@/lib/utils/ids";
 import { createInvitationToken, invitationUrl } from "@/lib/auth/invitation-token";
-import { requirePlatformAdmin, type PlatformAdmin } from "@/lib/auth/platform";
+import type { PlatformAdmin } from "@/lib/auth/platform-context";
 import { ensureOrganizationAccessDefaults } from "@/features/foundation/services/access-defaults.service";
 import type { CreateSchoolInput, SchoolStatusInput } from "../schemas/platform.schema";
 
@@ -46,7 +44,6 @@ export type PlatformOverview = {
 };
 
 export async function getPlatformOverview(): Promise<PlatformOverview> {
-  await requirePlatformAdmin();
   const db = getDb();
   const [schoolTotals, activeSchools, suspendedSchools, archivedSchools, userTotals, teacherTotals, studentTotals, parentTotals, staffTotals] = await Promise.all([
     db.select({ value: count() }).from(organizations),
@@ -76,7 +73,6 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
 }
 
 export async function listPlatformSchools(search?: string): Promise<PlatformSchoolRow[]> {
-  await requirePlatformAdmin();
   const searchTerm = search?.trim();
   const rows = await getDb().select({
     id: organizations.id,
@@ -97,7 +93,6 @@ export async function listPlatformSchools(search?: string): Promise<PlatformScho
 }
 
 export async function listPlatformAuditLogs() {
-  await requirePlatformAdmin();
   const rows = await getDb().select({
     id: platformAuditLogs.id,
     actorRole: platformAuditLogs.actorRole,

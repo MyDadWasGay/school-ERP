@@ -4,7 +4,7 @@ import { ChartCard } from "@/components/charts/chart-card";
 import { DashboardChart } from "@/components/charts/dashboard-chart";
 import { PageHeader } from "@/components/common/page-header";
 import { requirePermission, requireUser } from "@/lib/auth/guards";
-import { getDashboardMetrics, getDashboardTrends } from "@/features/reports/services/dashboard.service";
+import { createServerApiClient } from "@/lib/api-client/server";
 import { redirect } from "next/navigation";
 
 const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
@@ -14,7 +14,20 @@ export default async function DashboardPage() {
   if (user.role === "student") redirect("/student");
   if (user.role === "teacher") redirect("/teacher");
   await requirePermission("analytics:read");
-  const [metrics, trends] = await Promise.all([getDashboardMetrics(user), getDashboardTrends(user)]);
+  const dashboard = (await (await createServerApiClient()).call<{
+    metrics: {
+      students: number;
+      attendanceRate: number;
+      collectionRate: number;
+      pendingMinor: number;
+      staff: number;
+      transportUtilization: number;
+      hostelOccupancy: number;
+      openAlerts: number;
+    };
+    trends: Array<{ month: string; attendance: number; collection: number }>;
+  }>("GET", "/api/v1/dashboard")).data;
+  const { metrics, trends } = dashboard;
   return <div>
     <PageHeader title="Management overview" description="A permission-scoped view of student wellbeing, academic operations and collections across the current campus." />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

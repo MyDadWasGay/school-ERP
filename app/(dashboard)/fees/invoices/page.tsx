@@ -7,7 +7,7 @@ import { InvoiceForm } from "@/features/finance/components/invoice-form";
 import {
   getInvoiceStudentOptions,
   listInvoicesPage,
-} from "@/features/finance/services/finance-workspace.service";
+} from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

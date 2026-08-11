@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GatePassButton, GatePassForm } from "@/features/safety/components/safety-workspace";
-import { listGatePasses, listVisitors } from "@/features/safety/services/safety.service";
+import { listGatePasses, listVisitors } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

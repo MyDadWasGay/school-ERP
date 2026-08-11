@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransportVehicleForm, VehicleDocumentForm } from "@/features/transport/components/transport-workspace";
-import { listTransportVehicles, listVehicleDocuments } from "@/features/transport/services/transport.service";
+import { listTransportVehicles, listVehicleDocuments } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

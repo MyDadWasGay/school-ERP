@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InviteUserForm } from "@/features/users/components/invite-user-form";
-import { listUsersPage } from "@/features/users/services/access.service";
+import { listUsersPage } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarkNotificationReadButton } from "@/features/communication/components/communication-workspace";
-import { listNotifications } from "@/features/communication/services/communication.service";
+import { listNotifications } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function CommunicationNotificationsPage() {

@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/common/page-header";
 import { StudentCreateForm } from "@/features/students/components/student-create-form";
-import { getStudentFormOptions } from "@/features/students/services/students.service";
+import { getStudentFormOptions } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function NewStudentPage() {

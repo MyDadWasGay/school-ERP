@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/common/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { FoundationCreateForm } from "@/features/foundation/components/foundation-create-form";
 import { CampusActions } from "@/features/foundation/components/campus-actions";
-import { listCampuses } from "@/features/foundation/services/foundation.service";
+import { listCampuses } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function CampusesPage() {

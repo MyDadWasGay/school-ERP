@@ -22,8 +22,7 @@ export const reportQuerySchema = z.object({
 });
 
 export const reportExportSchema = reportQuerySchema.extend({
-  format: z.enum(["csv", "xlsx", "html"]),
+  format: z.enum(["csv", "xlsx", "html", "pdf"]),
 });
 
 export type ReportQuery = z.infer<typeof reportQuerySchema>;
-

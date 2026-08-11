@@ -1,8 +1,9 @@
 import { permissionForPath } from "@/config/modules";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { createServerApiClient } from "@/lib/api-client/server";
+import type { ApiPageInfo } from "@/lib/api-client/contracts";
 import { getModuleData } from "../module-data";
-import { listModuleRecordsPage } from "../services/module-records.service";
 import { ModuleOverview } from "./module-overview";
 
 const routeEntityNames: Record<string, string> = {
@@ -52,15 +53,21 @@ export async function ModuleWorkspace({
   const permissionModule = readPermission.split(":")[0] ?? "settings";
   const segment = route.split("/").filter(Boolean)[0] ?? "workspace";
   const moduleData = getModuleData(moduleKeyForSegment(segment));
-  const result = await listModuleRecordsPage(user, route, { page, search });
+  const api = await createServerApiClient();
+  const query = new URLSearchParams({ route, page: String(page) });
+  if (search?.trim()) query.set("search", search.trim());
+  const result = await api.call<{
+    rows: Array<{ id: string; name: string; detail: string; status: string }>;
+    pageInfo: ApiPageInfo;
+  }>("GET", `/api/v1/catalog/records?${query.toString()}`);
   const createPermission = permissionModule === "settings" ? "settings:update" : `${permissionModule}:create`;
 
   return <ModuleOverview
     {...moduleData}
     title={titleForRoute(route)}
     entityLabel={entityForRoute(route)}
-    rows={result.rows}
-    pageInfo={result.pageInfo}
+    rows={result.data.rows}
+    pageInfo={result.data.pageInfo}
     search={search}
     route={route}
     canCreate={hasPermission(user, createPermission)}

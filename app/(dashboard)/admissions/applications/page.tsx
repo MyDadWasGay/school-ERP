@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ApplicationForm } from "@/features/admissions/components/application-form";
 import { ApplicationActions } from "@/features/admissions/components/application-actions";
-import { getAdmissionOptions, listApplicationsPage } from "@/features/admissions/services/admissions.service";
+import { getAdmissionOptions, listApplicationsPage } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { FileUploadField } from "@/components/upload/file-upload-field";
 
 export default async function ApplicationsPage({ searchParams }: { searchParams: Promise<{ page?: string; search?: string }> }) {
   const query = await searchParams;
@@ -27,6 +28,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
         { key: "name", header: "Applicant", cell: (row) => <span className="font-medium">{row.name}</span> },
         { key: "detail", header: "Application number", cell: (row) => row.detail },
         { key: "status", header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
+        { key: "documents", header: "Documents", cell: (row) => hasPermission(user, "documents:create") ? <FileUploadField entityType="application" entityId={row.id} category="admission_document" campusId={row.campusId ?? undefined} label="Upload" /> : null },
         { key: "actions", header: "Actions", cell: (row) => hasPermission(user, "admissions:update") ? <ApplicationActions row={row} /> : null },
       ]} emptyTitle="No applications found" />
       <ServerPagination pageInfo={result.pageInfo} pathname="/admissions/applications" search={query.search} />

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ResultPublicationList } from "@/features/exams/components/result-publication-list";
-import { listExamResults } from "@/features/exams/services/exam-workspace.service";
+import { listExamResults } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

@@ -18,10 +18,18 @@ const required = [
   "INTERNAL_JOB_SECRET",
 ];
 const missing = required.filter((name) => !process.env[name]?.trim());
-if (process.env.TURSO_DATABASE_URL?.trim() && !process.env.TURSO_DATABASE_URL.trim().startsWith("file:") && !process.env.TURSO_AUTH_TOKEN?.trim()) missing.push("TURSO_AUTH_TOKEN");
-const tooShort = ["APP_ENCRYPTION_SECRET", "INTERNAL_JOB_SECRET"].filter((name) => (process.env[name]?.trim().length ?? 0) < 32);
+if (
+  process.env.TURSO_DATABASE_URL?.trim() &&
+  !process.env.TURSO_DATABASE_URL.trim().startsWith("file:") &&
+  !process.env.TURSO_AUTH_TOKEN?.trim()
+)
+  missing.push("TURSO_AUTH_TOKEN");
+const tooShort = ["APP_ENCRYPTION_SECRET", "INTERNAL_JOB_SECRET"].filter(
+  (name) => (process.env[name]?.trim().length ?? 0) < 32,
+);
 const appUrl = resolveAppUrl(process.env);
 const providerKeys = [
+  "API_INTERNAL_BASE_URL",
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
@@ -32,17 +40,36 @@ const providerKeys = [
   "CLOUDINARY_CLOUD_NAME",
   "CLOUDINARY_API_KEY",
   "CLOUDINARY_API_SECRET",
+  "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_FROM_NUMBER",
+  "GOOGLE_CALENDAR_CLIENT_EMAIL",
+  "GOOGLE_CALENDAR_PRIVATE_KEY",
+  "GOOGLE_CALENDAR_ID",
+  "MOODLE_BASE_URL",
+  "MOODLE_TOKEN",
+  "TRACCAR_BASE_URL",
+  "TRACCAR_TOKEN",
 ];
-if (["staging", "production"].includes(process.env.CONFIG_ENV ?? "")) missing.push(...providerKeys.filter((name) => !process.env[name]?.trim()));
+if (["staging", "production"].includes(process.env.CONFIG_ENV ?? ""))
+  missing.push(...providerKeys.filter((name) => !process.env[name]?.trim()));
 if (!appUrl) {
   missing.push("NEXT_PUBLIC_APP_URL");
-} else if (["staging", "production"].includes(process.env.CONFIG_ENV ?? "") && !appUrl.startsWith("https://")) {
+} else if (
+  ["staging", "production"].includes(process.env.CONFIG_ENV ?? "") &&
+  !appUrl.startsWith("https://")
+) {
   missing.push("NEXT_PUBLIC_APP_URL(https)");
 }
-if (tooShort.length) missing.push(...tooShort.map((name) => `${name}(>=32 characters)`));
+if (tooShort.length)
+  missing.push(...tooShort.map((name) => `${name}(>=32 characters)`));
 if (missing.length) {
   console.error(`Configuration validation failed: ${missing.join(", ")}`);
   process.exitCode = 1;
 } else {
-  console.log(`Configuration validation passed for ${process.env.CONFIG_ENV ?? "development"}.`);
+  console.log(
+    `Configuration validation passed for ${process.env.CONFIG_ENV ?? "development"}.`,
+  );
 }

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiKeyWorkspace } from "@/features/integrations/components/api-key-workspace";
-import { listApiKeys } from "@/features/integrations/services/integration.service";
+import { listApiKeys } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function ApiKeysPage() {
@@ -9,4 +9,3 @@ export default async function ApiKeysPage() {
   const rows = await listApiKeys(user);
   return <div><PageHeader title="API keys" description="Issue scoped integration credentials. Secrets are hashed at rest and shown only once." /><Card><CardHeader><CardTitle>Manage keys</CardTitle></CardHeader><CardContent><ApiKeyWorkspace rows={rows} /></CardContent></Card></div>;
 }
-

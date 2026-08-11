@@ -45,6 +45,35 @@ npm install
 
 The application requires a configured database and Firebase identity provider. Missing configuration fails the relevant server operation instead of creating an in-memory account or silently discarding mutations.
 
+## Web + Flutter / Fastify API
+
+The web app remains Next.js as the frontend, and Flutter is a second client. The shared Fastify backend in `server/api` owns the versioned API contracts, authorization and business mutations; Flutter implementation and device validation remain the external client gate. The migration rules and endpoint inventory are documented in [`docs/FLUTTER_FASTIFY_API_MIGRATION_PLAN.md`](docs/FLUTTER_FASTIFY_API_MIGRATION_PLAN.md).
+
+Run the API locally on port 3001:
+
+```powershell
+npm run api:dev
+```
+
+Run its checks:
+
+```powershell
+npm run api:typecheck
+npm run api:test
+```
+
+The versioned Fastify API owns the web and Flutter boundary under `/api/v1`, including identity, domain workflows, imports/exports, uploads, CMS, invitations, jobs, and provider webhooks. OpenAPI JSON is available at `/documentation/json` and interactive documentation at `/documentation`. Browser login exchanges a Firebase ID token at `/api/v1/auth/session` for an API-owned secure session cookie plus CSRF cookie; browser mutations send `X-CSRF-Token`. Flutter and external clients use `Authorization: Bearer <Firebase ID token>` and may send a validated `X-Campus-Id`. Fastify resolves organization, role, permissions and campus scope from the database. Neither client may send those values as trusted identity. The Fastify process binds to `0.0.0.0` and uses Render’s `PORT` when deployed. The API and Next.js web deploy separately; `render.yaml` provisions the API and supervised job worker.
+
+### Razorpay tenant setup
+
+Razorpay credentials are configured per school from `/integrations`; they are encrypted with `APP_ENCRYPTION_SECRET` and are not stored in public environment variables. Configure this webhook URL in the matching Razorpay Test or Live dashboard:
+
+```text
+https://<web-host>/api/v1/integrations/webhooks/razorpay/<organization-id>
+```
+
+Subscribe to `payment.captured`, `payment.failed`, `order.paid`, `refund.processed`, and `refund.failed`. The browser receives only the public Key ID and provider Order ID. Checkout signatures and raw webhook signatures are verified server-side, captured payment details are fetched from Razorpay before ledger posting, and refunds do not reverse the ERP ledger until Razorpay reports `processed`. Reuse the same webhook secret entered on `/integrations`. Test keys are rejected when `CONFIG_ENV=production`.
+
 ## Database environment
 
 Use a configured `.env.local` or deployment environment with these values:
@@ -54,7 +83,7 @@ TURSO_DATABASE_URL="libsql://your-database.turso.io"
 TURSO_AUTH_TOKEN="your-turso-token"
 ```
 
-Also configure the Firebase Admin variables (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`) and the public Firebase variables (`NEXT_PUBLIC_FIREBASE_*`). Add Cloudinary and the two random server secrets before deployment. Never put Turso, Firebase Admin, Cloudinary API secret, or either server secret in a `NEXT_PUBLIC_*` variable.
+Also configure the Firebase Admin variables (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`) and the public Firebase variables (`NEXT_PUBLIC_FIREBASE_*`). Add Cloudinary, the selected Resend/Twilio/Google Calendar/Moodle/Traccar provider credentials, `API_INTERNAL_BASE_URL`, and separate random values for `APP_ENCRYPTION_SECRET` and `INTERNAL_JOB_SECRET` before staging/production deployment. Never put Turso, Firebase Admin, Cloudinary API secret, provider credentials, or any server secret in a `NEXT_PUBLIC_*` variable.
 
 The CLI scripts load `.env.local` exactly like Next.js. This is important on Windows: running `tsx db/migrate.ts` directly without the loader can otherwise miss the configured target and fail before applying migrations.
 
@@ -133,7 +162,7 @@ npm run check:secrets
 
 ## Production checklist
 
-Before production, verify Firebase email verification and Admin credentials, Turso migrations/backups, Cloudinary signed delivery, secure random secrets, real email/SMS/payment/provider adapters, monitoring, and staging E2E tests.
+Before production, verify Firebase email verification and Admin credentials, Turso migrations/backups, Cloudinary signed delivery, secure random secrets, Razorpay Live credentials/webhook/capture/refund/settlement behavior, the remaining email/SMS and operational provider adapters, monitoring, and authenticated staging E2E tests.
 
 ## Troubleshooting
 

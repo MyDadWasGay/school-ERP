@@ -1,4 +1,3 @@
-import "server-only";
 import { getDb } from "@/db/client";
 import { auditLogs } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";

@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, count, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm/column";
 import { getDb } from "@/db/client";

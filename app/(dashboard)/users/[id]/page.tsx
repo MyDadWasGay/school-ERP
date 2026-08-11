@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserAccessWorkspace } from "@/features/users/components/user-access-workspace";
-import { getUserAccessDetail } from "@/features/users/services/access.service";
+import { getUserAccessDetail } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

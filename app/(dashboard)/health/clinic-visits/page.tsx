@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClinicVisitForm } from "@/features/health/components/health-workspace";
-import { listClinicVisits, listHealthStudents } from "@/features/health/services/health.service";
+import { listClinicVisits, listHealthStudents } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 

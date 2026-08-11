@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, count, desc, eq, inArray, isNull, like, or, type AnyColumn } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { employees, payrollPayslips, payrollRuns, users } from "@/db/schema";
@@ -7,6 +5,8 @@ import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
 import type { EmployeeInput, PayrollRunInput } from "../schemas/hr.schema";
+import { calculatePayrollAmounts } from "./payroll-calculation";
+export { calculatePayrollAmounts } from "./payroll-calculation";
 
 function campusScope(user: CurrentUser, column: AnyColumn) {
   if (user.campusIds && user.campusIds.length > 0) return inArray(column, user.campusIds);
@@ -65,6 +65,9 @@ export async function createEmployee(user: CurrentUser, input: EmployeeInput) {
     jobTitle: input.jobTitle || null,
     linkedUserId: input.linkedUserId || null,
     salaryMinor: input.salaryMinor,
+    allowanceMinor: input.allowanceMinor,
+    fixedDeductionMinor: input.fixedDeductionMinor,
+    deductionRateBps: input.deductionRateBps,
     status: "active",
     createdBy: user.id,
     updatedBy: user.id,
@@ -146,9 +149,13 @@ export async function processPayrollRun(user: CurrentUser, runId: string) {
     await tx.update(payrollRuns).set({ status: "processing", updatedAt: now, updatedBy: user.id }).where(eq(payrollRuns.id, run.id));
     let totalMinor = 0;
     for (const employee of employeeRows) {
-      const grossMinor = Math.max(0, employee.salaryMinor);
-      const deductionsMinor = 0;
-      const netMinor = grossMinor - deductionsMinor;
+      const amounts = calculatePayrollAmounts({
+        salaryMinor: employee.salaryMinor,
+        allowanceMinor: employee.allowanceMinor,
+        fixedDeductionMinor: employee.fixedDeductionMinor,
+        deductionRateBps: employee.deductionRateBps,
+      });
+      const { grossMinor, deductionsMinor, netMinor } = amounts;
       totalMinor += netMinor;
       await tx.insert(payrollPayslips).values({
         id: createId("payslip"),
@@ -169,6 +176,10 @@ export async function processPayrollRun(user: CurrentUser, runId: string) {
           email: employee.email,
           jobTitle: employee.jobTitle,
           salaryMinor: employee.salaryMinor,
+          allowanceMinor: employee.allowanceMinor,
+          fixedDeductionMinor: employee.fixedDeductionMinor,
+          deductionRateBps: employee.deductionRateBps,
+          percentageDeductionMinor: amounts.percentageDeduction,
           capturedAt: now.toISOString(),
         }),
         issuedAt: now,

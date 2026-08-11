@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarksEntryForm } from "@/features/exams/components/marks-entry-form";
-import { getExamWorkspaceOptions } from "@/features/exams/services/exam-workspace.service";
+import { getExamWorkspaceOptions } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 
 export default async function MarksEntryPage() {

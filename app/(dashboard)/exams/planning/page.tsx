@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExamPlanningForm } from "@/features/exams/components/exam-planning-form";
 import { ExamPlanningList } from "@/features/exams/components/exam-planning-list";
 import { ExamScheduleForm } from "@/features/exams/components/exam-schedule-form";
-import { getExamPlanningOptions, listExamPlanning } from "@/features/exams/services/exam-workspace.service";
+import { getExamPlanningOptions, listExamPlanning } from "@/lib/api-client/server-queries";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { requirePermission } from "@/lib/auth/guards";
 

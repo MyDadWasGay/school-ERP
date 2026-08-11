@@ -1,8 +1,7 @@
-import "server-only";
 
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { goodsReceipts, inventoryItems, purchaseOrders, purchaseRequisitions, stockMovements, workflowTransitions } from "@/db/schema";
+import { goodsReceipts, inventoryItems, purchaseOrders, purchaseRequisitions, stockMovements, suppliers, workflowTransitions } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
@@ -83,6 +82,15 @@ export async function createPurchaseOrder(user: CurrentUser, input: PurchaseOrde
     eq(purchaseRequisitions.status, "approved"),
   ) });
   if (!requisition) throw new AppError("CONFLICT", "Only an approved requisition can become a purchase order.", 409);
+  const supplier = input.supplierId ? await getDb().query.suppliers.findFirst({ where: and(
+    eq(suppliers.id, input.supplierId),
+    eq(suppliers.organizationId, user.organizationId),
+    user.campusId ? eq(suppliers.campusId, user.campusId) : undefined,
+    eq(suppliers.status, "active"),
+  ) }) : null;
+  if (input.supplierId && !supplier) throw new AppError("NOT_FOUND", "Supplier is not in your campus scope.", 404);
+  const supplierName = supplier?.name ?? input.supplierName?.trim();
+  if (!supplierName) throw new AppError("VALIDATION_ERROR", "A supplier is required.", 422);
   const [row] = await getDb().insert(purchaseOrders).values({
     id: createId("purchase_order"),
     organizationId: user.organizationId,
@@ -90,7 +98,7 @@ export async function createPurchaseOrder(user: CurrentUser, input: PurchaseOrde
     name: `PO for ${requisition.name}`,
     code: `PO-${createId("number").slice(-8).toUpperCase()}`,
     referenceId: requisition.id,
-    detailsJson: JSON.stringify({ supplierName: input.supplierName, amountMinor: input.amountMinor }),
+    detailsJson: JSON.stringify({ supplierId: supplier?.id ?? null, supplierName, amountMinor: input.amountMinor }),
     status: "draft",
     createdBy: user.id,
     updatedBy: user.id,

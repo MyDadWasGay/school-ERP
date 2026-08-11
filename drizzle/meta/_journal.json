@@ -225,6 +225,48 @@
       "when": 1786087000000,
       "tag": "0031_community_extensions",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786252200000,
+      "tag": "0032_allocation_booking_concurrency",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786253100000,
+      "tag": "0033_library_borrower_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786254000000,
+      "tag": "0034_razorpay_payment_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1786254600000,
+      "tag": "0035_payroll_inputs",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786255200000,
+      "tag": "0036_staff_attendance_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786255800000,
+      "tag": "0037_donations",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,8 @@
 import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DisciplineForm, DisciplineList } from "@/features/attendance/components/discipline-form";
-import { listDisciplineIncidents } from "@/features/attendance/services/discipline.service";
-import { getAttendanceStudentOptions } from "@/features/attendance/services/attendance-workspace.service";
+import { listDisciplineIncidents } from "@/lib/api-client/server-queries";
+import { getAttendanceStudentOptions } from "@/lib/api-client/server-queries";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { requirePermission } from "@/lib/auth/guards";
 

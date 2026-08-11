@@ -1,4 +1,3 @@
-import "server-only";
 import { v2 as cloudinary } from "cloudinary";
 import { AppError } from "@/lib/errors/app-error";
 

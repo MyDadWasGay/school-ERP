@@ -1,9 +1,20 @@
-import "server-only";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { academicYears, classes, exams, examSchedules, resultPublications, subjects } from "@/db/schema";
+import {
+  academicYears,
+  classes,
+  exams,
+  examSchedules,
+  marksEntries,
+  resultPublications,
+  subjects,
+} from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
-import { listStudents } from "@/features/students/services/students.service";
+import { normalizePagination } from "@/lib/utils/pagination";
+import {
+  getReadableStudent,
+  listStudents,
+} from "@/features/students/services/students.service";
 
 export type ExamOption = { id: string; name: string; maxMarks: number; status: string };
 export type SubjectOption = { id: string; name: string };
@@ -71,6 +82,89 @@ export async function listExamResults(user: CurrentUser) {
     status: row.publicationStatus === "published" ? "published" : row.status,
     publishedAt: row.publishedAt?.toLocaleString(),
   }));
+}
+
+export async function listStudentPublishedResults(
+  user: CurrentUser,
+  studentId: string,
+  input?: { page?: number; pageSize?: number },
+) {
+  const student = await getReadableStudent(user, studentId);
+  const pagination = normalizePagination(input);
+  const where = and(
+    eq(marksEntries.organizationId, user.organizationId),
+    eq(marksEntries.studentId, student.id),
+    student.campusId ? eq(marksEntries.campusId, student.campusId) : undefined,
+    eq(marksEntries.status, "active"),
+    eq(resultPublications.status, "published"),
+  );
+  const [rows, totals] = await Promise.all([
+    getDb()
+      .select({
+        id: marksEntries.id,
+        examId: exams.id,
+        examName: exams.name,
+        subjectId: subjects.id,
+        subjectName: subjects.name,
+        marks: marksEntries.marks,
+        maximumMarks: exams.maxMarks,
+        state: marksEntries.state,
+        publishedAt: resultPublications.publishedAt,
+      })
+      .from(marksEntries)
+      .innerJoin(
+        exams,
+        and(
+          eq(exams.id, marksEntries.examId),
+          eq(exams.organizationId, user.organizationId),
+        ),
+      )
+      .innerJoin(
+        subjects,
+        and(
+          eq(subjects.id, marksEntries.subjectId),
+          eq(subjects.organizationId, user.organizationId),
+        ),
+      )
+      .innerJoin(
+        resultPublications,
+        and(
+          eq(resultPublications.examId, marksEntries.examId),
+          eq(resultPublications.organizationId, user.organizationId),
+        ),
+      )
+      .where(where)
+      .orderBy(
+        desc(resultPublications.publishedAt),
+        desc(marksEntries.updatedAt),
+      )
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    getDb()
+      .select({ value: count() })
+      .from(marksEntries)
+      .innerJoin(
+        resultPublications,
+        and(
+          eq(resultPublications.examId, marksEntries.examId),
+          eq(resultPublications.organizationId, user.organizationId),
+        ),
+      )
+      .where(where),
+  ]);
+  const total = totals[0]?.value ?? 0;
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      publishedAt: row.publishedAt?.toISOString() ?? null,
+    })),
+    pageInfo: {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      total,
+      pageCount: Math.ceil(total / pagination.pageSize),
+    },
+  };
 }
 
 export async function getExamPlanningOptions(user: CurrentUser) {
