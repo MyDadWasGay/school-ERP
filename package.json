@@ -9,7 +9,7 @@
     "api:dev": "tsx watch server/api/index.ts",
     "api:start": "tsx server/api/index.ts",
     "api:typecheck": "tsc --noEmit -p tsconfig.api.json",
-    "api:test": "vitest run server/api",
+    "api:test": "vitest run server/api --environment node",
     "api:check": "npm run api:typecheck && npm run api:test",
     "lint": "eslint app components config db features lib server tests middleware.ts",
     "typecheck": "tsc --noEmit",
