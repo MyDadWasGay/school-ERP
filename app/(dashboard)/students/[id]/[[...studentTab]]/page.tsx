@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { EntityHeader, EntityTabs } from "@/components/common/entity-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
@@ -54,6 +55,7 @@ export default async function StudentDetailPage({
 }) {
   const { id, studentTab } = await params;
   const user = await requirePermission("students:read");
+  if (studentTab?.length && !tabs.includes(studentTab[0] as (typeof tabs)[number])) notFound();
   const profile = await getStudentProfile(user, id);
   const canUpdate = hasPermission(user, "students:update");
   const canViewSensitive = hasPermission(user, "students:view_sensitive");

@@ -1,16 +1,17 @@
 # Remaining School ERP features
 
-Last reviewed: 2026-08-07
+Last reviewed: 2026-08-12
 
 This backlog is based on the implementation plan and the current code review.
 The application already has authenticated routing, server-side RBAC and tenant
-scope enforcement, audited CRUD workspaces for all planned modules, and
-dedicated core workflows for students, admissions, attendance, exams, finance,
+scope enforcement, dedicated released workflows for students, admissions,
+attendance, exams, finance,
 documents, analytics, user access, HR/payroll, communication, library,
 transport, hostel/canteen, inventory/procurement, health, safety, and
-facilities, activities, alumni, and CMS/forms. The items below are the deeper
-extensions, automation, and external rollout evidence still needed beyond the
-implemented first-build boundary.
+facilities, activities, alumni, and CMS/forms. Planned and generic routes are
+intentionally hidden until their domain workflows are ready. The items below
+are the deeper extensions, automation, and external rollout evidence still
+needed beyond the implemented first-build boundary.
 
 ## Execution update — 2026-08-07
 

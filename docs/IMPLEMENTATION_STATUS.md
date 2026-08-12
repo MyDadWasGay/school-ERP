@@ -1,6 +1,6 @@
 # School ERP implementation status
 
-Last reviewed: 2026-08-07
+Last reviewed: 2026-08-12
 
 This document records the result of the codebase-first review against
 `SCHOOL_ERP_LLM_CONTEXT.md`, `SCHOOL_ERP_PRD.md`, `SCHOOL_ERP_TDD.md`, and
@@ -13,11 +13,14 @@ authenticated, role-aware foundation: every module is routed and functional,
 provider boundaries are explicit, and the core workflows use the real domain
 schema and server-side controls.
 
-The project now meets that first-build boundary. A functional audited CRUD
-workspace is available for every planned module route. The high-risk workflows
-listed below use dedicated domain services rather than the generic workspace.
-Provider-dependent production rollout still requires real credentials,
-staging data, and operational sign-off.
+The released product surface now meets the honest first-build boundary. Core
+workflows use dedicated domain services and pages; Foundation setup remains
+available for organization, campus, academic year, class, section, and subject
+configuration. Planned, generic, and unfinished routes remain in the internal
+product map but are hidden from navigation and reject direct access. Existing
+legacy generic records are preserved and are not exposed through a fallback API.
+Provider-dependent production rollout still requires real credentials, staging
+data, and operational sign-off.
 
 The current execution also added dedicated exam planning/status gating, leave
 and discipline workflows, fee refund/reversal accounting, invitation/session
@@ -34,9 +37,16 @@ configuration.
 
 ## Review findings resolved
 
-- Replaced static-looking catch-all screens with tenant-scoped, paginated,
-  searchable create/edit/archive workspaces.
-- Added all 167 planned route definitions and reject unknown catch-all routes.
+- Removed misleading generic catch-all screens from the released surface and
+  retained a fail-closed catch-all boundary for future dedicated routes.
+- Added a single route registry with owner, permission, presentation, and
+  release-status metadata; role navigation is filtered from that registry.
+- Removed the generic catalog API's `module_records` read/write fallback while
+  preserving existing data.
+- Added Foundation enrollment guidance, including direct links to class and
+  section setup when campus-scoped dependencies are missing.
+- Kept the configured route inventory and reject unknown, unreleased, and
+  unowned catch-all routes.
 - Completed server-side campus switching and role-aware teacher, parent,
   student, alumni, and management navigation.
 - Closed tenant/campus/class scope gaps in students, admissions, attendance,
@@ -71,7 +81,7 @@ configuration.
 | --- | --- | --- |
 | Authentication | Implemented | Firebase email/password, verified email, secure server session cookie, active local-user/organization checks, login/session audit, logout revocation |
 | RBAC and scope | Implemented | Server guards, persisted role permissions with defaults, delegated permissions, organization/campus/class/parent/student/teacher scopes |
-| Foundation | Implemented core | Organization/campus creation, academic year/class/section/subject setup, one active year policy, scope validation; remaining settings use audited CRUD workspace |
+| Foundation | Implemented core | Organization/campus creation, academic year/class/section/subject setup, one active year policy, scope validation; unfinished settings are hidden |
 | Users | Implemented | Invite and link Firebase identity, paginated search, role/status/campus/class scope administration, delegation, login history |
 | Admissions | Implemented core | Enquiries, applications, verification/waitlist/rejection, guarded approval, capacity enforcement, atomic student/guardian/enrollment/timeline conversion |
 | Students | Implemented core | Create/update master, optional guardian reuse/link, initial enrollment, capacity and duplicate checks, profile tabs, history, secure documents, scoped portal views |
@@ -80,7 +90,7 @@ configuration.
 | Fees and accounts | Implemented core | Invoice creation, partial payment allocation, stable idempotency, optimistic balance protection, immutable receipt and ledger records |
 | Reports and analytics | Implemented | Scoped report catalog/services for 11 operational datasets, bounded CSV/XLSX/HTML exports, Tremor KPIs and database trends, audit of export access |
 | Documents | Implemented | Signed Cloudinary upload, exact tenant/entity path, entity authorization, server metadata verification, private document records |
-| Academic | Functional scaffold | Planned pages expose filtered, paginated, validated, permission-shaped, tenant-scoped, audited create/edit/archive patterns; dedicated curriculum, timetable, assignment, and resource workflows remain open |
+| Academic | Implemented core | Dedicated curriculum, timetable, assignment, substitution, lesson-plan, allocation, and resource workflows with scoped records and audited mutations |
 | HR and payroll | Implemented core | Employee register with unique IDs, linked portal users, salary inputs, payroll-period runs, immutable payslip snapshots, scoped payroll views and tenant triggers |
 | Communication | Implemented core | Audited message drafts, campus/role audience publication, durable in-app notification events, read state and delivery logs with tenant guards |
 | Library | Implemented core | Catalogue/copy circulation, issue/return/renewal, borrower limits, fine calculation, lost/damaged state, reservations and digital-resource records |
@@ -121,8 +131,8 @@ npm run check:config
 npm run check:secrets
 ```
 
-The route matrix is unit-tested for 167 unique planned entries. The current
-suite has 23 files and 64 passing tests. Tests cover
+The route matrix is unit-tested for the configured route inventory. The current
+suite has 44 files and 149 passing tests. Tests cover
 RBAC, route permissions, audit records, student forms and schemas, admission
 decisions, academic setup, attendance validation, marks, payment rules,
 document upload policy, import parsing, export behavior, user access

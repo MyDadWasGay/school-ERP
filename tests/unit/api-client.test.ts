@@ -2,6 +2,24 @@ import { describe, expect, it, vi } from "vitest";
 import { SchoolErpApiClient, SchoolErpApiError } from "@/lib/api-client/client";
 
 describe("shared School ERP API client", () => {
+  it("binds the browser fetch receiver when no adapter is supplied", async () => {
+    const fetchMock = vi.fn(function (this: typeof globalThis) {
+      if (this !== globalThis) throw new Error("fetch receiver was lost");
+      return Promise.resolve(new Response(JSON.stringify({ data: { id: "user-1" }, meta: { requestId: "request-default-fetch" } }), { status: 200, headers: { "content-type": "application/json" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const client = new SchoolErpApiClient({
+        baseUrl: "https://api.example.com",
+        getFirebaseIdToken: async () => "firebase-token",
+      });
+      await expect(client.getMe()).resolves.toMatchObject({ id: "user-1" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("sends only Firebase and selected-campus authority headers", async () => {
     const fetchMock = vi.fn().mockImplementation(
       async () =>

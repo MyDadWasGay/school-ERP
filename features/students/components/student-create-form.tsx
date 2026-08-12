@@ -28,6 +28,9 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
   const availableYears = options.academicYears.filter((year) => !year.campusId || year.campusId === campusId);
   const availableClasses = options.classes.filter((classRow) => !classRow.campusId || classRow.campusId === campusId);
   const availableSections = options.sections.filter((section) => section.classId === classId && (!section.campusId || section.campusId === campusId));
+  const needsAcademicYearSetup = Boolean(campusId) && availableYears.length === 0;
+  const needsClassSetup = Boolean(campusId) && availableClasses.length === 0;
+  const needsSectionSetup = Boolean(classId) && availableSections.length === 0;
   const campusField = form.register("campusId");
   const classField = form.register("classId");
 
@@ -81,6 +84,9 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
         <FormField label="Section" error={form.formState.errors.sectionId?.message}><Select {...form.register("sectionId")} options={availableSections} emptyLabel={classId ? "Select a section" : "Choose a class first"} disabled={!classId || availableSections.length === 0} /></FormField>
         <FormField label="Roll number" error={form.formState.errors.rollNumber?.message}><Input {...form.register("rollNumber")} /></FormField>
       </div>
+      {needsAcademicYearSetup ? <p className="mt-3 text-sm text-muted-foreground" role="status">No active academic year is configured for this campus. <ButtonLink href="/settings/academic-years" variant="outline" size="sm" className="ml-1">Set up academic years</ButtonLink></p> : null}
+      {needsClassSetup ? <p className="mt-3 text-sm text-muted-foreground" role="status">No active classes are configured for this campus. Classes are campus-scoped, so create one before starting enrollment. <ButtonLink href="/settings/classes" variant="outline" size="sm" className="ml-1">Set up classes</ButtonLink></p> : null}
+      {needsSectionSetup ? <p className="mt-3 text-sm text-muted-foreground" role="status">No sections are configured for the selected class and campus. <ButtonLink href="/settings/sections" variant="outline" size="sm" className="ml-1">Set up sections</ButtonLink></p> : null}
       {form.formState.errors.academicYearId?.message ? <p className="mt-3 text-xs text-muted-foreground">To enroll the student, choose all three enrollment fields.</p> : null}
     </fieldset>
 

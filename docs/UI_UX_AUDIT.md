@@ -13,6 +13,8 @@ This document started as a forward-looking report of work that still needed to b
 The implementation now includes:
 
 - A typed route/presentation registry covering all configured module routes, grouped role-aware navigation, duplicate-destination checks, human breadcrumb labels, skip navigation, and semantic current-page/tab state.
+- An authoritative route release registry with owner, permission, presentation, and release status metadata. Foundation setup and dedicated workflows remain visible; reserved and generic routes are hidden and reject direct access.
+- Generic catch-all workspaces and generic `module_records` mutations are removed from the released surface. Existing legacy rows remain preserved but are not reachable through the catalog API.
 - Shared dialog/drawer interaction contracts with focus trapping, focus restoration, Escape handling, body-scroll locking, pending protection, retryable errors, and scoped destructive copy.
 - Durable mutation feedback for important payment work, visible campus/session failure states, server-safe API error handling, and idempotent payment retry identity.
 - URL-backed retrieval patterns for students, users, admissions, attendance, and fee invoices, with filter summaries, clear actions, and query-preserving pagination.
@@ -479,21 +481,20 @@ Acceptance: A receptionist can identify the correct student quickly while speaki
 
 Affected users: Users of academic setup, operations, configuration, reports, and less mature modules.
 
-Current issue: `features/shared/components/module-workspace.tsx` derives titles, entity labels, metrics, and forms from URL segments. Distinct domain workflows can look like generic records.
+Current status: Completed for the released surface. The route registry now owns route ownership, permission, presentation, and release status. Dedicated pages remain available, while reserved/planned routes, generic catalog routes, and generic integration fallbacks are hidden from navigation and return not-found on direct access.
 
-Work required:
+Repository implementation:
 
-1. Add an explicit route presentation registry: `dedicated`, `catalog`, or `planned`.
-2. Give catalog routes human descriptions and domain-safe empty states.
-3. Do not expose generic metrics such as `Live` or `Requires review` when they are not backed by meaningful data.
-4. Graduate high-frequency or high-invariant modules to dedicated service/UI contracts.
-5. Keep the catalog workspace for genuinely simple records only.
+1. Added an explicit route presentation/release registry with owner and permission metadata.
+2. Removed generic catch-all rendering and the `module_records` fallback mutation path.
+3. Kept the Foundation academic setup pages and dedicated analytics/report workflows released.
+4. Added regression coverage for hidden navigation, direct route rejection, breadcrumb labels, and the catalog boundary.
 
-Primary files: `features/shared/components/module-workspace.tsx`, `features/shared/components/module-overview.tsx`, `config/modules.ts`, route registry.
+Primary files: `config/route-registry.ts`, `config/nav.ts`, `server/api/routes/catalog.routes.ts`, and the catch-all route boundary.
 
 Acceptance criteria:
 
-- Users can tell whether a page is a real domain workflow or a simple catalog.
+- Users can tell whether a page is a released domain workflow or an unavailable reserved route.
 - Titles and entity labels are user-facing and meaningful.
 - High-volume/financial/scheduling workflows are not represented only by generic records.
 
@@ -806,7 +807,7 @@ The following source-level areas are implemented in this checkout and should be 
 - `config/nav.ts` and `config/route-registry.ts`: grouped navigation metadata, role filtering, active-prefix rules, route labels, breadcrumbs, route presentation modes, and inventory tests.
 - `components/layout/`: permission-filtered desktop/mobile navigation, header context, campus failure feedback, theme persistence, notification state, menu keyboard behavior, skip link, and main landmark.
 - `components/common/` and `components/data-table/`: confirmation dialogs, mutation feedback, loading/error/empty states, field errors, filter summaries, table captions/scopes, and query-preserving pagination.
-- `features/shared/`: honest catalog/planned-route behavior, server-backed search, scoped metrics, consistent status rendering, and safe archive transitions.
+- `features/shared/`: reserved catalog definitions remain data-preserving server infrastructure; no generic workspace or `module_records` mutation is released.
 - Students, admissions, attendance, fees, HR/users, library, inventory, procurement, safety, facilities, assets, CMS/community, integrations, and reports: representative list, form, status, confirmation, feedback, and empty-state migrations.
 - `tests/unit/confirm-dialog.test.tsx`, `tests/unit/destructive-workflows.test.tsx`, `tests/unit/nav.test.ts`, and existing student-form coverage: regression coverage for shared interaction contracts.
 
@@ -814,7 +815,8 @@ Current local evidence for the implementation pass:
 
 - `npm.cmd run typecheck`: passed.
 - `npm.cmd run lint`: passed.
-- `npm.cmd run test`: passed, 43 files and 142 tests.
+- `npm.cmd run test`: passed, 44 files and 149 tests.
 - `npm.cmd run build`: passed; all 123 routes generated.
+- `npm.cmd run test:e2e`: passed 3 unauthenticated smoke tests; 6 authenticated tests are gated on an operator-provided staging storage state.
 
 Still-open release evidence is intentionally separate: authenticated role journeys, 390/768/1024/1440px browser checks, 200% zoom, screen-reader validation, axe/automated browser accessibility checks, real-device interaction, provider behavior, production configuration, load, security, backup/restore, and deployment verification. Local gates do not establish those conditions.

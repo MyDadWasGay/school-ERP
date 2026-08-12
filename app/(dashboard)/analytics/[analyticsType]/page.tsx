@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ReportsWorkspace } from "@/features/reports/components/reports-workspace";
 import type { ReportType } from "@/features/reports/schemas/report.schema";
+import { isReleasedRoute } from "@/config/route-registry";
 import { requirePermission } from "@/lib/auth/guards";
 import { createServerApiClient } from "@/lib/api-client/server";
 
@@ -16,6 +17,7 @@ export default async function AnalyticsDrilldownPage({ params }: { params: Promi
   const { analyticsType } = await params;
   const selection = analyticsReports[analyticsType];
   if (!selection) notFound();
+  if (!isReleasedRoute(`/analytics/${analyticsType}`)) notFound();
   await requirePermission("reports:read");
   const result = (await (await createServerApiClient()).call<{
     definition: { key: ReportType; label: string; description: string; columns: string[] };

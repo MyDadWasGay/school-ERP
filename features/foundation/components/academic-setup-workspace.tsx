@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
@@ -34,11 +35,18 @@ export function AcademicSetupWorkspace({
   options: AcademicSetupOptions;
   canCreate: boolean;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [campusId, setCampusId] = useState(options.campuses[0]?.id ?? "");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const definition = copy[kind];
   async function submit(formData: FormData) {
+    if (pending) return;
+    setMessage("");
+    setError("");
+    setPending(true);
     const base = { kind, campusId, name: String(formData.get("name") ?? "") };
     const input = kind === "academic_year"
       ? { ...base, startsOn: formData.get("startsOn"), endsOn: formData.get("endsOn"), isActive: formData.get("isActive") === "on" }
@@ -47,9 +55,18 @@ export function AcademicSetupWorkspace({
         : kind === "section"
           ? { ...base, classId: formData.get("classId"), capacity: formData.get("capacity") }
           : { ...base, code: formData.get("code"), isOptional: formData.get("isOptional") === "on" };
-    const result = await createAcademicSetupAction(input);
-    setMessage(result.ok ? result.message ?? "Saved." : result.error);
-    if (result.ok) setOpen(false);
+    try {
+      const result = await createAcademicSetupAction(input);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setMessage(result.message ?? "Saved.");
+      setOpen(false);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
   }
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +75,8 @@ export function AcademicSetupWorkspace({
   const classes = options.classes.filter((row) => row.campusId === campusId);
   return <div>
     <PageHeader title={definition.title} description={definition.description} />
+    {error ? <p role="alert" className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
+    {message ? <p role="status" className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{message}</p> : null}
     {canCreate ? open
       ? <form onSubmit={handleSubmit} className="mb-6 rounded-lg border p-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -78,8 +97,7 @@ export function AcademicSetupWorkspace({
           </> : null}
           {kind === "subject" ? <><Field label="Code"><Input name="code" required /></Field><CheckField name="isOptional" label="Optional subject" /></> : null}
         </div>
-        {message ? <p role="status" className="mt-3 text-sm text-muted-foreground">{message}</p> : null}
-        <div className="mt-4 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={!options.campuses.length || (kind === "section" && !classes.length)}>Create {definition.label}</Button></div>
+        <div className="mt-4 flex justify-end gap-2"><Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>Cancel</Button><Button disabled={pending || !options.campuses.length || (kind === "section" && !classes.length)}>{pending ? "Saving..." : `Create ${definition.label}`}</Button></div>
       </form>
       : <Button className="mb-6" onClick={() => setOpen(true)}>New {definition.label}</Button>
       : null}

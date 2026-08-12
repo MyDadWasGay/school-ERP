@@ -1,4 +1,5 @@
-import { Activity, BarChart3, BedDouble, BookOpen, Boxes, CalendarCheck, ClipboardList, CreditCard, FileText, Globe2, GraduationCap, HeartPulse, Home, LayoutDashboard, Library, Megaphone, Package, Plug, Route, Settings, ShieldCheck, ShoppingCart, UserRound, Users, Utensils, type LucideIcon } from "lucide-react";
+import { Activity, BarChart3, BedDouble, BookOpen, Boxes, CalendarCheck, ClipboardList, CreditCard, FileText, Globe2, GraduationCap, HeartPulse, Home, LayoutDashboard, Library, Megaphone, Package, Plug, Route, ShieldCheck, ShoppingCart, UserRound, Users, Utensils, type LucideIcon } from "lucide-react";
+import { isReleasedRoute } from "./route-registry";
 
 export type NavItem = {
   label: string;
@@ -61,7 +62,6 @@ export const primaryNav: NavItem[] = [
   { label: "Sections", href: "/settings/sections", icon: ClipboardList, permission: "settings:read", section: "Foundation & settings", activePrefixes: ["/settings/sections"] },
   { label: "Subjects", href: "/settings/subjects", icon: BookOpen, permission: "settings:read", section: "Foundation & settings", activePrefixes: ["/settings/subjects"] },
   { label: "Audit Logs", href: "/audit-logs", icon: ShieldCheck, permission: "audit_logs:read", section: "Reports & administration", activePrefixes: ["/audit-logs"] },
-  { label: "Settings", href: "/settings/permissions", icon: Settings, permission: "settings:read", section: "Reports & administration", activePrefixes: ["/settings/permissions", "/settings/roles", "/settings/access-scopes"] },
 ];
 
 const teacherNav: NavItem[] = [
@@ -89,7 +89,6 @@ const parentNav: NavItem[] = [
   { label: "Timetable", href: "/academics/timetable", icon: CalendarCheck, permission: "academics:read", section: "Learning" },
   { label: "Transport", href: "/transport/routes", icon: Route, permission: "transport:read", section: "Services" },
   { label: "Leave", href: "/attendance/leave", icon: ClipboardList, permission: "attendance:read", section: "Services" },
-  { label: "PTM", href: "/communication/ptm", icon: Users, permission: "communication:read", section: "Services" },
   { label: "Notices", href: "/communication/notices", icon: Megaphone, permission: "communication:read", section: "Services" },
   { label: "Documents", href: "/students", icon: FileText, permission: "documents:read", section: "Children" },
 ];
@@ -103,7 +102,6 @@ const studentNav: NavItem[] = [
   { label: "Attendance", href: "/attendance/students", icon: CalendarCheck, permission: "attendance:read", section: "My learning" },
   { label: "Exams", href: "/exams/planning", icon: FileText, permission: "exams:read", section: "My learning" },
   { label: "Results", href: "/exams/results", icon: BarChart3, permission: "exams:read", section: "My learning" },
-  { label: "Certificates", href: "/certificates", icon: FileText, permission: "students:read", section: "My learning" },
   { label: "Activities", href: "/activities/clubs", icon: Activity, permission: "activities:read", section: "Community" },
   { label: "Notices", href: "/communication/notices", icon: Megaphone, permission: "communication:read", section: "Community" },
 ];
@@ -118,7 +116,7 @@ const alumniNav: NavItem[] = [
 
 function groupNavigation(items: NavItem[]): NavGroup[] {
   const groups = new Map<string, NavItem[]>();
-  for (const item of items) {
+  for (const item of items.filter((candidate) => isReleasedRoute(candidate.href))) {
     const group = groups.get(item.section) ?? [];
     group.push(item);
     groups.set(item.section, group);

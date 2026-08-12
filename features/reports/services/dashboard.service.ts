@@ -1,7 +1,6 @@
 import { and, count, eq, gte, sql, sum } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  alerts,
   employees,
   feeInvoices,
   hostelAllotments,
@@ -21,7 +20,6 @@ export type DashboardMetrics = {
   staff: number;
   transportUtilization: number;
   hostelOccupancy: number;
-  openAlerts: number;
 };
 
 export type DashboardTrend = { month: string; attendance: number; collection: number };
@@ -31,7 +29,7 @@ export async function getDashboardMetrics(user: CurrentUser): Promise<DashboardM
   const campus = user.campusId ? eq(students.campusId, user.campusId) : undefined;
   const [
     studentRows, attendanceRows, invoiceRows, staffRows, routeRows,
-    allocationRows, roomRows, allotmentRows, alertRows,
+    allocationRows, roomRows, allotmentRows,
   ] = await Promise.all([
     getDb().select({ value: count() }).from(students).where(and(tenant, campus, eq(students.status, "active"))),
     getDb().select({
@@ -50,7 +48,6 @@ export async function getDashboardMetrics(user: CurrentUser): Promise<DashboardM
     getDb().select({ value: count() }).from(routeAllocations).where(and(eq(routeAllocations.organizationId, user.organizationId), user.campusId ? eq(routeAllocations.campusId, user.campusId) : undefined, eq(routeAllocations.status, "active"))),
     getDb().select({ capacity: sum(hostelRooms.capacity) }).from(hostelRooms).where(and(eq(hostelRooms.organizationId, user.organizationId), user.campusId ? eq(hostelRooms.campusId, user.campusId) : undefined, eq(hostelRooms.status, "active"))),
     getDb().select({ value: count() }).from(hostelAllotments).where(and(eq(hostelAllotments.organizationId, user.organizationId), user.campusId ? eq(hostelAllotments.campusId, user.campusId) : undefined, eq(hostelAllotments.status, "active"))),
-    getDb().select({ value: count() }).from(alerts).where(and(eq(alerts.organizationId, user.organizationId), user.campusId ? eq(alerts.campusId, user.campusId) : undefined, eq(alerts.status, "open"))),
   ]);
   // Keep the total and present counts in one tenant-scoped scan.
   const totalAttendance = Number(attendanceRows[0]?.total ?? 0);
@@ -67,7 +64,6 @@ export async function getDashboardMetrics(user: CurrentUser): Promise<DashboardM
     staff: staffRows[0]?.value ?? 0,
     transportUtilization: routeCapacity ? ((allocationRows[0]?.value ?? 0) / routeCapacity) * 100 : 0,
     hostelOccupancy: hostelCapacity ? ((allotmentRows[0]?.value ?? 0) / hostelCapacity) * 100 : 0,
-    openAlerts: alertRows[0]?.value ?? 0,
   };
 }
 

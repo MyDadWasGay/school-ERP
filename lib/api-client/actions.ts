@@ -39,10 +39,6 @@ function textId(input: unknown, key: string) {
 export const createAcademicRecordAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/academics/${encodeURIComponent(textId(input, "kind"))}`, input, "Academic record created.");
 export const archiveAcademicRecordAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/academics/${encodeURIComponent(textId(input, "kind"))}/${encodeURIComponent(textId(input, "id"))}/archive`, undefined, "Academic record archived.");
 
-export const createModuleRecordAction = (input: unknown) => callApiAction<{ id: string }>("POST", "/api/v1/catalog/records", input, "Record created.");
-export const updateModuleRecordAction = (input: unknown) => callApiAction<{ id: string }>("PATCH", `/api/v1/catalog/records/${encodeURIComponent(textId(input, "id"))}`, input, "Record updated.");
-export const archiveModuleRecordAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/catalog/records/${encodeURIComponent(textId(input, "id"))}/archive`, input, "Record archived.");
-
 export const createStudentAction = (input: unknown) => callApiAction<{ id: string }>("POST", "/api/v1/students", input, "Student created.");
 export const updateStudentAction = (input: unknown) => callApiAction<{ id: string }>("PATCH", `/api/v1/students/${encodeURIComponent(textId(input, "id"))}`, input, "Student updated.");
 export const createGuardianAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/students/${encodeURIComponent(textId(input, "studentId"))}/guardians`, input, "Guardian linked.");

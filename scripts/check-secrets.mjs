@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const roots = ["app", "components", "config", "db", "features", "lib", "tests", "middleware.ts", "next.config.mjs", "package.json", "Dockerfile"];
+const roots = ["app", "components", "config", "db", "features", "lib", "tests", ".env.example", "middleware.ts", "next.config.mjs", "package.json", "Dockerfile"];
 const ignored = new Set(["node_modules", ".next", ".git", ".tmp-validation"]);
 const findings = [];
 const secretPatterns = [
@@ -39,4 +39,3 @@ function scan(file) {
     }
   });
 }
-

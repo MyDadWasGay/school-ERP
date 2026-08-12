@@ -35,7 +35,6 @@ async function DashboardData({ user }: { user: CurrentUser }) {
       staff: number;
       transportUtilization: number;
       hostelOccupancy: number;
-      openAlerts: number;
     };
     trends: Array<{ month: string; attendance: number; collection: number }>;
   }>("GET", "/api/v1/dashboard")).data;
@@ -48,7 +47,6 @@ async function DashboardData({ user }: { user: CurrentUser }) {
       <KpiCard title="Active staff" value={metrics.staff.toLocaleString("en-IN")} detail="Current campus scope" />
       <KpiCard title="Transport utilization" value={`${metrics.transportUtilization.toFixed(1)}%`} detail="Allocated seats" />
       <KpiCard title="Hostel occupancy" value={`${metrics.hostelOccupancy.toFixed(1)}%`} detail="Active allotments" />
-      <KpiCard title="Open alerts" value={metrics.openAlerts.toLocaleString("en-IN")} detail="Requires attention" trend={metrics.openAlerts > 0 ? "down" : "up"} />
     </div>
     <div className="mt-6 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
       <ChartCard title="Attendance and collections"><LazyDashboardChart data={trends} /></ChartCard>
@@ -57,9 +55,8 @@ async function DashboardData({ user }: { user: CurrentUser }) {
   </>;
 }
 
-function ActionQueue({ metrics, user }: { metrics: { attendanceRate: number; pendingMinor: number; openAlerts: number }; user: CurrentUser }) {
+function ActionQueue({ metrics, user }: { metrics: { attendanceRate: number; pendingMinor: number }; user: CurrentUser }) {
   const actions = [
-    metrics.openAlerts > 0 && hasPermission(user, "reports:read") ? { href: "/alerts", title: `${metrics.openAlerts.toLocaleString("en-IN")} open alert${metrics.openAlerts === 1 ? "" : "s"}`, detail: "Review campus alerts and follow-up owners." } : null,
     metrics.pendingMinor > 0 && hasPermission(user, "fees:read") ? { href: "/fees/defaulters", title: "Review outstanding fees", detail: `${money.format(metrics.pendingMinor / 100)} remains outstanding in this scope.` } : null,
     metrics.attendanceRate < 90 && hasPermission(user, "attendance:read") ? { href: "/attendance/students", title: "Review attendance", detail: `Recorded attendance is ${metrics.attendanceRate.toFixed(1)}%.` } : null,
   ].filter((action): action is { href: string; title: string; detail: string } => Boolean(action));
@@ -69,7 +66,7 @@ function ActionQueue({ metrics, user }: { metrics: { attendanceRate: number; pen
 function DashboardDataLoading() {
   return <>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {Array.from({ length: 7 }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-xl border bg-muted/60" />)}
+      {Array.from({ length: 6 }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-xl border bg-muted/60" />)}
     </div>
     <div className="mt-6 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
       <div className="h-96 animate-pulse rounded-xl border bg-muted/60" />
