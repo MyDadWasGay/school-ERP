@@ -1,4 +1,4 @@
-import { Activity, BarChart3, BedDouble, BookOpen, Boxes, Building2, CalendarCheck, ClipboardList, CreditCard, FileText, Globe2, GraduationCap, HeartPulse, Home, LayoutDashboard, Library, Megaphone, Package, Plug, Route, Settings, ShieldCheck, ShoppingCart, UserRound, Users, Utensils, type LucideIcon } from "lucide-react";
+import { Activity, BarChart3, BedDouble, BookOpen, Boxes, CalendarCheck, ClipboardList, CreditCard, FileText, Globe2, GraduationCap, HeartPulse, Home, LayoutDashboard, Library, Megaphone, Package, Plug, Route, Settings, ShieldCheck, ShoppingCart, UserRound, Users, Utensils, type LucideIcon } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -56,7 +56,10 @@ export const primaryNav: NavItem[] = [
   { label: "CMS & Forms", href: "/cms/pages", icon: Globe2, permission: "cms:read", section: "Safety & community", activePrefixes: ["/cms"] },
   { label: "Reports & Analytics", href: "/analytics", icon: BarChart3, permission: "analytics:read", section: "Reports & administration", activePrefixes: ["/analytics", "/reports"] },
   { label: "Integrations", href: "/integrations", icon: Plug, permission: "integrations:read", section: "Reports & administration", activePrefixes: ["/integrations"] },
-  { label: "Foundation", href: "/settings/academic-years", icon: Building2, permission: "settings:read", section: "Reports & administration", activePrefixes: ["/settings/academic-years", "/settings/classes", "/settings/sections", "/settings/subjects"] },
+  { label: "Academic years", href: "/settings/academic-years", icon: CalendarCheck, permission: "settings:read", section: "Foundation & settings", activePrefixes: ["/settings/academic-years"] },
+  { label: "Classes", href: "/settings/classes", icon: GraduationCap, permission: "settings:read", section: "Foundation & settings", activePrefixes: ["/settings/classes"] },
+  { label: "Sections", href: "/settings/sections", icon: ClipboardList, permission: "settings:read", section: "Foundation & settings", activePrefixes: ["/settings/sections"] },
+  { label: "Subjects", href: "/settings/subjects", icon: BookOpen, permission: "settings:read", section: "Foundation & settings", activePrefixes: ["/settings/subjects"] },
   { label: "Audit Logs", href: "/audit-logs", icon: ShieldCheck, permission: "audit_logs:read", section: "Reports & administration", activePrefixes: ["/audit-logs"] },
   { label: "Settings", href: "/settings/permissions", icon: Settings, permission: "settings:read", section: "Reports & administration", activePrefixes: ["/settings/permissions", "/settings/roles", "/settings/access-scopes"] },
 ];

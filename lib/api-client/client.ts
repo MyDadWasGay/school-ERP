@@ -93,7 +93,9 @@ export class SchoolErpApiClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     if (!/^https?:\/\//.test(this.baseUrl))
       throw new Error("School ERP API baseUrl must use HTTP(S).");
-    this.fetchImpl = options.fetch ?? fetch;
+    // Keep the browser's `fetch` receiver intact. Some browsers throw
+    // "Illegal invocation" when window.fetch is stored and called detached.
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   private async request<T>(
