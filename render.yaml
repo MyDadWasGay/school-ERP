@@ -3,7 +3,7 @@ services:
     name: school-erp-fastify-api
     runtime: node
     plan: starter
-    buildCommand: npm ci --include=dev && npm run api:typecheck && npm run api:test
+    buildCommand: npm ci --include=dev && npm run check:config && npm run api:typecheck && npm run api:test
     startCommand: npm run api:start
     healthCheckPath: /health/ready
     envVars:
@@ -11,6 +11,8 @@ services:
         value: production
       - key: CONFIG_ENV
         value: staging
+      - key: CONFIG_TARGET
+        value: api
       - key: API_HOST
         value: 0.0.0.0
       - key: API_PUBLIC_URL

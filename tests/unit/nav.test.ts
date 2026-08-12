@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isNavigationItemActive, navigationForRole } from "@/config/nav";
-import { breadcrumbsForPath, configuredRoutePaths, genericCatalogPaths, genericIntegrationPaths, isReleasedRoute, plannedPaths, reservedCatalogPaths, routeDefinitions, routeLabelForPath, routePresentationForPath } from "@/config/route-registry";
+import { breadcrumbsForPath, configuredRoutePaths, genericCatalogPaths, genericIntegrationPaths, isReleasedRoute, plannedPaths, reservedCatalogPaths, routeDefinitions, routeLabelForPath, routePresentationForPath, unreleasedPaths } from "@/config/route-registry";
 
 describe("role-aware navigation", () => {
   it("groups administrator navigation without changing destination order", () => {
@@ -55,6 +55,8 @@ describe("role-aware navigation", () => {
       expect(items.some((item) => plannedPaths.has(item.href))).toBe(false);
       expect(items.some((item) => genericCatalogPaths.has(item.href))).toBe(false);
       expect(items.some((item) => genericIntegrationPaths.has(item.href))).toBe(false);
+      expect(items.some((item) => reservedCatalogPaths.has(item.href))).toBe(false);
+      expect(items.every((item) => !unreleasedPaths.has(item.href))).toBe(true);
     }
   });
 

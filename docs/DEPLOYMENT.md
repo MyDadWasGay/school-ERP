@@ -19,6 +19,14 @@ following are mandatory for a real environment:
   and at least 32 characters.
 - Cloudinary credentials for signed private document uploads.
 
+The Vercel web build uses `CONFIG_TARGET=web` (the default) and validates the
+browser Firebase values, API base URL, canonical HTTPS app URL, Firebase
+Admin, Cloudinary, database, and core secrets. Render's API service uses
+`CONFIG_TARGET=api` and validates only the API-owned values; it is not blocked
+by Vercel-only browser variables. Optional Resend, Twilio, Google Calendar,
+Moodle, and Traccar deployment values may remain unset. If any value from one
+adapter group is supplied, validation requires the complete group.
+
 Email/SMS/payment adapters must be selected and configured before enabling the
 corresponding module. The application does not silently pretend that a provider
 delivered a message or payment.
@@ -55,8 +63,9 @@ optional `JOB_WORKER_INTERVAL_MS`.
 Run `npm run check:config` and `npm run check:secrets` in the release job.
 Configuration checks validate required core values without printing their
 contents; the source scan intentionally excludes local `.env` files.
-`/api/health/ready` also fails closed when core configuration is missing, and
-production readiness additionally requires Firebase and Cloudinary values.
+`/api/health/ready` also fails closed when API-owned core configuration,
+Firebase Admin, Cloudinary, or the database is missing. Production web
+configuration additionally requires the Vercel browser/API values.
 
 ## Vercel
 

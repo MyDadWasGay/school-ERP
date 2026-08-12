@@ -1,6 +1,6 @@
 # School ERP implementation status
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-13
 
 This document records the result of the codebase-first review against
 `SCHOOL_ERP_LLM_CONTEXT.md`, `SCHOOL_ERP_PRD.md`, `SCHOOL_ERP_TDD.md`, and
@@ -132,7 +132,7 @@ npm run check:secrets
 ```
 
 The route matrix is unit-tested for the configured route inventory. The current
-suite has 44 files and 149 passing tests. Tests cover
+suite has 44 files and 153 passing tests. Tests cover
 RBAC, route permissions, audit records, student forms and schemas, admission
 decisions, academic setup, attendance validation, marks, payment rules,
 document upload policy, import parsing, export behavior, user access

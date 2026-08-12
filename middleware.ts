@@ -15,6 +15,7 @@ export function middleware(request: NextRequest) {
   }
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
+  requestHeaders.set("x-school-erp-pathname", request.nextUrl.pathname);
   const response = NextResponse.next(
     { request: { headers: requestHeaders } } as unknown as Parameters<typeof NextResponse.next>[0],
   );

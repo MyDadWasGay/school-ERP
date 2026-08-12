@@ -2,7 +2,7 @@
 
 Status: Repository implementation pass complete; release evidence open
 
-Date: 2026-08-12
+Date: 2026-08-13
 
 Scope: Next.js App Router frontend, shared application shell, navigation, dashboards, list and table workflows, forms, entity detail pages, feedback states, accessibility, responsive behavior, perceived performance, and operational productivity.
 
@@ -815,8 +815,11 @@ Current local evidence for the implementation pass:
 
 - `npm.cmd run typecheck`: passed.
 - `npm.cmd run lint`: passed.
-- `npm.cmd run test`: passed, 44 files and 149 tests.
+- `npm.cmd run test`: passed, 44 files and 153 tests.
 - `npm.cmd run build`: passed; all 123 routes generated.
 - `npm.cmd run test:e2e`: passed 3 unauthenticated smoke tests; 6 authenticated tests are gated on an operator-provided staging storage state.
+- `npm.cmd run db:migrate` against an explicit disposable SQLite URL: passed.
+- `npm.cmd exec drizzle-kit check`: passed.
+- `npm.cmd run check:config` and `npm.cmd run check:secrets`: passed; web/API deployment configuration targets are separated and deployment manifests run their matching checks.
 
 Still-open release evidence is intentionally separate: authenticated role journeys, 390/768/1024/1440px browser checks, 200% zoom, screen-reader validation, axe/automated browser accessibility checks, real-device interaction, provider behavior, production configuration, load, security, backup/restore, and deployment verification. Local gates do not establish those conditions.

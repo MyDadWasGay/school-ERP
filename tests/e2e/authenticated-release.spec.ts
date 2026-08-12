@@ -20,6 +20,9 @@ test.describe("authenticated released surface", () => {
   });
 
   test("rejects an unreleased workflow on direct access", async ({ page }) => {
+    await page.goto("/cms/news");
+    await expect(page.getByText("This page could not be found.")).toBeVisible();
+
     await page.goto("/settings/permissions");
     await expect(page.getByText("This page could not be found.")).toBeVisible();
   });

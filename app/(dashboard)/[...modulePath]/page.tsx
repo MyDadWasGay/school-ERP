@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { isConfiguredRoute } from "@/config/modules";
-import { isReleasedRoute } from "@/config/route-registry";
+import { isConfiguredRoute, isReleasedRoute } from "@/config/route-registry";
 
 export default async function CatchAllModulePage({
   params,

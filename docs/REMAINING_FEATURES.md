@@ -1,6 +1,6 @@
 # Remaining School ERP features
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-13
 
 This backlog is based on the implementation plan and the current code review.
 The application already has authenticated routing, server-side RBAC and tenant

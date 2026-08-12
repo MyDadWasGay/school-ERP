@@ -431,6 +431,12 @@ export function routePathForPattern(pathname: string) {
   return path;
 }
 
+export function isConfiguredRoute(pathname: string) {
+  const path = normalizePath(pathname);
+  const pattern = routePathForPattern(path);
+  return configuredRoutePaths.includes(path) || configuredRoutePaths.includes(pattern);
+}
+
 export const routeDefinitions: RouteDefinition[] = configuredRoutePaths.map((path) => ({
   path,
   label: routeLabelForPath(path),
@@ -452,6 +458,10 @@ export function isReleasedRoute(pathname: string) {
   const path = normalizePath(pathname);
   return navigationOnlyReleasedPaths.has(path)
     || routeDefinitionForPath(path)?.releaseStatus === "released";
+}
+
+export function isUnreleasedConfiguredRoute(pathname: string) {
+  return isConfiguredRoute(pathname) && !isReleasedRoute(pathname);
 }
 
 export function isReleasedCatalogRoute(pathname: string) {
