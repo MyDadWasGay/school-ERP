@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/common/empty-state";
+import { StatusBadge } from "@/components/common/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/common/page-header";
 import type { ApiPortalSnapshot } from "@/lib/api-client/contracts";
@@ -62,11 +64,12 @@ export function PortalDashboard({
             {snapshot.students.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
+                  <caption className="sr-only">Students in the current portal scope</caption>
                   <thead>
                     <tr className="border-b">
-                      <th className="px-3 py-2 font-medium">Student</th>
-                      <th className="px-3 py-2 font-medium">Enrollment</th>
-                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Student</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Enrollment</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -78,18 +81,14 @@ export function PortalDashboard({
                         <td className="px-3 py-2 text-muted-foreground">
                           {student.detail}
                         </td>
-                        <td className="px-3 py-2 capitalize">
-                          {student.status}
-                        </td>
+                        <td className="px-3 py-2"><StatusBadge status={student.status} /></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-                No linked or assigned student records are available.
-              </p>
+              <EmptyState title="No linked student records" description="Linked or assigned students will appear here when your portal scope has data." />
             )}
           </CardContent>
         </Card>
@@ -98,7 +97,7 @@ export function PortalDashboard({
             <CardTitle>Quick actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            {snapshot.recent.length ? <div className="space-y-3">
               {snapshot.recent.map((item) => (
                 <Link
                   key={item.href}
@@ -111,7 +110,7 @@ export function PortalDashboard({
                   </p>
                 </Link>
               ))}
-            </div>
+            </div> : <EmptyState title="No quick actions yet" description="Relevant timetable, attendance, fees, assignments, and notice links will appear here when available." />}
           </CardContent>
         </Card>
       </div>

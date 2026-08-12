@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/forms/field-error";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { createGuardianAction, unlinkGuardianAction } from "../actions/student.actions";
 import { guardianSchema, type GuardianInput } from "../schemas/student.schema";
 
@@ -45,9 +46,13 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 
 export function GuardianUnlinkButton({ studentId, guardianId }: { studentId: string; guardianId: string }) {
   const [message, setMessage] = useState("");
-  return <div className="flex items-center gap-2"><Button type="button" size="sm" variant="destructive" onClick={async () => {
-    if (!window.confirm("Unlink this guardian from the student?")) return;
+  async function unlink() {
     const result = await unlinkGuardianAction({ studentId, guardianId });
-    setMessage(result.ok ? "Unlinked" : result.error);
-  }}>Unlink</Button>{message ? <span role="status" className="text-xs text-muted-foreground">{message}</span> : null}</div>;
+    if (!result.ok) {
+      setMessage(result.error);
+      throw new Error(result.error);
+    }
+    setMessage(result.message ?? "Guardian unlinked.");
+  }
+  return <div className="flex items-center gap-2"><ConfirmDialog label="Unlink" title="Unlink this guardian?" description="The guardian will no longer be linked to this student. The guardian record itself will be kept." triggerVariant="destructive" onConfirm={unlink} />{message ? <span role="status" className="text-xs text-muted-foreground">{message}</span> : null}</div>;
 }

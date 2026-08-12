@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import type { OrganizationStatus } from "@/config/organization-status";
 import { updatePlatformSchoolStatusAction } from "../actions/platform.actions";
@@ -27,14 +28,37 @@ export function SchoolActions({ organizationId, status }: { organizationId: stri
   const [message, setMessage] = useState("");
 
   async function changeStatus(action: LifecycleAction) {
-    if (action.targetStatus === "archived" && !window.confirm("Archive this school? School access will remain disabled until it is restored.")) return;
     setPending(true);
     setMessage("");
     const result = await updatePlatformSchoolStatusAction({ organizationId, status: action.targetStatus });
-    setMessage(result.ok ? result.message ?? "Updated" : result.error);
+    if (!result.ok) {
+      setMessage(result.error);
+      setPending(false);
+      throw new Error(result.error);
+    }
+    setMessage(result.message ?? "Updated");
     setPending(false);
   }
 
   const actions = lifecycleActions[status];
-  return <div className="flex items-center gap-2">{actions.map((action) => <Button key={action.targetStatus} type="button" size="sm" variant={action.variant} onClick={() => changeStatus(action)} disabled={pending}>{pending ? "Saving…" : action.label}</Button>)}{message ? <span className="sr-only" role="status">{message}</span> : null}</div>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {actions.map((action) => action.targetStatus === "archived" ? (
+        <ConfirmDialog
+          key={action.targetStatus}
+          label={action.label}
+          title="Archive this school?"
+          description="School access will remain disabled until the school is restored. Existing records and audit history are retained."
+          triggerVariant={action.variant}
+          disabled={pending}
+          onConfirm={() => changeStatus(action)}
+        />
+      ) : (
+        <Button key={action.targetStatus} type="button" size="sm" variant={action.variant} onClick={() => changeStatus(action)} disabled={pending}>
+          {pending ? "Saving..." : action.label}
+        </Button>
+      ))}
+      {message ? <span className="sr-only" role="status">{message}</span> : null}
+    </div>
+  );
 }

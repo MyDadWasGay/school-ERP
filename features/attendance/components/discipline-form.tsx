@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { EmptyState } from "@/components/common/empty-state";
+import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,11 +14,7 @@ export function DisciplineForm({ students }: { students: Array<{ id: string; nam
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const result = await createDisciplineIncidentAction({
-      studentId: String(data.get("studentId") ?? ""), severity: String(data.get("severity") ?? "medium"),
-      title: String(data.get("title") ?? ""), details: String(data.get("details") ?? "") || undefined,
-      confidential: data.get("confidential") === "on", occurredAt: new Date(String(data.get("occurredAt") ?? "")),
-    });
+    const result = await createDisciplineIncidentAction({ studentId: String(data.get("studentId") ?? ""), severity: String(data.get("severity") ?? "medium"), title: String(data.get("title") ?? ""), details: String(data.get("details") ?? "") || undefined, confidential: data.get("confidential") === "on", occurredAt: new Date(String(data.get("occurredAt") ?? "")) });
     setMessage(result.ok ? result.message ?? "Incident recorded." : result.error);
     if (result.ok) event.currentTarget.reset();
   }
@@ -24,10 +23,11 @@ export function DisciplineForm({ students }: { students: Array<{ id: string; nam
 
 export function DisciplineList({ rows, canUpdate }: { rows: Array<{ id: string; student: string; severity: string; title: string; details: string | null; occurredAt: string; status: string }>; canUpdate: boolean }) {
   const [messages, setMessages] = useState<Record<string, string>>({});
-  async function update(incidentId: string, status: "resolved" | "dismissed") {
+  async function update(incidentId: string, status: "resolved" | "dismissed", throwOnError = false) {
     const result = await updateDisciplineStatusAction({ incidentId, status });
     setMessages((current) => ({ ...current, [incidentId]: result.ok ? result.message ?? "Updated." : result.error }));
+    if (!result.ok && throwOnError) throw new Error(result.error);
   }
-  if (!rows.length) return <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No sensitive incidents found.</p>;
-  return <div className="space-y-3">{rows.map((row) => <div key={row.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{row.student} · {row.title}</p><p className="text-sm text-muted-foreground">{row.severity} · {row.occurredAt}{row.details ? ` · ${row.details}` : ""}</p></div><div className="flex items-center gap-2"><span className="rounded-full border px-2 py-1 text-xs capitalize">{row.status}</span>{canUpdate && row.status === "open" ? <><Button size="sm" onClick={() => update(row.id, "resolved")}>Resolve</Button><Button size="sm" variant="outline" onClick={() => update(row.id, "dismissed")}>Dismiss</Button></> : null}</div></div>{messages[row.id] ? <p role="status" className="mt-2 text-sm text-muted-foreground">{messages[row.id]}</p> : null}</div>)}</div>;
+  if (!rows.length) return <EmptyState title="No sensitive incidents found" description="Recorded discipline incidents will appear here for authorized staff." />;
+  return <div className="space-y-3">{rows.map((row) => <div key={row.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{row.student} · {row.title}</p><p className="text-sm text-muted-foreground">{row.severity} · {row.occurredAt}{row.details ? ` · ${row.details}` : ""}</p></div><div className="flex items-center gap-2"><StatusBadge status={row.status} />{canUpdate && row.status === "open" ? <><Button size="sm" onClick={() => update(row.id, "resolved")}>Resolve</Button><ConfirmDialog label="Dismiss" title="Dismiss this incident?" description="The incident will be marked dismissed and the decision will remain in the confidential incident history." triggerVariant="outline" onConfirm={() => update(row.id, "dismissed", true)} /></> : null}</div></div>{messages[row.id] ? <p role="status" className="mt-2 text-sm text-muted-foreground">{messages[row.id]}</p> : null}</div>)}</div>;
 }

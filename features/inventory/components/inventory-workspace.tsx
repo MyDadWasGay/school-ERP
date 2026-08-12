@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,11 +28,12 @@ export function SupplierList({ suppliers: rows, mode = "inventory" }: { supplier
   const [message, setMessage] = useState("");
   async function archive(id: string) {
     const result = await archiveSupplierAction({ id });
-    setMessage(result.ok ? result.message ?? "Archived." : result.error);
-    if (result.ok) window.location.reload();
+    if (!result.ok) throw new Error(result.error);
+    setMessage(result.message ?? "Supplier archived.");
+    window.location.reload();
   }
   if (!rows.length) return <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No active suppliers found.</p>;
-  return <div className="space-y-3">{message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}{rows.map((supplier) => <div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><div><p className="font-medium">{supplier.name}</p><p className="text-sm text-muted-foreground">{supplier.contactEmail ?? "No email"}{supplier.phone ? ` · ${supplier.phone}` : ""}</p></div>{mode === "inventory" ? <Button size="sm" variant="outline" onClick={() => archive(supplier.id)}>Archive</Button> : null}</div>)}</div>;
+  return <div className="space-y-3">{message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}{rows.map((supplier) => <div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><div><p className="font-medium">{supplier.name}</p><p className="text-sm text-muted-foreground">{supplier.contactEmail ?? "No email"}{supplier.phone ? ` · ${supplier.phone}` : ""}</p></div>{mode === "inventory" ? <ConfirmDialog label="Archive" title="Archive supplier?" description={`Archive ${supplier.name}? It will be removed from active supplier lists, but its existing records will remain available.`} triggerVariant="outline" triggerSize="sm" onConfirm={() => archive(supplier.id)} /> : null}</div>)}</div>;
 }
 
 export function InventoryItemForm() {

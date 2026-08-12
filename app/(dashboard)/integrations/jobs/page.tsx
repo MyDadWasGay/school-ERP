@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/common/page-header";
+import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listJobRuns } from "@/lib/jobs/job-store";
 import { requirePermission } from "@/lib/auth/guards";
@@ -14,7 +14,7 @@ export default async function IntegrationJobsPage() {
     <p className="text-sm text-muted-foreground"><Link className="underline" href="/integrations">Back to integrations</Link>. Workers call the internal job endpoint with the deployment secret; failed jobs retry with exponential backoff and never expose payloads here.</p>
     <Card><CardHeader><CardTitle>Recent jobs</CardTitle></CardHeader><CardContent><DataTable rows={jobs} columns={[
       { key: "jobType", header: "Type", cell: (row) => <span className="font-medium">{row.jobType}</span> },
-      { key: "status", header: "Status", cell: (row) => <Badge variant={row.status === "succeeded" ? "success" : row.status === "dead_letter" || row.status === "failed" ? "warning" : "secondary"}>{row.status}</Badge> },
+      { key: "status", header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
       { key: "attempts", header: "Attempts", cell: (row) => `${row.attempts}/${row.maxAttempts}` },
       { key: "createdAt", header: "Created", cell: (row) => row.createdAt },
       { key: "runAfter", header: "Next run", cell: (row) => row.status === "succeeded" ? "—" : row.runAfter },

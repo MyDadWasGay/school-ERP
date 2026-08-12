@@ -1,2 +1,3 @@
 import { Badge } from "@/components/ui/badge";
-export function StatusBadge({ status }: { status: string }) { const normalized = status.toLowerCase(); return <Badge variant={normalized === "active" || normalized === "published" || normalized === "paid" ? "success" : normalized === "pending" || normalized === "draft" ? "warning" : "secondary"}>{status}</Badge>; }
+import { statusLabelFor, statusVariantFor } from "@/config/status-registry";
+export function StatusBadge({ status }: { status: string }) { return <Badge variant={statusVariantFor(status)}>{statusLabelFor(status)}</Badge>; }

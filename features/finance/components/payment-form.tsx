@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/forms/field-error";
+import { MutationFeedback, type MutationState } from "@/components/common/mutation-feedback";
 import { createBrowserApiClient } from "@/lib/api-client/browser";
 
 type PaymentOption = {
@@ -35,6 +37,8 @@ export function PaymentForm({
   const router = useRouter();
   const api = useMemo(() => createBrowserApiClient(campusId), [campusId]);
   const [message, setMessage] = useState("");
+  const [mutationState, setMutationState] = useState<MutationState>("idle");
+  const intentRef = useRef<{ fingerprint: string; idempotencyKey: string }>();
   const form = useForm<PaymentFormInput>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: { invoiceId: invoices[0]?.id ?? "", method: "cash" },
@@ -53,6 +57,10 @@ export function PaymentForm({
       });
       return;
     }
+    setMutationState("submitting");
+    setMessage("");
+    const fingerprint = JSON.stringify(input);
+    if (intentRef.current?.fingerprint !== fingerprint) intentRef.current = { fingerprint, idempotencyKey: crypto.randomUUID() };
     try {
       await api.collectPayment({
         invoiceId: invoice.id,
@@ -60,12 +68,15 @@ export function PaymentForm({
         amountMinor,
         method: input.method,
         providerReference: input.providerReference,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: intentRef.current.idempotencyKey,
       });
       setMessage("Payment collected and ledger posted.");
+      setMutationState("success");
+      intentRef.current = undefined;
       form.reset({ invoiceId: invoices[0]?.id ?? "", method: "cash" });
       router.refresh();
     } catch (error) {
+      setMutationState("error");
       setMessage(
         error instanceof Error ? error.message : "Unable to collect payment.",
       );
@@ -121,11 +132,7 @@ export function PaymentForm({
           <Input {...form.register("providerReference")} />
         </Field>
       </div>
-      {message ? (
-        <p role="status" className="mt-3 text-sm text-muted-foreground">
-          {message}
-        </p>
-      ) : null}
+      <MutationFeedback state={mutationState} message={message} className="mt-3" />
       <div className="mt-4 flex justify-end">
         <Button disabled={form.formState.isSubmitting || invoices.length === 0}>
           Collect payment
@@ -144,11 +151,14 @@ function Field({
   error?: string;
   children: React.ReactNode;
 }) {
+  const child = children as React.ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>;
+  const id = child.props.id ?? `payment-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+  const errorId = `${id}-error`;
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
-      <FieldError message={error} />
+      <Label htmlFor={id}>{label}</Label>
+      {React.cloneElement(child, { id, "aria-describedby": error ? errorId : undefined, "aria-invalid": Boolean(error) })}
+      <FieldError id={errorId} message={error} />
     </div>
   );
 }

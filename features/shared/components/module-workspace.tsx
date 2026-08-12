@@ -1,10 +1,13 @@
 import { permissionForPath } from "@/config/modules";
+import { routeLabelForPath, routePresentationForPath } from "@/config/route-registry";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { createServerApiClient } from "@/lib/api-client/server";
 import type { ApiPageInfo } from "@/lib/api-client/contracts";
 import { getModuleData } from "../module-data";
 import { ModuleOverview } from "./module-overview";
+import { EmptyState } from "@/components/common/empty-state";
+import { PageHeader } from "@/components/common/page-header";
 
 const routeEntityNames: Record<string, string> = {
   "/library/issue-return": "circulation transaction",
@@ -22,14 +25,6 @@ function moduleKeyForSegment(segment: string) {
   if (["health", "safety", "facilities"].includes(segment)) return "safety";
   if (["activities", "alumni", "cms"].includes(segment)) return "community";
   return segment;
-}
-
-function titleForRoute(route: string) {
-  return route
-    .split("/")
-    .filter(Boolean)
-    .map((part) => part.replaceAll("-", " "))
-    .join(" / ");
 }
 
 function entityForRoute(route: string) {
@@ -53,6 +48,10 @@ export async function ModuleWorkspace({
   const permissionModule = readPermission.split(":")[0] ?? "settings";
   const segment = route.split("/").filter(Boolean)[0] ?? "workspace";
   const moduleData = getModuleData(moduleKeyForSegment(segment));
+  const presentation = routePresentationForPath(route);
+  if (presentation === "planned") {
+    return <div><PageHeader title={routeLabelForPath(route)} description={moduleData.description} /><EmptyState title="This workflow is not available yet" description="The route is reserved in the product map, but no operational workflow is released for it. Use an available workflow from the navigation." /></div>;
+  }
   const api = await createServerApiClient();
   const query = new URLSearchParams({ route, page: String(page) });
   if (search?.trim()) query.set("search", search.trim());
@@ -64,7 +63,8 @@ export async function ModuleWorkspace({
 
   return <ModuleOverview
     {...moduleData}
-    title={titleForRoute(route)}
+    title={routeLabelForPath(route)}
+    description={`${moduleData.description} This is a simple catalog workflow; financial, scheduling, and high-volume operations use dedicated pages.`}
     entityLabel={entityForRoute(route)}
     rows={result.data.rows}
     pageInfo={result.data.pageInfo}

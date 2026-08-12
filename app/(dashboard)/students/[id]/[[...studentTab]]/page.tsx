@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { PageHeader } from "@/components/common/page-header";
+import { EntityHeader, EntityTabs } from "@/components/common/entity-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +33,19 @@ const tabs = [
   "fees",
   "results",
 ] as const;
+
+const tabLabels: Record<(typeof tabs)[number], string> = {
+  profile: "Overview",
+  guardians: "Guardians",
+  documents: "Documents",
+  enrollment: "Enrollment",
+  medical: "Medical profile",
+  certificates: "Certificates",
+  timeline: "Activity timeline",
+  attendance: "Attendance",
+  fees: "Fees & payments",
+  results: "Results",
+};
 
 export default async function StudentDetailPage({
   params,
@@ -88,38 +100,20 @@ export default async function StudentDetailPage({
   }));
   return (
     <div>
-      <PageHeader
-        title={studentName}
-        description={`Admission ${profile.student.admissionNumber} - one master record shared across every module.`}
+      <EntityHeader
+        name={studentName}
+        identifier={`Admission ${profile.student.admissionNumber}`}
+        description="One authorized master record shared across student, academic, attendance and finance workflows."
+        status={profile.student.status}
+        meta={<><span>{profile.student.email || "No email"}</span><span>{profile.student.phone || "No phone"}</span></>}
+        backHref="/students"
       />
-      <nav
-        aria-label="Student sections"
-        className="mb-6 flex gap-2 overflow-x-auto pb-1"
-      >
-        {visibleTabs.map((tab) => (
-          <Link
-            key={tab}
-            href={`/students/${id}/${tab}`}
-            className={`whitespace-nowrap rounded-md border px-3 py-2 text-sm capitalize ${activeTab === tab ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
-          >
-            {tab}
-          </Link>
-        ))}
-      </nav>
+      <EntityTabs
+        activeTab={activeTab}
+        tabs={visibleTabs.map((tab) => ({ key: tab, label: tabLabels[tab], href: `/students/${id}/${tab}` }))}
+      />
       {activeTab === "profile" ? (
         <div className="space-y-4">
-          <Card>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
-              <div>
-                <p className="font-medium">{studentName}</p>
-                <p className="text-sm text-muted-foreground">
-                  {profile.student.email || "No email"} -{" "}
-                  {profile.student.phone || "No phone"}
-                </p>
-              </div>
-              <StatusBadge status={profile.student.status} />
-            </CardContent>
-          </Card>
           {canUpdate ? (
             <StudentUpdateForm
               student={{

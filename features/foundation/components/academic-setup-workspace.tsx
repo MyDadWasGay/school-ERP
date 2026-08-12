@@ -51,11 +51,15 @@ export function AcademicSetupWorkspace({
     setMessage(result.ok ? result.message ?? "Saved." : result.error);
     if (result.ok) setOpen(false);
   }
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submit(new FormData(event.currentTarget));
+  }
   const classes = options.classes.filter((row) => row.campusId === campusId);
   return <div>
     <PageHeader title={definition.title} description={definition.description} />
     {canCreate ? open
-      ? <form action={submit} className="mb-6 rounded-lg border p-4">
+      ? <form onSubmit={handleSubmit} className="mb-6 rounded-lg border p-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="Campus"><select name="campusId" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={campusId} onChange={(event) => setCampusId(event.target.value)}>{options.campuses.map((campus) => <option key={campus.id} value={campus.id}>{campus.name}</option>)}</select></Field>
           <Field label="Name"><Input name="name" required /></Field>

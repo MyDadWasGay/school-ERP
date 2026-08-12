@@ -1,2 +1,2 @@
 import type { ReactNode } from "react";
-export function FilterBar({ children }: { children: ReactNode }) { return <div className="mb-4 flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">{children}</div>; }
+export function FilterBar({ children, label = "List filters", summary }: { children: ReactNode; label?: string; summary?: string }) { return <div role="region" aria-label={label} className="mb-4 flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0 flex-1">{children}</div>{summary ? <p className="shrink-0 text-xs text-muted-foreground" aria-live="polite">{summary}</p> : null}</div>; }

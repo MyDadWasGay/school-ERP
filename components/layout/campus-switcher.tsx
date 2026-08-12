@@ -12,8 +12,12 @@ export function CampusSwitcher({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   async function selectCampus(nextCampusId: string) {
     setPending(true);
+    setMessage("");
+    setError("");
     try {
       const csrfCookie = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("school_erp_csrf="));
       const csrfToken = csrfCookie ? decodeURIComponent(csrfCookie.slice("school_erp_csrf=".length)) : "";
@@ -23,12 +27,20 @@ export function CampusSwitcher({
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({ campusId: nextCampusId }),
       });
-      if (response.ok) router.refresh();
+      if (!response.ok) {
+        setError("We could not switch campus. Your current campus is still active; please retry.");
+        return;
+      }
+      setMessage("Campus changed.");
+      router.refresh();
+    } catch {
+      setError("Network error while switching campus. Your current campus is still active.");
     } finally {
       setPending(false);
     }
   }
-  return <label className="hidden items-center gap-2 text-xs text-muted-foreground xl:flex">
+  return <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
+    <label className="flex items-center gap-2">
     Campus
     <select
       aria-label="Active campus"
@@ -39,5 +51,9 @@ export function CampusSwitcher({
     >
       {campuses.map((campus) => <option key={campus.id} value={campus.id}>{campus.name}</option>)}
     </select>
-  </label>;
+    </label>
+    {pending ? <span role="status" aria-live="polite">Switching…</span> : null}
+    {message ? <span role="status" aria-live="polite" className="text-emerald-700">{message}</span> : null}
+    {error ? <span role="alert" className="max-w-52 text-destructive">{error}</span> : null}
+  </div>;
 }

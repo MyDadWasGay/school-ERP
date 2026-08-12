@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,8 +53,12 @@ export function CheckoutButton({ allotmentId }: { allotmentId: string }) {
   const [message, setMessage] = useState("");
   async function checkout() {
     const result = await checkoutHostelAllotmentAction({ allotmentId });
-    setMessage(result.ok ? result.message ?? "Checked out." : result.error);
-    if (result.ok) window.location.reload();
+    if (!result.ok) {
+      setMessage(result.error);
+      throw new Error(result.error);
+    }
+    setMessage(result.message ?? "Checked out.");
+    window.location.reload();
   }
-  return <div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={checkout}>Check out</Button>{message ? <span role="status" className="text-xs text-muted-foreground">{message}</span> : null}</div>;
+  return <div className="flex items-center gap-2"><ConfirmDialog label="Check out" title="Check this student out?" description="The hostel allotment will be closed and the bed will become available for another student." triggerVariant="outline" onConfirm={checkout} />{message ? <span role="status" className="text-xs text-muted-foreground">{message}</span> : null}</div>;
 }

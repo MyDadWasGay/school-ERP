@@ -1,10 +1,11 @@
 import { PageHeader } from "@/components/common/page-header";
+import { FilterBar } from "@/components/common/filter-bar";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
 import { ServerPagination } from "@/components/data-table/server-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { ApplicationForm } from "@/features/admissions/components/application-form";
 import { ApplicationActions } from "@/features/admissions/components/application-actions";
 import { getAdmissionOptions, listApplicationsPage } from "@/lib/api-client/server-queries";
@@ -23,14 +24,16 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
     <PageHeader title="Admission applications" description="Create tenant-scoped applications with guardian, academic-year, class and section data." />
     {hasPermission(user, "admissions:create") ? <ApplicationForm options={options} /> : null}
     <Card><CardContent className="pt-6">
-      <form className="mb-4 flex max-w-md gap-2"><Input name="search" defaultValue={query.search} placeholder="Search applicant or application number" /><Button variant="outline">Search</Button></form>
+      <FilterBar summary={query.search ? `Searching for “${query.search}”` : "Search by applicant or application number"}>
+        <form action="/admissions/applications" method="get" role="search" className="flex w-full max-w-md gap-2"><Input name="search" aria-label="Search applications by applicant or application number" defaultValue={query.search} placeholder="Search applicant or application number" /><Button type="submit" variant="outline">Search</Button>{query.search ? <ButtonLink href="/admissions/applications" variant="ghost" size="sm">Clear</ButtonLink> : null}</form>
+      </FilterBar>
       <DataTable rows={result.rows} columns={[
         { key: "name", header: "Applicant", cell: (row) => <span className="font-medium">{row.name}</span> },
         { key: "detail", header: "Application number", cell: (row) => row.detail },
         { key: "status", header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
         { key: "documents", header: "Documents", cell: (row) => hasPermission(user, "documents:create") ? <FileUploadField entityType="application" entityId={row.id} category="admission_document" campusId={row.campusId ?? undefined} label="Upload" /> : null },
         { key: "actions", header: "Actions", cell: (row) => hasPermission(user, "admissions:update") ? <ApplicationActions row={row} /> : null },
-      ]} emptyTitle="No applications found" />
+      ]} emptyTitle={query.search ? "No applications match this search" : "No applications found"} emptyDescription={query.search ? "Try a different applicant name or application number." : "Create an application to begin the admissions workflow."} filtered={Boolean(query.search)} ariaLabel="Admission applications" caption="Applications in the current authorized scope" />
       <ServerPagination pageInfo={result.pageInfo} pathname="/admissions/applications" search={query.search} />
     </CardContent></Card>
   </div>;

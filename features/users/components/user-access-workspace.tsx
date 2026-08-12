@@ -10,6 +10,7 @@ import {
   updateUserAccessAction,
 } from "../actions/user-access.actions";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -93,14 +94,31 @@ export function UserAccessWorkspace({
     if (result.ok) router.refresh();
   }
 
+  async function handleSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveAccess(new FormData(event.currentTarget));
+  }
+
+  async function handleGrantDelegation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await grantDelegation(new FormData(event.currentTarget));
+  }
+
   function toggleCampus(campusId: string, checked: boolean) {
     setCampusIds((current) => checked
       ? [...new Set([...current, campusId])]
       : current.filter((id) => id !== campusId));
   }
 
+  async function revokeDelegation(delegationId: string) {
+    const result = await revokeDelegationAction({ id: delegationId, userId: user.id });
+    if (!result.ok) throw new Error(result.error);
+    setDelegationMessage(result.message ?? "Delegated access revoked.");
+    router.refresh();
+  }
+
   return <div className="space-y-6">
-    <form action={saveAccess} className="space-y-5 rounded-lg border p-5">
+    <form onSubmit={handleSave} className="space-y-5 rounded-lg border p-5">
       <div>
         <h2 className="font-semibold">Account and scope</h2>
         <p className="text-sm text-muted-foreground">Firebase activation and server-side organization, campus, and class scope are updated together.</p>
@@ -154,7 +172,7 @@ export function UserAccessWorkspace({
 
     <section className="space-y-4 rounded-lg border p-5">
       <div><h2 className="font-semibold">Delegated access</h2><p className="text-sm text-muted-foreground">Grant one permission for a bounded period; expired or revoked grants are ignored by the server guard.</p></div>
-      {canManage ? <form action={grantDelegation} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {canManage ? <form onSubmit={handleGrantDelegation} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Field label="Permission">
           <select name="permissionKey" className="h-10 w-full rounded-md border bg-background px-3 text-sm">{permissionKeys.map((permission) => <option key={permission} value={permission}>{permission}</option>)}</select>
         </Field>
@@ -169,11 +187,7 @@ export function UserAccessWorkspace({
       <div className="space-y-2">
         {delegations.length === 0 ? <p className="text-sm text-muted-foreground">No delegated access records.</p> : delegations.map((delegation) => <div key={delegation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
           <div><p className="text-sm font-medium">{delegation.permissionKey}</p><p className="text-xs text-muted-foreground">{delegation.startsAt.toLocaleString()} - {delegation.endsAt.toLocaleString()}</p></div>
-          <div className="flex items-center gap-2"><StatusBadge status={delegation.status} />{canManage && delegation.status === "active" ? <Button type="button" variant="outline" size="sm" onClick={async () => {
-            const result = await revokeDelegationAction({ id: delegation.id, userId: user.id });
-            setDelegationMessage(result.ok ? result.message ?? "Access revoked." : result.error);
-            if (result.ok) router.refresh();
-          }}>Revoke</Button> : null}</div>
+          <div className="flex items-center gap-2"><StatusBadge status={delegation.status} />{canManage && delegation.status === "active" ? <ConfirmDialog label="Revoke" title="Revoke delegated access?" description={`Revoke ${delegation.permissionKey} access for ${user.displayName}? The user will lose this temporary permission immediately.`} triggerVariant="outline" triggerSize="sm" onConfirm={() => revokeDelegation(delegation.id)} /> : null}</div>
         </div>)}
       </div>
     </section>

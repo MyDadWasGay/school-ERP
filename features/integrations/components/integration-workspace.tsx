@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -172,20 +174,16 @@ export function IntegrationConfigList({
   canManage: boolean;
 }) {
   const [messages, setMessages] = useState<Record<string, string>>({});
-  async function toggle(row: { id: string; provider: string; status: string }) {
+  async function toggle(row: { id: string; provider: string; status: string }, throwOnError = false) {
     const status = row.status === "disabled" ? "configured" : "disabled";
     const result = await setIntegrationStatusAction({ id: row.id, status });
     setMessages((current) => ({
       ...current,
       [row.id]: result.ok ? (result.message ?? "Updated.") : result.error,
     }));
+    if (!result.ok && throwOnError) throw new Error(result.error);
   }
-  if (!rows.length)
-    return (
-      <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-        No integration configuration is stored for this tenant.
-      </p>
-    );
+  if (!rows.length) return <EmptyState title="No integration configuration" description="Configured providers for this campus will appear here. Secret values are never displayed." />;
   return (
     <div className="space-y-3">
       {rows.map((row) => (
@@ -206,10 +204,10 @@ export function IntegrationConfigList({
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={row.status} />
-            {canManage ? (
-              <Button size="sm" variant="outline" onClick={() => toggle(row)}>
-                {row.status === "disabled" ? "Enable" : "Disable"}
-              </Button>
+            {canManage ? row.status === "disabled" ? (
+              <Button size="sm" variant="outline" onClick={() => toggle(row)}>Enable</Button>
+            ) : (
+              <ConfirmDialog label="Disable" title={`Disable ${row.provider}?`} description="The integration will stop processing through the ERP until it is enabled again. Existing configuration and secrets remain stored." triggerVariant="outline" onConfirm={() => toggle(row, true)} />
             ) : null}
           </div>
         </div>

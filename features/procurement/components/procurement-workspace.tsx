@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,10 +25,16 @@ export function ProcurementTransitionButton({ kind, id, toStatus }: { kind: "req
   const [message, setMessage] = useState("");
   async function transition() {
     const result = kind === "requisition" ? await transitionRequisitionAction({ id, toStatus }) : await transitionPurchaseOrderAction({ id, toStatus });
-    setMessage(result.ok ? result.message ?? "Updated." : result.error);
-    if (result.ok) window.location.reload();
+    if (!result.ok) {
+      setMessage(result.error);
+      throw new Error(result.error);
+    }
+    setMessage(result.message ?? "Updated.");
+    window.location.reload();
   }
-  return <div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={transition}>{toStatus.replaceAll("_", " ")}</Button><Message value={message} /></div>;
+  const normalizedStatus = toStatus.replaceAll("_", " ");
+  const isDestructive = ["rejected", "cancelled", "closed"].includes(toStatus);
+  return <div className="flex items-center gap-2"><ConfirmDialog label={normalizedStatus} title={`Move this ${kind} to ${normalizedStatus}?`} description="This procurement transition will update the workflow and may affect approvals, purchasing, or receiving. Verify the record before continuing." triggerVariant="outline" confirmVariant={isDestructive ? "destructive" : "default"} onConfirm={transition} /><Message value={message} /></div>;
 }
 
 export function PurchaseOrderWithSupplierForm({ requisitions, suppliers }: { requisitions: Array<{ id: string; name: string; code: string | null }>; suppliers: Array<{ id: string; name: string }> }) {

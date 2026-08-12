@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,12 +97,13 @@ export function LeaveRequestList({
   }>;
 }) {
   const [messages, setMessages] = useState<Record<string, string>>({});
-  async function review(leaveId: string, decision: "approved" | "rejected") {
+  async function review(leaveId: string, decision: "approved" | "rejected", throwOnError = false) {
     const result = await reviewLeaveRequestAction({ leaveId, decision });
     setMessages((current) => ({
       ...current,
       [leaveId]: result.ok ? (result.message ?? "Updated.") : result.error,
     }));
+    if (!result.ok && throwOnError) throw new Error(result.error);
   }
   if (!rows.length)
     return (
@@ -127,21 +130,19 @@ export function LeaveRequestList({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full border px-2 py-1 text-xs capitalize">
-              {row.status}
-            </span>
+              <StatusBadge status={row.status} />
             {row.canReview ? (
               <>
                 <Button size="sm" onClick={() => review(row.id, "approved")}>
                   Approve
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => review(row.id, "rejected")}
-                >
-                  Reject
-                </Button>
+                <ConfirmDialog
+                  label="Reject"
+                  title="Reject this leave request?"
+                  description="The request will be marked rejected and the decision will remain in the leave history."
+                  triggerVariant="outline"
+                  onConfirm={() => review(row.id, "rejected", true)}
+                />
               </>
             ) : null}
           </div>

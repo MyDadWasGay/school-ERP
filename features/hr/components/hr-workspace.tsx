@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,9 +67,14 @@ export function ProcessPayrollButton({ runId, disabled = false }: { runId: strin
   async function process() {
     setWorking(true);
     const result = await processPayrollRunAction({ runId });
-    setMessage(result.ok ? result.message ?? "Payroll completed." : result.error);
+    if (!result.ok) {
+      setMessage(result.error);
+      setWorking(false);
+      throw new Error(result.error);
+    }
+    setMessage(result.message ?? "Payroll completed.");
     setWorking(false);
     if (result.ok) window.location.reload();
   }
-  return <div className="flex flex-wrap items-center gap-2"><Button size="sm" onClick={process} disabled={disabled || working}>{working ? "Processing..." : "Process run"}</Button>{message ? <span role="status" className="text-xs text-muted-foreground">{message}</span> : null}</div>;
+  return <div className="flex flex-wrap items-center gap-2"><ConfirmDialog label="Process run" title="Process this payroll run?" description="This will calculate payroll and create the resulting financial records for the run. Review the draft before continuing." triggerVariant="default" confirmVariant="default" disabled={disabled || working} onConfirm={process} />{message ? <span role="status" className="text-xs text-muted-foreground">{message}</span> : null}</div>;
 }

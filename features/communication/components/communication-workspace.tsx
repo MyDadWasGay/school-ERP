@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,10 +26,14 @@ export function PublishMessageButton({ messageId }: { messageId: string }) {
   const [message, setMessage] = useState("");
   async function publish() {
     const result = await publishMessageAction({ messageId });
-    setMessage(result.ok ? result.message ?? "Published." : result.error);
-    if (result.ok) window.location.reload();
+    if (!result.ok) {
+      setMessage(result.error);
+      throw new Error(result.error);
+    }
+    setMessage(result.message ?? "Published.");
+    window.location.reload();
   }
-  return <div className="flex items-center gap-2"><Button size="sm" onClick={publish}>Publish in-app</Button><Message value={message} /></div>;
+  return <div className="flex items-center gap-2"><ConfirmDialog label="Publish in-app" title="Publish this message?" description="The message will be delivered to the configured campus audience and will no longer be a draft." triggerVariant="default" confirmVariant="default" onConfirm={publish} /><Message value={message} /></div>;
 }
 
 export function MarkNotificationReadButton({ notificationId }: { notificationId: string }) {
