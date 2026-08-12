@@ -40,6 +40,11 @@ function mutationChain() {
   return { set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })) };
 }
 
+function testOrigin() {
+  return process.env.API_CORS_ORIGINS?.split(",").map((origin) => origin.trim()).find(Boolean) ??
+    "http://localhost:3000";
+}
+
 describe("API-owned browser session", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -69,7 +74,7 @@ describe("API-owned browser session", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/session",
-      headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+      headers: { "content-type": "application/json", origin: testOrigin() },
       payload: { idToken: "firebase-id-token-that-is-long-enough" },
     });
 
@@ -88,7 +93,7 @@ describe("API-owned browser session", () => {
     const login = await app.inject({
       method: "POST",
       url: "/api/v1/auth/session",
-      headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+      headers: { "content-type": "application/json", origin: testOrigin() },
       payload: { idToken: "firebase-id-token-that-is-long-enough" },
     });
     const setCookie = login.headers["set-cookie"] as string[];
@@ -99,7 +104,7 @@ describe("API-owned browser session", () => {
     const denied = await app.inject({
       method: "POST",
       url: "/api/v1/auth/campus",
-      headers: { cookie, "content-type": "application/json", origin: "http://localhost:3000" },
+      headers: { cookie, "content-type": "application/json", origin: testOrigin() },
       payload: { campusId: "campus-2" },
     });
     expect(denied.statusCode).toBe(403);
@@ -107,7 +112,7 @@ describe("API-owned browser session", () => {
     const allowed = await app.inject({
       method: "POST",
       url: "/api/v1/auth/campus",
-      headers: { cookie, "x-csrf-token": csrf?.split("=", 2)[1], "content-type": "application/json", origin: "http://localhost:3000" },
+      headers: { cookie, "x-csrf-token": csrf?.split("=", 2)[1], "content-type": "application/json", origin: testOrigin() },
       payload: { campusId: "campus-2" },
     });
     expect(allowed.statusCode).toBe(200);
