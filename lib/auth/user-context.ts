@@ -26,13 +26,12 @@ export async function getUserByFirebaseUid(uid: string, selectedCampusId?: strin
   const row = await getDb().query.users.findFirst({ where: eq(users.firebaseUid, uid) });
   if (!row || row.status !== "active") return null;
   if (!SUPPORTED_ROLES.includes(row.role as (typeof SUPPORTED_ROLES)[number])) return null;
-  const organization = await getDb().query.organizations.findFirst({ where: and(
-    eq(organizations.id, row.organizationId),
-    eq(organizations.status, "active"),
-  ) });
-  if (!organization) return null;
   const now = new Date();
-  const [campusRows, classRows, persistedPermissions] = await Promise.all([
+  const [organization, campusRows, classRows, persistedPermissions] = await Promise.all([
+    getDb().query.organizations.findFirst({ where: and(
+      eq(organizations.id, row.organizationId),
+      eq(organizations.status, "active"),
+    ) }),
     getDb().select({ campusId: userCampusScopes.campusId, campusName: campuses.name }).from(userCampusScopes)
       .innerJoin(campuses, and(
         eq(campuses.id, userCampusScopes.campusId),
@@ -51,6 +50,7 @@ export async function getUserByFirebaseUid(uid: string, selectedCampusId?: strin
       .innerJoin(roles, eq(roles.id, rolePermissions.roleId))
       .where(and(eq(rolePermissions.organizationId, row.organizationId), eq(roles.organizationId, row.organizationId), eq(roles.key, row.role), eq(roles.status, "active"))),
   ]);
+  if (!organization) return null;
   const availableCampuses = [...new Map(campusRows.map(({ campusId, campusName }) => [campusId, { id: campusId, name: campusName }])).values()];
   if (row.campusId && !availableCampuses.some(({ id }) => id === row.campusId)) {
     const primaryCampus = await getDb().query.campuses.findFirst({ where: and(

@@ -88,7 +88,11 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/library/issues", authenticated, async (request) => {
     const user = requireApiPermission(request, "library:read");
-    return apiSuccess(request, { active: await listActiveLibraryIssues(user), borrowers: await listLibraryBorrowers(user) });
+    const [active, borrowers] = await Promise.all([
+      listActiveLibraryIssues(user),
+      listLibraryBorrowers(user),
+    ]);
+    return apiSuccess(request, { active, borrowers });
   });
 
   app.get("/library/reservations", authenticated, async (request) => {

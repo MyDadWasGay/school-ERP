@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { CurrentUser } from "@/lib/auth/types";
+import { memoizeRequest } from "@/lib/server/request-memo";
 import { SchoolErpApiError } from "./client";
 import {
   createPublicServerApiClient,
@@ -88,6 +89,34 @@ async function publicApiGet<T>(path: string): Promise<T> {
   const client = await createPublicServerApiClient();
   const response = await client.call<T>("GET", path);
   return reviveApiDates<T>(response.data);
+}
+
+function requestUserKey(user: CurrentUser) {
+  return `${user.id}:${user.organizationId}:${user.campusId ?? "all"}`;
+}
+
+type LibraryIssuesPayload = {
+  active: AsyncResult<LibraryService["listActiveLibraryIssues"]>;
+  borrowers: AsyncResult<LibraryService["listLibraryBorrowers"]>;
+};
+
+function getLibraryIssues(user: CurrentUser) {
+  return memoizeRequest(
+    `api.library.issues:${requestUserKey(user)}`,
+    () => apiGet<LibraryIssuesPayload>(user, "/api/v1/library/issues"),
+  );
+}
+
+type AlumniEventsPayload = {
+  events: AsyncResult<CommunityService["listAlumniEvents"]>;
+  registrations: AsyncResult<CommunityService["listAlumniEventRegistrations"]>;
+};
+
+function getAlumniEvents(user: CurrentUser) {
+  return memoizeRequest(
+    `api.alumni.events:${requestUserKey(user)}`,
+    () => apiGet<AlumniEventsPayload>(user, "/api/v1/alumni/events"),
+  );
 }
 
 export async function getPublicCmsPage(
@@ -180,12 +209,12 @@ export async function listLibraryCopies(user: CurrentUser, itemId?: string, avai
 }
 
 export async function listActiveLibraryIssues(user: CurrentUser): Promise<AsyncResult<LibraryService["listActiveLibraryIssues"]>> {
-  const data = await apiGet<{ active: AsyncResult<LibraryService["listActiveLibraryIssues"]>; borrowers: unknown }>(user, "/api/v1/library/issues");
+  const data = await getLibraryIssues(user);
   return data.active;
 }
 
 export async function listLibraryBorrowers(user: CurrentUser): Promise<AsyncResult<LibraryService["listLibraryBorrowers"]>> {
-  const data = await apiGet<{ active: unknown; borrowers: AsyncResult<LibraryService["listLibraryBorrowers"]> }>(user, "/api/v1/library/issues");
+  const data = await getLibraryIssues(user);
   return data.borrowers;
 }
 
@@ -406,12 +435,12 @@ export async function listAlumniProfiles(user: CurrentUser): Promise<AsyncResult
 }
 
 export async function listAlumniEvents(user: CurrentUser): Promise<AsyncResult<CommunityService["listAlumniEvents"]>> {
-  const data = await apiGet<{ events: AsyncResult<CommunityService["listAlumniEvents"]>; registrations: unknown }>(user, "/api/v1/alumni/events");
+  const data = await getAlumniEvents(user);
   return data.events;
 }
 
 export async function listAlumniEventRegistrations(user: CurrentUser): Promise<AsyncResult<CommunityService["listAlumniEventRegistrations"]>> {
-  const data = await apiGet<{ events: unknown; registrations: AsyncResult<CommunityService["listAlumniEventRegistrations"]> }>(user, "/api/v1/alumni/events");
+  const data = await getAlumniEvents(user);
   return data.registrations;
 }
 

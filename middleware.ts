@@ -3,7 +3,9 @@ import { SESSION_COOKIE } from "@/config/constants";
 
 export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
-  const requestId = request.headers.get("x-request-id")?.slice(0, 128) || crypto.randomUUID();
+  // Generate this at the web boundary rather than reusing client input. The
+  // ID also scopes request-local memoization, so it must be server-owned.
+  const requestId = crypto.randomUUID();
   if (!hasSession) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
@@ -11,13 +13,20 @@ export function middleware(request: NextRequest) {
     applySecurityHeaders(response, requestId);
     return response;
   }
-  const response = NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+  const response = NextResponse.next(
+    { request: { headers: requestHeaders } } as unknown as Parameters<typeof NextResponse.next>[0],
+  );
   applySecurityHeaders(response, requestId);
   return response;
 }
 
 function applySecurityHeaders(response: NextResponse, requestId: string) {
   response.headers.set("X-Request-ID", requestId);
+  // ERP pages contain tenant-scoped data. Prevent browser/shared caches from
+  // restoring an authenticated response after logout or a scope change.
+  response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

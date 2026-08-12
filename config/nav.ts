@@ -2,6 +2,23 @@ import { Activity, BarChart3, BedDouble, BookOpen, Boxes, Building2, CalendarChe
 
 export type NavItem = { label: string; href: string; icon: LucideIcon; permission?: string };
 
+const frequentlyVisitedRoutes = new Set([
+  "/dashboard",
+  "/students",
+  "/attendance/students",
+  "/academics/curriculum",
+  "/exams/results",
+  "/fees/invoices",
+  "/hr/employees",
+  "/teacher",
+  "/parent",
+  "/student",
+]);
+
+export function shouldPrefetchNavigation(href: string) {
+  return frequentlyVisitedRoutes.has(href);
+}
+
 export const primaryNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Students", href: "/students", icon: GraduationCap, permission: "students:read" },

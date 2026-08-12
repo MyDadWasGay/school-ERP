@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, School, X } from "lucide-react";
-import { navigationForRole } from "@/config/nav";
+import { navigationForRole, shouldPrefetchNavigation } from "@/config/nav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { CurrentUser } from "@/lib/auth/types";
@@ -27,7 +27,7 @@ export function MobileSidebar({ user }: { user: CurrentUser }) {
         <nav className="h-[calc(100vh-4rem)] space-y-1 overflow-y-auto p-3">{visibleItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground", active && "bg-accent font-medium text-accent-foreground")}><Icon className="h-4 w-4" />{item.label}</Link>;
+          return <Link key={item.href} href={item.href} prefetch={shouldPrefetchNavigation(item.href)} onClick={() => setOpen(false)} className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground", active && "bg-accent font-medium text-accent-foreground")}><Icon className="h-4 w-4" />{item.label}</Link>;
         })}</nav>
       </aside>
     </div> : null}

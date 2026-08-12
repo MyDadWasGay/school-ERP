@@ -9,18 +9,34 @@ import { isFirebaseClientConfigured } from "@/lib/env-public";
 
 export function UserMenu({ name }: { name: string }) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
   async function logout() {
+    if (pending) return;
+    setPending(true);
+    setError("");
     const csrfCookie = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("school_erp_csrf="));
     const csrfToken = csrfCookie ? decodeURIComponent(csrfCookie.slice("school_erp_csrf=".length)) : "";
-    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include", headers: { "X-CSRF-Token": csrfToken } });
-    if (isFirebaseClientConfigured()) await signOut(getFirebaseAuth()).catch(() => undefined);
-    window.location.assign("/login");
+    try {
+      const response = await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include", headers: { "X-CSRF-Token": csrfToken } });
+      if (!response.ok) {
+        setError("We could not end the server session. Please try again.");
+        return;
+      }
+      if (isFirebaseClientConfigured()) await signOut(getFirebaseAuth()).catch(() => undefined);
+      window.location.replace("/login");
+    } catch {
+      setError("Network error while signing out. Your session is still active; please retry.");
+    } finally {
+      setPending(false);
+    }
   }
   return <div className="relative">
     <button aria-label="Open user menu" className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary" onClick={() => setOpen((value) => !value)}>{name.slice(0, 1).toUpperCase()}</button>
     {open ? <div className="absolute right-0 top-11 z-40 w-52 rounded-md border bg-card p-2 shadow-lg">
       <p className="truncate px-2 py-1 text-sm font-medium">{name}</p>
-      <Button className="mt-1 w-full justify-start" variant="ghost" size="sm" onClick={logout}><LogOut className="mr-2 h-4 w-4" />Sign out</Button>
+      <Button className="mt-1 w-full justify-start" variant="ghost" size="sm" disabled={pending} onClick={logout}><LogOut className="mr-2 h-4 w-4" />{pending ? "Signing out…" : "Sign out"}</Button>
+      {error ? <p className="px-2 pt-2 text-xs text-destructive" role="alert">{error}</p> : null}
     </div> : null}
   </div>;
 }

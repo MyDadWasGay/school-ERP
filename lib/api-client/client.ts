@@ -70,10 +70,14 @@ export type SchoolErpApiClientOptions = {
   getCsrfToken?: () => string | undefined | Promise<string | undefined>;
   credentials?: RequestCredentials;
   fetch?: typeof fetch;
+  /** Server adapters use this to invalidate request-local auth/data snapshots. */
+  onMutation?: () => void;
 };
 
 export type ApiRequestOptions = {
   idempotencyKey?: string;
+  /** Positive timeout override in milliseconds. Defaults to 15s for reads and 30s for mutations. */
+  timeoutMs?: number;
 };
 
 /**
@@ -116,41 +120,84 @@ export class SchoolErpApiClient {
     const csrfToken = this.options.getCsrfToken
       ? await this.options.getCsrfToken()
       : undefined;
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method,
-      headers: {
-        accept: "application/json",
-        ...(token
-          ? {
-              authorization: `${this.options.authorizationScheme ?? "Bearer"} ${token}`,
-            }
-          : {}),
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-        ...(campusId ? { "x-campus-id": campusId } : {}),
-        ...(cookieHeader ? { cookie: cookieHeader } : {}),
-        ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-        ...(requestOptions.idempotencyKey
-          ? { "x-idempotency-key": requestOptions.idempotencyKey }
-          : {}),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      credentials:
-        this.options.credentials ??
-        (this.options.useSessionCookie ? "include" : "omit"),
-      cache: "no-store",
-    });
-    const payload = (await response.json()) as ApiSuccess<T> | ApiErrorEnvelope;
-    if (!response.ok || "error" in payload) {
-      const error = "error" in payload ? payload.error : undefined;
-      throw new SchoolErpApiError(
-        response.status,
-        error?.code ?? "INVALID_RESPONSE",
-        error?.message ?? "The API request failed.",
-        error?.requestId ?? response.headers.get("x-request-id") ?? undefined,
-        error?.fields,
-      );
+    const timeoutMs = requestOptions.timeoutMs ?? (method === "GET" ? 15_000 : 30_000);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      throw new Error("API request timeout must be a positive number.");
     }
-    return payload;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    try {
+      const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          accept: "application/json",
+          ...(token
+            ? {
+                authorization: `${this.options.authorizationScheme ?? "Bearer"} ${token}`,
+              }
+            : {}),
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...(campusId ? { "x-campus-id": campusId } : {}),
+          ...(cookieHeader ? { cookie: cookieHeader } : {}),
+          ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+          ...(requestOptions.idempotencyKey
+            ? { "x-idempotency-key": requestOptions.idempotencyKey }
+            : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        credentials:
+          this.options.credentials ??
+          (this.options.useSessionCookie ? "include" : "omit"),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      let payload: ApiSuccess<T> | ApiErrorEnvelope;
+      try {
+        payload = (await response.json()) as ApiSuccess<T> | ApiErrorEnvelope;
+      } catch {
+        throw new SchoolErpApiError(
+          response.status,
+          "INVALID_RESPONSE",
+          "The API returned an invalid response. Please try again.",
+          response.headers.get("x-request-id") ?? undefined,
+        );
+      }
+      if (!response.ok || "error" in payload) {
+        const error = "error" in payload ? payload.error : undefined;
+        throw new SchoolErpApiError(
+          response.status,
+          error?.code ?? "INVALID_RESPONSE",
+          error?.message ?? "The API request failed.",
+          error?.requestId ?? response.headers.get("x-request-id") ?? undefined,
+          error?.fields,
+        );
+      }
+      return payload;
+    } catch (error) {
+      if (timedOut) {
+        throw new SchoolErpApiError(
+          408,
+          "REQUEST_TIMEOUT",
+          "The API request timed out. Please try again.",
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (method !== "GET") {
+        // A mutation can change access, campus, or session state. Never let a
+        // server render reuse an auth/data snapshot after that point.
+        try {
+          this.options.onMutation?.();
+        } catch {
+          // Invalidation must never replace the API result or error.
+        }
+      }
+    }
   }
 
   private get<T>(path: string) {

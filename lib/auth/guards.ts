@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { sessionLogs } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import { checkPermission } from "@/lib/rbac/check-permission";
+import { memoizeRequest } from "@/lib/server/request-memo";
 import type { CurrentUser } from "./types";
 import { readActiveCampusId, readSessionIdentity } from "./session";
 import { getUserByFirebaseUid } from "./user-context";
@@ -13,22 +14,28 @@ import { getUserByFirebaseUid } from "./user-context";
 // Bearer/API credentials. Do not create separate web and Flutter RBAC rules.
 export { getUserByFirebaseUid } from "./user-context";
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const session = await readSessionIdentity();
-  if (!session) return null;
-  const user = await getUserByFirebaseUid(session.uid);
-  if (!user) return null;
-  const activeSession = await getDb().query.sessionLogs.findFirst({ where: and(
-    eq(sessionLogs.organizationId, user.organizationId),
-    eq(sessionLogs.userId, user.id),
-    eq(sessionLogs.firebaseSessionId, session.fingerprint),
-    eq(sessionLogs.status, "active"),
-    isNull(sessionLogs.revokedAt),
-    gt(sessionLogs.expiresAt, new Date()),
-  ) });
-  if (!activeSession) return null;
-  const selectedCampusId = await readActiveCampusId();
-  return getUserByFirebaseUid(session.uid, selectedCampusId);
+export function getCurrentUser(): Promise<CurrentUser | null> {
+  return memoizeRequest("auth.current-user", async () => {
+    const [session, selectedCampusId] = await Promise.all([
+      readSessionIdentity(),
+      readActiveCampusId(),
+    ]);
+    if (!session) return null;
+
+    // Resolve the scoped user once. The previous flow resolved the full
+    // context before and after checking the session log.
+    const user = await getUserByFirebaseUid(session.uid, selectedCampusId);
+    if (!user) return null;
+    const activeSession = await getDb().query.sessionLogs.findFirst({ where: and(
+      eq(sessionLogs.organizationId, user.organizationId),
+      eq(sessionLogs.userId, user.id),
+      eq(sessionLogs.firebaseSessionId, session.fingerprint),
+      eq(sessionLogs.status, "active"),
+      isNull(sessionLogs.revokedAt),
+      gt(sessionLogs.expiresAt, new Date()),
+    ) });
+    return activeSession ? user : null;
+  });
 }
 
 export async function requireUser() {

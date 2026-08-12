@@ -113,6 +113,50 @@ describe("shared School ERP API client", () => {
     );
   });
 
+  it("bounds hung requests and reports a stable timeout error", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn((_: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      }));
+      const client = new SchoolErpApiClient({
+        baseUrl: "https://api.example.com",
+        getFirebaseIdToken: async () => "firebase-token",
+        fetch: fetchMock,
+      });
+      const pending = client.call("GET", "/api/v1/me", undefined, { timeoutMs: 25 });
+      const rejection = expect(pending).rejects.toMatchObject({
+        status: 408,
+        code: "REQUEST_TIMEOUT",
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(25);
+      await rejection;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("notifies the server adapter after mutations but not reads", async () => {
+    const fetchMock = vi.fn().mockImplementation(
+      async () => new Response(JSON.stringify({ data: { ok: true }, meta: { requestId: "request-mutation" } }), { status: 200 }),
+    );
+    const onMutation = vi.fn();
+    const client = new SchoolErpApiClient({
+      baseUrl: "https://api.example.com",
+      getFirebaseIdToken: async () => "firebase-token",
+      fetch: fetchMock,
+      onMutation,
+    });
+
+    await client.call("GET", "/api/v1/me");
+    expect(onMutation).not.toHaveBeenCalled();
+    await client.call("POST", "/api/v1/users/user-1/access", {});
+    expect(onMutation).toHaveBeenCalledTimes(1);
+  });
+
   it("uses versioned Razorpay order and verification contracts", async () => {
     const fetchMock = vi
       .fn()

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { permissionKeys } from "@/config/permissions";
 import { provisionRoles } from "../schemas/provision.schema";
 import {
@@ -53,6 +54,7 @@ export function UserAccessWorkspace({
   delegations: DelegationRow[];
   canManage: boolean;
 }) {
+  const router = useRouter();
   const [campusIds, setCampusIds] = useState(assignedCampusIds);
   const [message, setMessage] = useState("");
   const [delegationMessage, setDelegationMessage] = useState("");
@@ -76,6 +78,7 @@ export function UserAccessWorkspace({
       classSectionScopes,
     });
     setMessage(result.ok ? result.message ?? "Access updated." : result.error);
+    if (result.ok) router.refresh();
   }
 
   async function grantDelegation(formData: FormData) {
@@ -87,6 +90,7 @@ export function UserAccessWorkspace({
       endsAt: formData.get("endsAt"),
     });
     setDelegationMessage(result.ok ? result.message ?? "Access granted." : result.error);
+    if (result.ok) router.refresh();
   }
 
   function toggleCampus(campusId: string, checked: boolean) {
@@ -168,6 +172,7 @@ export function UserAccessWorkspace({
           <div className="flex items-center gap-2"><StatusBadge status={delegation.status} />{canManage && delegation.status === "active" ? <Button type="button" variant="outline" size="sm" onClick={async () => {
             const result = await revokeDelegationAction({ id: delegation.id, userId: user.id });
             setDelegationMessage(result.ok ? result.message ?? "Access revoked." : result.error);
+            if (result.ok) router.refresh();
           }}>Revoke</Button> : null}</div>
         </div>)}
       </div>

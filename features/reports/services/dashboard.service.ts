@@ -34,7 +34,10 @@ export async function getDashboardMetrics(user: CurrentUser): Promise<DashboardM
     allocationRows, roomRows, allotmentRows, alertRows,
   ] = await Promise.all([
     getDb().select({ value: count() }).from(students).where(and(tenant, campus, eq(students.status, "active"))),
-    getDb().select({ total: count() }).from(studentAttendanceRecords).where(and(
+    getDb().select({
+      total: count(),
+      present: sql<number>`sum(case when ${studentAttendanceRecords.state} = 'present' then 1 else 0 end)`,
+    }).from(studentAttendanceRecords).where(and(
       eq(studentAttendanceRecords.organizationId, user.organizationId),
       user.campusId ? eq(studentAttendanceRecords.campusId, user.campusId) : undefined,
     )),
@@ -49,20 +52,16 @@ export async function getDashboardMetrics(user: CurrentUser): Promise<DashboardM
     getDb().select({ value: count() }).from(hostelAllotments).where(and(eq(hostelAllotments.organizationId, user.organizationId), user.campusId ? eq(hostelAllotments.campusId, user.campusId) : undefined, eq(hostelAllotments.status, "active"))),
     getDb().select({ value: count() }).from(alerts).where(and(eq(alerts.organizationId, user.organizationId), user.campusId ? eq(alerts.campusId, user.campusId) : undefined, eq(alerts.status, "open"))),
   ]);
-  const totalAttendance = attendanceRows[0]?.total ?? 0;
-  // SQLite boolean aggregation is kept explicit here because attendance states are text.
-  const presentRows = await getDb().select({ value: count() }).from(studentAttendanceRecords).where(and(
-    eq(studentAttendanceRecords.organizationId, user.organizationId),
-    user.campusId ? eq(studentAttendanceRecords.campusId, user.campusId) : undefined,
-    eq(studentAttendanceRecords.state, "present"),
-  ));
+  // Keep the total and present counts in one tenant-scoped scan.
+  const totalAttendance = Number(attendanceRows[0]?.total ?? 0);
+  const presentAttendance = Number(attendanceRows[0]?.present ?? 0);
   const totalMinor = Number(invoiceRows[0]?.total ?? 0);
   const pendingMinor = Number(invoiceRows[0]?.balance ?? 0);
   const routeCapacity = Number(routeRows[0]?.capacity ?? 0);
   const hostelCapacity = Number(roomRows[0]?.capacity ?? 0);
   return {
     students: studentRows[0]?.value ?? 0,
-    attendanceRate: totalAttendance ? (presentRows[0].value / totalAttendance) * 100 : 0,
+    attendanceRate: totalAttendance ? (presentAttendance / totalAttendance) * 100 : 0,
     collectionRate: totalMinor ? ((totalMinor - pendingMinor) / totalMinor) * 100 : 0,
     pendingMinor,
     staff: staffRows[0]?.value ?? 0,

@@ -31,7 +31,14 @@ export const communityIntegrationsRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: unknown }>("/activities/sports/fixtures", { ...mutation, schema: routeSchema("Schedule a sports fixture") }, async (request, reply) => { const user = requireApiPermission(request, "activities:create"); const input = parseApiBody(sportsFixtureSchema, request.body); const row = await createSportsFixture(user, input); await auditCommand(user, { action: "create", module: "activities", entityType: "sports_fixture", entityId: row.id, campusId: row.campusId, after: { name: row.name } }); return apiCreated(reply, request, { id: row.id }); });
 
   app.get("/alumni/profiles", authenticated, async (request) => apiSuccess(request, await listAlumniProfiles(requireApiPermission(request, "alumni:read"))));
-  app.get("/alumni/events", authenticated, async (request) => apiSuccess(request, { events: await listAlumniEvents(requireApiPermission(request, "alumni:read")), registrations: await listAlumniEventRegistrations(requireApiPermission(request, "alumni:read")) }));
+  app.get("/alumni/events", authenticated, async (request) => {
+    const user = requireApiPermission(request, "alumni:read");
+    const [events, registrations] = await Promise.all([
+      listAlumniEvents(user),
+      listAlumniEventRegistrations(user),
+    ]);
+    return apiSuccess(request, { events, registrations });
+  });
   app.get("/alumni/mentorship", authenticated, async (request) => apiSuccess(request, await listMentorships(requireApiPermission(request, "alumni:read"))));
   app.get("/alumni/jobs", authenticated, async (request) => apiSuccess(request, await listJobBoardPosts(requireApiPermission(request, "alumni:read"))));
   app.get("/alumni/donations", authenticated, async (request) => apiSuccess(request, await listAlumniDonations(requireApiPermission(request, "alumni:read"))));

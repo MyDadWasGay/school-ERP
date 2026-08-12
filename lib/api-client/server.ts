@@ -7,6 +7,7 @@ import {
   readCsrfCookie,
   readSessionIdentity,
 } from "@/lib/auth/session";
+import { invalidateRequestMemo, memoizeRequest } from "@/lib/server/request-memo";
 
 export function apiBaseUrl() {
   const value = (
@@ -27,24 +28,27 @@ export async function createPublicServerApiClient() {
   });
 }
 
-export async function createServerApiClient() {
-  const [identity, campusId, cookieHeader, csrfToken] = await Promise.all([
-    readSessionIdentity(),
-    readActiveCampusId(),
-    readApiCookieHeader(),
-    readCsrfCookie(),
-  ]);
-  if (!identity || !cookieHeader)
-    throw new SchoolErpApiError(
-      401,
-      "UNAUTHENTICATED",
-      "A valid web session is required.",
-    );
-  return new SchoolErpApiClient({
-    baseUrl: apiBaseUrl(),
-    useSessionCookie: true,
-    getCookieHeader: () => cookieHeader,
-    getCsrfToken: () => csrfToken,
-    getCampusId: () => campusId,
+export function createServerApiClient(): Promise<SchoolErpApiClient> {
+  return memoizeRequest("api.server-client", async () => {
+    const [identity, campusId, cookieHeader, csrfToken] = await Promise.all([
+      readSessionIdentity(),
+      readActiveCampusId(),
+      readApiCookieHeader(),
+      readCsrfCookie(),
+    ]);
+    if (!identity || !cookieHeader)
+      throw new SchoolErpApiError(
+        401,
+        "UNAUTHENTICATED",
+        "A valid web session is required.",
+      );
+    return new SchoolErpApiClient({
+      baseUrl: apiBaseUrl(),
+      useSessionCookie: true,
+      getCookieHeader: () => cookieHeader,
+      getCsrfToken: () => csrfToken,
+      getCampusId: () => campusId,
+      onMutation: invalidateRequestMemo,
+    });
   });
 }

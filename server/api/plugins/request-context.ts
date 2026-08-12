@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { FastifyInstance } from "fastify";
-
-const requestIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+import { isSafeRequestId } from "../../../config/request-id";
 
 export function resolveRequestId(request: IncomingMessage) {
   const candidate = request.headers["x-request-id"];
-  return typeof candidate === "string" && requestIdPattern.test(candidate)
+  return typeof candidate === "string" && isSafeRequestId(candidate)
     ? candidate
     : randomUUID();
 }
