@@ -3,7 +3,7 @@ services:
     name: school-erp-fastify-api
     runtime: node
     plan: starter
-    buildCommand: npm ci && npm run api:typecheck && npm run api:test
+    buildCommand: npm ci --include=dev && npm run api:typecheck && npm run api:test
     startCommand: npm run api:start
     healthCheckPath: /health/ready
     envVars:
