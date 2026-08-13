@@ -20,6 +20,7 @@ export default async function AdmissionsPage({ searchParams }: { searchParams: P
   ]);
   return <div>
     <PageHeader title="Admission enquiries" description="Capture every lead, source and follow-up before converting it into an application." />
+    <Card className="mb-6"><CardContent className="space-y-2 pt-6"><p className="font-medium">Enquiries are pre-application leads.</p><p className="text-sm text-muted-foreground">Use this queue for first contact, source and follow-up notes. When a family is ready for formal review, create an application from the enquiry and keep the conversion history intact.</p><p className="text-xs text-muted-foreground">Lifecycle: New → Contacted → Qualified → Converted, or Lost with a reason.</p></CardContent></Card>
     {hasPermission(user, "admissions:create") ? <EnquiryForm campuses={options.campuses} /> : null}
     <Card><CardContent className="pt-6">
       <form className="mb-4 flex max-w-md gap-2"><Input name="search" defaultValue={query.search} placeholder="Search applicant or guardian email" /><Button variant="outline">Search</Button></form>

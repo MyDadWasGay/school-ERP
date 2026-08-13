@@ -36,8 +36,10 @@ export type AdmissionOptions = {
   enquiries: AdmissionOption[];
 };
 
-function campusCondition(user: CurrentUser, campusId: AnyColumn) {
-  return user.campusId ? eq(campusId, user.campusId) : undefined;
+function campusCondition(user: CurrentUser, campusId: AnyColumn, allAccessibleCampuses = false) {
+  if (allAccessibleCampuses && user.campusIds?.length) return inArray(campusId, user.campusIds);
+  if (user.campusId) return eq(campusId, user.campusId);
+  return user.campusIds?.length ? inArray(campusId, user.campusIds) : undefined;
 }
 
 async function assertCampus(user: CurrentUser, campusId: string) {
@@ -52,31 +54,31 @@ async function assertCampus(user: CurrentUser, campusId: string) {
   return campus;
 }
 
-export async function getAdmissionOptions(user: CurrentUser): Promise<AdmissionOptions> {
+export async function getAdmissionOptions(user: CurrentUser, options: { allAccessibleCampuses?: boolean } = {}): Promise<AdmissionOptions> {
   const [campusRows, yearRows, classRows, sectionRows, enquiryRows] = await Promise.all([
     getDb().select({ id: campuses.id, name: campuses.name }).from(campuses).where(and(
       eq(campuses.organizationId, user.organizationId),
       eq(campuses.status, "active"),
-      campusCondition(user, campuses.id),
+      campusCondition(user, campuses.id, options.allAccessibleCampuses),
     )).orderBy(asc(campuses.name)),
     getDb().select({ id: academicYears.id, name: academicYears.name, campusId: academicYears.campusId }).from(academicYears).where(and(
       eq(academicYears.organizationId, user.organizationId),
       eq(academicYears.status, "active"),
-      campusCondition(user, academicYears.campusId),
+      campusCondition(user, academicYears.campusId, options.allAccessibleCampuses),
     )).orderBy(desc(academicYears.startsOn)),
     getDb().select({ id: classes.id, name: classes.name, campusId: classes.campusId }).from(classes).where(and(
       eq(classes.organizationId, user.organizationId),
       eq(classes.status, "active"),
-      campusCondition(user, classes.campusId),
+      campusCondition(user, classes.campusId, options.allAccessibleCampuses),
     )).orderBy(asc(classes.sortOrder)),
     getDb().select({ id: sections.id, name: sections.name, campusId: sections.campusId, classId: sections.classId }).from(sections).where(and(
       eq(sections.organizationId, user.organizationId),
       eq(sections.status, "active"),
-      campusCondition(user, sections.campusId),
+      campusCondition(user, sections.campusId, options.allAccessibleCampuses),
     )).orderBy(asc(sections.name)),
     getDb().select({ id: admissionsEnquiries.id, name: admissionsEnquiries.applicantName, campusId: admissionsEnquiries.campusId }).from(admissionsEnquiries).where(and(
       eq(admissionsEnquiries.organizationId, user.organizationId),
-      campusCondition(user, admissionsEnquiries.campusId),
+      campusCondition(user, admissionsEnquiries.campusId, options.allAccessibleCampuses),
       or(eq(admissionsEnquiries.status, "new"), eq(admissionsEnquiries.status, "qualified")),
     )).orderBy(desc(admissionsEnquiries.createdAt)).limit(100),
   ]);
@@ -95,6 +97,7 @@ export async function listEnquiriesPage(
     search ? or(
       like(admissionsEnquiries.applicantName, `%${search}%`),
       like(admissionsEnquiries.guardianEmail, `%${search}%`),
+      like(admissionsEnquiries.guardianPhone, `%${search}%`),
     ) : undefined,
   );
   const [rows, totals] = await Promise.all([
@@ -116,6 +119,9 @@ export async function listEnquiriesPage(
       campusId: row.campusId,
       source: row.source,
       campaign: row.campaign,
+      guardianName: row.guardianName,
+      guardianPhone: row.guardianPhone,
+      notes: row.notes,
       nextFollowUpAt: row.nextFollowUpAt,
       lostReason: row.lostReason,
       openFollowUp: firstFollowUp.get(row.id),
@@ -133,7 +139,10 @@ export async function createEnquiry(user: CurrentUser, input: EnquiryInput) {
     organizationId: user.organizationId,
     campusId: input.campusId,
     applicantName: input.applicantName,
+    guardianName: input.guardianName || undefined,
     guardianEmail: input.guardianEmail || undefined,
+    guardianPhone: input.guardianPhone || undefined,
+    notes: input.notes || undefined,
     source: input.source,
     campaign: undefined,
     nextFollowUpAt: input.nextFollowUpAt,
@@ -383,7 +392,36 @@ export async function recordAdmissionAssessment(user: CurrentUser, input: Assess
   return { before: existing, updated };
 }
 
-export async function getAdmissionSeatMatrix(user: CurrentUser) {
+export type AdmissionSeatMatrixFilters = {
+  campusId?: string;
+  academicYearId?: string;
+  classId?: string;
+  sectionId?: string;
+};
+
+function requestedSeatCampusCondition(user: CurrentUser, campusId: AnyColumn, requestedCampusId?: string) {
+  if (requestedCampusId) {
+    const accessible = user.campusIds?.length ? user.campusIds.includes(requestedCampusId) : !user.campusId || user.campusId === requestedCampusId;
+    if (!accessible) throw new AppError("TENANT_SCOPE_ERROR", "Campus is outside your assigned scope.", 403);
+    return eq(campusId, requestedCampusId);
+  }
+  return campusCondition(user, campusId, true);
+}
+
+export async function getAdmissionSeatMatrix(user: CurrentUser, filters: AdmissionSeatMatrixFilters = {}) {
+  const seatCampusCondition = requestedSeatCampusCondition(user, sections.campusId, filters.campusId);
+  const activeYearRows = await getDb().select({ id: academicYears.id }).from(academicYears).where(and(
+    eq(academicYears.organizationId, user.organizationId),
+    eq(academicYears.status, "active"),
+    eq(academicYears.isActive, true),
+    requestedSeatCampusCondition(user, academicYears.campusId, filters.campusId),
+    filters.academicYearId ? eq(academicYears.id, filters.academicYearId) : undefined,
+  ));
+  if (filters.academicYearId && !activeYearRows.length) throw new AppError("NOT_FOUND", "Academic year is not available in your selected campus scope.", 404);
+  const activeYearIds = activeYearRows.map((row) => row.id);
+  const enrollmentYearCondition = activeYearIds.length
+    ? inArray(enrollments.academicYearId, activeYearIds)
+    : eq(enrollments.academicYearId, "__no_active_academic_year__");
   const rows = await getDb().select({
     classId: classes.id,
     className: classes.name,
@@ -393,9 +431,15 @@ export async function getAdmissionSeatMatrix(user: CurrentUser) {
     capacity: sections.capacity,
     occupied: count(enrollments.id),
   }).from(sections)
-    .innerJoin(classes, and(eq(classes.id, sections.classId), eq(classes.organizationId, user.organizationId)))
-    .leftJoin(enrollments, and(eq(enrollments.sectionId, sections.id), eq(enrollments.organizationId, user.organizationId), eq(enrollments.status, "active")))
-    .where(and(eq(sections.organizationId, user.organizationId), eq(sections.status, "active"), campusCondition(user, sections.campusId)))
+    .innerJoin(classes, and(eq(classes.id, sections.classId), eq(classes.organizationId, user.organizationId), eq(classes.campusId, sections.campusId), eq(classes.status, "active")))
+    .leftJoin(enrollments, and(eq(enrollments.sectionId, sections.id), eq(enrollments.organizationId, user.organizationId), eq(enrollments.status, "active"), enrollmentYearCondition))
+    .where(and(
+      eq(sections.organizationId, user.organizationId),
+      eq(sections.status, "active"),
+      seatCampusCondition,
+      filters.classId ? eq(sections.classId, filters.classId) : undefined,
+      filters.sectionId ? eq(sections.id, filters.sectionId) : undefined,
+    ))
     .groupBy(classes.id, classes.name, sections.id, sections.name, sections.campusId, sections.capacity)
     .orderBy(asc(classes.name), asc(sections.name));
   return rows.map((row) => ({ ...row, occupied: Number(row.occupied), available: Math.max(0, row.capacity - Number(row.occupied)) }));

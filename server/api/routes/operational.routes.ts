@@ -8,6 +8,7 @@ import { listAuditLogs } from "../../../features/audit/services/audit.service";
 import {
   getStudentImportErrors,
   listStudentImportJobs,
+  previewStudentImport,
   runStudentImport,
 } from "../../../features/import-export/services/student-import.service";
 import { runEmployeeImport } from "../../../features/import-export/services/employee-import.service";
@@ -227,6 +228,21 @@ export const operationalRoutes: FastifyPluginAsync = async (app) => {
         metadata: { rowCount: rows.length },
       });
       return sendDownload(reply, toCsv(rows), "text/csv; charset=utf-8", `transport-manifest-${routeId}.csv`);
+    },
+  );
+
+  app.post(
+    "/imports/students/preview",
+    {
+      preHandler: [authenticateApiRequest, requireApiCsrf],
+      schema: { ...publicOperationSchema, summary: "Validate a student import without writing records", security: [{ firebaseBearer: [] }, { apiSessionCookie: [] }] },
+    },
+    async (request) => {
+      const user = requireApiPermission(request, "students:import");
+      const csv = requestBodyText(request);
+      if (!csv.trim() || csv.length > 5_000_000) throw new AppError("VALIDATION_ERROR", "A CSV body between 1 byte and 5 MB is required.", 422);
+      const result = await previewStudentImport(user, csv);
+      return apiSuccess(request, { totalRows: result.totalRows, readyRows: result.validRows.length, errors: result.errors.slice(0, 200) });
     },
   );
 

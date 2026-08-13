@@ -254,8 +254,12 @@ export async function listHostelAllotments(user: CurrentUser): Promise<AsyncResu
   return apiGet(user, "/api/v1/hostel/allotments");
 }
 
-export async function getAttendanceStudentOptions(user: CurrentUser): Promise<AsyncResult<AttendanceWorkspaceService["getAttendanceStudentOptions"]>> {
-  return apiGet(user, "/api/v1/attendance/students/options");
+export async function getAttendanceStudentOptions(user: CurrentUser, search?: string): Promise<AsyncResult<AttendanceWorkspaceService["getAttendanceStudentOptions"]>> {
+  return apiGet(user, withQuery("/api/v1/attendance/students/options", { search }));
+}
+
+export async function getAttendanceOverview(user: CurrentUser): Promise<AsyncResult<AttendanceWorkspaceService["getAttendanceOverview"]>> {
+  return apiGet(user, "/api/v1/attendance/overview");
 }
 
 export async function listAttendancePage(user: CurrentUser, input?: { page?: number; pageSize?: number; date?: string }): Promise<AsyncResult<AttendanceWorkspaceService["listAttendancePage"]>> {
@@ -390,8 +394,8 @@ export async function listPayslips(user: CurrentUser): Promise<AsyncResult<HrSer
   return apiGet(user, "/api/v1/payroll/payslips");
 }
 
-export async function getAdmissionOptions(user: CurrentUser): Promise<AsyncResult<AdmissionsService["getAdmissionOptions"]>> {
-  return apiGet(user, "/api/v1/admissions/options");
+export async function getAdmissionOptions(user: CurrentUser, options: { allAccessibleCampuses?: boolean } = {}): Promise<AsyncResult<AdmissionsService["getAdmissionOptions"]>> {
+  return apiGet(user, withQuery("/api/v1/admissions/options", { allCampuses: options.allAccessibleCampuses }));
 }
 
 export async function listEnquiriesPage(user: CurrentUser, input: PageInput): Promise<AsyncResult<AdmissionsService["listEnquiriesPage"]>> {
@@ -406,8 +410,8 @@ export async function listApprovalQueue(user: CurrentUser): Promise<AsyncResult<
   return apiGet(user, "/api/v1/admissions/approvals");
 }
 
-export async function getAdmissionSeatMatrix(user: CurrentUser): Promise<AsyncResult<AdmissionsService["getAdmissionSeatMatrix"]>> {
-  return apiGet(user, "/api/v1/admissions/seat-matrix");
+export async function getAdmissionSeatMatrix(user: CurrentUser, input: Parameters<AdmissionsService["getAdmissionSeatMatrix"]>[1] = {}): Promise<AsyncResult<AdmissionsService["getAdmissionSeatMatrix"]>> {
+  return apiGet(user, withQuery("/api/v1/admissions/seat-matrix", input));
 }
 
 export async function listClubs(user: CurrentUser): Promise<AsyncResult<CommunityService["listClubs"]>> {

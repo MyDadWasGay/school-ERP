@@ -5,7 +5,7 @@ import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { createStudentAction } from "../actions/student.actions";
-import { studentSchema, type StudentInput } from "../schemas/student.schema";
+import { guardianRelationshipOptions, studentSchema, type StudentInput } from "../schemas/student.schema";
 import type { StudentFormOptions } from "../types";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
   });
   const campusId = form.watch("campusId");
   const classId = form.watch("classId");
+  const guardianRelationship = form.watch("guardian.relationship");
   const availableYears = options.academicYears.filter((year) => !year.campusId || year.campusId === campusId);
   const availableClasses = options.classes.filter((classRow) => !classRow.campusId || classRow.campusId === campusId);
   const availableSections = options.sections.filter((section) => section.classId === classId && (!section.campusId || section.campusId === campusId));
@@ -103,7 +104,8 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
       {addGuardian ? <fieldset className="mt-4 rounded-md border bg-background p-4"><legend className="px-1 text-sm font-semibold">Guardian</legend><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <FormField label="First name" error={form.formState.errors.guardian?.firstName?.message}><Input {...form.register("guardian.firstName")} /></FormField>
         <FormField label="Last name" error={form.formState.errors.guardian?.lastName?.message}><Input {...form.register("guardian.lastName")} /></FormField>
-        <FormField label="Relationship" error={form.formState.errors.guardian?.relationship?.message}><Input {...form.register("guardian.relationship")} placeholder="Parent, guardian..." /></FormField>
+        <FormField label="Relationship" error={form.formState.errors.guardian?.relationship?.message}><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" {...form.register("guardian.relationship")}><option value="">Select relationship</option>{guardianRelationshipOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FormField>
+        {guardianRelationship === "other" ? <FormField label="Specify relationship" error={form.formState.errors.guardian?.customRelationship?.message}><Input {...form.register("guardian.customRelationship")} placeholder="For example, Grandmother" /></FormField> : null}
         <FormField label="Email" error={form.formState.errors.guardian?.email?.message}><Input type="email" {...form.register("guardian.email")} /></FormField>
         <FormField label="Phone" error={form.formState.errors.guardian?.phone?.message}><Input type="tel" {...form.register("guardian.phone")} /></FormField>
       </div></fieldset> : null}

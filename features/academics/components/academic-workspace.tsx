@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { EntityCombobox } from "@/components/forms/entity-combobox";
 import { EmptyState } from "@/components/common/empty-state";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
@@ -61,13 +62,13 @@ export function AcademicWorkspace({ kind, rows, canCreate, canDelete }: { kind: 
       <Card>
         <CardHeader><CardTitle>{label} workflow</CardTitle></CardHeader>
         <CardContent>
-          <p className="mb-4 text-sm text-muted-foreground">Typed academic records are scoped to the current organization and campus. IDs are server-validated against the academic context before they are used by teaching workflows.</p>
+          <p className="mb-4 text-sm text-muted-foreground">Search the academic context by name or code. The server validates the selected records against the current organization and campus before saving.</p>
           {canCreate ? <form onSubmit={create} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" noValidate>
             <div className="space-y-1"><Label htmlFor="academic-name">Name/title</Label><Input id="academic-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>
             <div className="space-y-1"><Label htmlFor="academic-code">Code</Label><Input id="academic-code" value={code} onChange={(event) => setCode(event.target.value)} /></div>
-            <div className="space-y-1"><Label htmlFor="academic-teacher">Teacher ID</Label><Input id="academic-teacher" value={teacherId} onChange={(event) => setTeacherId(event.target.value)} /></div>
-            <div className="space-y-1"><Label htmlFor="academic-class">Class ID</Label><Input id="academic-class" value={classId} onChange={(event) => setClassId(event.target.value)} /></div>
-            <div className="space-y-1"><Label htmlFor="academic-subject">Subject ID</Label><Input id="academic-subject" value={subjectId} onChange={(event) => setSubjectId(event.target.value)} /></div>
+            <EntityCombobox label="Teacher" value={teacherId} onChange={setTeacherId} endpoint="/api/v1/academics/options?kind=teacher" required={kind === "lesson-plans" || kind === "assignments"} description="Search by teacher name or email." />
+            <EntityCombobox label="Class" value={classId} onChange={setClassId} endpoint="/api/v1/academics/options?kind=class" required={kind === "lesson-plans" || kind === "assignments"} description="Search by class name or code." />
+            <EntityCombobox label="Subject" value={subjectId} onChange={setSubjectId} endpoint="/api/v1/academics/options?kind=subject" required={kind === "lesson-plans" || kind === "assignments"} description="Search by subject name or code." />
             <div className="space-y-1"><Label htmlFor="academic-date">{kind === "assignments" ? "Due date" : "Scheduled date"}</Label><Input id="academic-date" type="datetime-local" value={date} onChange={(event) => setDate(event.target.value)} required={kind === "assignments" || kind === "lesson-plans"} /></div>
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="academic-details">Details</Label><Input id="academic-details" value={details} onChange={(event) => setDetails(event.target.value)} /></div>
             <div className="flex items-end gap-3"><Button disabled={pending}>{pending ? "Creating..." : `Create ${label}`}</Button>{message ? <span role="status" className="text-sm text-muted-foreground">{message}</span> : null}</div>

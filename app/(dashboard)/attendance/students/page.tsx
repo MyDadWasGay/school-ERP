@@ -23,7 +23,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   ]);
   const selectedDate = query.date ?? result.attendanceDate.toISOString().slice(0, 10);
   return <div>
-    <PageHeader title="Student attendance" description="Mark current attendance directly; older changes automatically enter the correction approval workflow." />
+    <PageHeader title="Student attendance" description="Teachers can mark students in their assigned class or section; leadership permissions can oversee the campus. Older changes automatically enter the correction approval workflow." />
     {hasPermission(user, "attendance:mark") ? <AttendanceMarkForm students={students} /> : null}
     <Card><CardContent className="pt-6">
       <FilterBar label="Attendance filters" summary={`Viewing attendance for ${selectedDate}`}>

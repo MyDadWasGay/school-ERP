@@ -51,7 +51,7 @@ import { attendanceSchema } from "../../../features/attendance/schemas/attendanc
 import { staffAttendanceSchema } from "../../../features/attendance/schemas/attendance-extension.schema";
 import { disciplineDecisionSchema, disciplineIncidentSchema } from "../../../features/attendance/schemas/discipline.schema";
 import { markAttendanceRecord, reviewAttendanceCorrection } from "../../../features/attendance/services/attendance.service";
-import { getAttendanceStudentOptions, listAttendanceCorrections, listAttendancePage } from "../../../features/attendance/services/attendance-workspace.service";
+import { getAttendanceOverview, getAttendanceStudentOptions, listAttendanceCorrections, listAttendancePage } from "../../../features/attendance/services/attendance-workspace.service";
 import { listEmployeeOptions, listLowAttendance, listStaffAttendance, recordStaffAttendance } from "../../../features/attendance/services/attendance-extension.service";
 import { createDisciplineIncident, listDisciplineIncidents, updateDisciplineStatus } from "../../../features/attendance/services/discipline.service";
 import { listLeaveRequests, reviewLeaveRequest } from "../../../features/attendance/services/leave.service";
@@ -95,7 +95,7 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     const user = requireApiPermission(request, "students:update");
     const input = parseApiBody(guardianSchema, { ...(request.body as Record<string, unknown>), studentId: request.params.studentId });
     const result = await createGuardianAndLink(user, input);
-    await auditCommand(user, { action: "create", module: "students", entityType: "guardian", entityId: result.guardian.id, campusId: result.guardian.campusId, after: { studentId: input.studentId, relationship: input.relationship, isPrimary: input.isPrimary } });
+    await auditCommand(user, { action: "create", module: "students", entityType: "guardian", entityId: result.guardian.id, campusId: result.guardian.campusId, after: { studentId: input.studentId, relationship: input.relationship, customRelationship: input.customRelationship, isPrimary: input.isPrimary, isEmergencyContact: input.isEmergencyContact, isBillingContact: input.isBillingContact } });
     return apiCreated(reply, request, { id: result.guardian.id });
   });
 
@@ -103,7 +103,7 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     const user = requireApiPermission(request, "students:update");
     const input = parseApiBody(guardianUpdateSchema, { ...(request.body as Record<string, unknown>), studentId: request.params.studentId, id: request.params.id });
     const result = await updateGuardian(user, input);
-    await auditCommand(user, { action: "update", module: "students", entityType: "guardian", entityId: result.guardian.id, campusId: result.guardian.campusId, after: { studentId: input.studentId, relationship: input.relationship, isPrimary: input.isPrimary } });
+    await auditCommand(user, { action: "update", module: "students", entityType: "guardian", entityId: result.guardian.id, campusId: result.guardian.campusId, after: { studentId: input.studentId, relationship: input.relationship, customRelationship: input.customRelationship, isPrimary: input.isPrimary, isEmergencyContact: input.isEmergencyContact, isBillingContact: input.isBillingContact } });
     return apiSuccess(request, { id: result.guardian.id });
   });
 
@@ -142,9 +142,9 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     return apiCreated(reply, request, { id: certificate.id, certificateNumber: certificate.certificateNumber });
   });
 
-  app.get("/admissions/options", authenticated, async (request) => {
+  app.get<{ Querystring: { allCampuses?: string } }>("/admissions/options", authenticated, async (request) => {
     const user = requireApiPermission(request, "admissions:read");
-    return apiSuccess(request, await getAdmissionOptions(user));
+    return apiSuccess(request, await getAdmissionOptions(user, { allAccessibleCampuses: request.query.allCampuses === "true" }));
   });
 
   app.get<{ Querystring: ApplicationQuery }>("/admissions/enquiries", authenticated, async (request) => {
@@ -206,9 +206,9 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     return apiSuccess(request, await listApprovalQueue(user));
   });
 
-  app.get("/admissions/seat-matrix", authenticated, async (request) => {
+  app.get<{ Querystring: { campusId?: string; academicYearId?: string; classId?: string; sectionId?: string } }>("/admissions/seat-matrix", authenticated, async (request) => {
     const user = requireApiPermission(request, "admissions:read");
-    return apiSuccess(request, await getAdmissionSeatMatrix(user));
+    return apiSuccess(request, await getAdmissionSeatMatrix(user, request.query));
   });
 
   app.post<{ Params: IdParams; Body: unknown }>("/admissions/applications/:id/approve", { ...mutation, schema: routeSchema("Approve an admission and enroll the student") }, async (request) => {
@@ -292,14 +292,19 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     return apiSuccess(request, await listEmployeeOptions(user));
   });
 
+  app.get("/attendance/overview", authenticated, async (request) => {
+    const user = requireApiPermission(request, "attendance:read");
+    return apiSuccess(request, await getAttendanceOverview(user));
+  });
+
   app.get<{ Querystring: { page?: number; pageSize?: number; date?: string } }>("/attendance/students", authenticated, async (request) => {
     const user = requireApiPermission(request, "attendance:read");
     return apiSuccess(request, await listAttendancePage(user, { ...pageQuery(request.query), date: queryString(request.query.date) }));
   });
 
-  app.get("/attendance/students/options", authenticated, async (request) => {
+  app.get<{ Querystring: { search?: string } }>("/attendance/students/options", authenticated, async (request) => {
     const user = requireApiPermission(request, "attendance:read");
-    return apiSuccess(request, await getAttendanceStudentOptions(user));
+    return apiSuccess(request, await getAttendanceStudentOptions(user, queryString(request.query.search)));
   });
 
   app.get("/attendance/corrections", authenticated, async (request) => {

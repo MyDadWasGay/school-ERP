@@ -10,6 +10,7 @@ import { EnrollmentTransferForm } from "@/features/students/components/enrollmen
 import {
   GuardianForm,
   GuardianUnlinkButton,
+  type GuardianRecord,
 } from "@/features/students/components/guardian-form";
 import { MedicalProfileForm } from "@/features/students/components/medical-profile-form";
 import { StudentUpdateForm } from "@/features/students/components/student-update-form";
@@ -60,12 +61,6 @@ export default async function StudentDetailPage({
   const canUpdate = hasPermission(user, "students:update");
   const canViewSensitive = hasPermission(user, "students:view_sensitive");
   const canPayOnline = hasPermission(user, "fees:pay_online");
-  const [studentFormOptions, medicalProfile] = await Promise.all([
-    canUpdate ? getStudentFormOptions(user) : Promise.resolve(undefined),
-    canViewSensitive
-      ? getStudentMedicalProfile(user, id)
-      : Promise.resolve(null),
-  ]);
   const requestedTab = studentTab?.[0] ?? "profile";
   const visibleTabs = tabs.filter((tab) => {
     if (tab === "documents") return hasPermission(user, "documents:read");
@@ -77,6 +72,14 @@ export default async function StudentDetailPage({
   const activeTab = visibleTabs.includes(requestedTab as (typeof tabs)[number])
     ? requestedTab
     : "profile";
+  const [studentFormOptions, medicalProfile] = await Promise.all([
+    activeTab === "enrollment" && canUpdate
+      ? getStudentFormOptions(user)
+      : Promise.resolve(undefined),
+    activeTab === "medical" && canViewSensitive
+      ? getStudentMedicalProfile(user, id)
+      : Promise.resolve(null),
+  ]);
   const api = ["documents", "attendance", "fees", "results"].includes(activeTab)
     ? await createServerApiClient()
     : undefined;
@@ -99,6 +102,11 @@ export default async function StudentDetailPage({
     sectionId: enrollment.sectionId,
     rollNumber: enrollment.rollNumber,
     status: enrollment.status,
+  }));
+  const guardianRows: GuardianRecord[] = profile.guardians.map((guardian) => ({
+    ...guardian,
+    address: guardian.address ?? null,
+    custodyNotes: guardian.custodyNotes ?? null,
   }));
   return (
     <div>
@@ -144,7 +152,7 @@ export default async function StudentDetailPage({
           <Card>
             <CardContent className="pt-6">
               <DataTable
-                rows={profile.guardians}
+                rows={guardianRows}
                 columns={[
                   {
                     key: "name",
@@ -158,12 +166,14 @@ export default async function StudentDetailPage({
                   {
                     key: "relationship",
                     header: "Relationship",
-                    cell: (row) => row.relationship,
+                    cell: (row) => row.relationship === "other"
+                      ? row.customRelationship || "Other"
+                      : row.relationship.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
                   },
                   {
-                    key: "primary",
-                    header: "Primary",
-                    cell: (row) => (row.isPrimary ? "Yes" : "No"),
+                    key: "contacts",
+                    header: "Contact roles",
+                    cell: (row) => [row.isPrimary ? "Primary" : null, row.isEmergencyContact ? "Emergency" : null, row.isBillingContact ? "Billing" : null].filter(Boolean).join(" · ") || "—",
                   },
                   {
                     key: "phone",
@@ -173,16 +183,11 @@ export default async function StudentDetailPage({
                   {
                     key: "actions",
                     header: "Actions",
-                    cell: (row) =>
-                      canUpdate ? (
-                        <GuardianUnlinkButton
-                          studentId={id}
-                          guardianId={row.id}
-                        />
-                      ) : null,
+                    cell: (row) => canUpdate ? <div className="flex flex-wrap items-center justify-end gap-2"><GuardianForm studentId={id} guardian={row} /><GuardianUnlinkButton studentId={id} guardianId={row.id} /></div> : null,
                   },
                 ]}
                 emptyTitle="No guardians linked"
+                emptyDescription="Add the student's parents or legal guardians. Each relationship is kept separately."
               />
             </CardContent>
           </Card>

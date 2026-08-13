@@ -10,8 +10,8 @@ export const students = sqliteTable("students", {
 }, (table) => [index("students_org_idx").on(table.organizationId), index("students_campus_idx").on(table.organizationId, table.campusId), uniqueIndex("students_admission_unique").on(table.organizationId, table.admissionNumber)]);
 
 export const studentGuardianLinks = sqliteTable("student_guardian_links", {
-  id: idColumn("student_guardian"), ...tenantColumns(), studentId: text("student_id").notNull(), guardianId: text("guardian_id").notNull(), relationship: text("relationship").notNull(), isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false), ...auditColumns(),
-}, (table) => [index("student_guardians_student_idx").on(table.organizationId, table.studentId)]);
+  id: idColumn("student_guardian"), ...tenantColumns(), studentId: text("student_id").notNull(), guardianId: text("guardian_id").notNull(), relationship: text("relationship").notNull(), customRelationship: text("custom_relationship"), isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false), isEmergencyContact: integer("is_emergency_contact", { mode: "boolean" }).notNull().default(false), isBillingContact: integer("is_billing_contact", { mode: "boolean" }).notNull().default(false), ...auditColumns(),
+}, (table) => [index("student_guardians_student_idx").on(table.organizationId, table.studentId), uniqueIndex("student_guardian_link_unique").on(table.organizationId, table.studentId, table.guardianId)]);
 
 export const enrollments = sqliteTable("enrollments", {
   id: idColumn("enrollment"), ...tenantColumns(), studentId: text("student_id").notNull(), academicYearId: text("academic_year_id").notNull(), classId: text("class_id").notNull(), sectionId: text("section_id").notNull(), rollNumber: text("roll_number"), startsOn: integer("starts_on", { mode: "timestamp" }).notNull(), endsOn: integer("ends_on", { mode: "timestamp" }), ...auditColumns(), status: statusColumn(),

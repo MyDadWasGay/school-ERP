@@ -62,11 +62,19 @@ export type ApiStudentProfile = {
   };
   guardians: Array<{
     id: string;
+    linkId: string;
     firstName: string;
     lastName: string;
     relationship: string;
+    customRelationship: string | null;
     isPrimary: boolean;
+    isEmergencyContact: boolean;
+    isBillingContact: boolean;
+    email: string | null;
     phone: string | null;
+    occupation: string | null;
+    address: string | null;
+    custodyNotes: string | null;
   }>;
   enrollments: Array<{
     id: string;

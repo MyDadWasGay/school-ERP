@@ -1,5 +1,67 @@
 import { z } from "zod";
 
+export const guardianRelationshipOptions = [
+  { value: "father", label: "Father" },
+  { value: "mother", label: "Mother" },
+  { value: "grandfather", label: "Grandfather" },
+  { value: "grandmother", label: "Grandmother" },
+  { value: "brother", label: "Brother" },
+  { value: "sister", label: "Sister" },
+  { value: "uncle", label: "Uncle" },
+  { value: "aunt", label: "Aunt" },
+  { value: "legal_guardian", label: "Legal guardian" },
+  { value: "foster_parent", label: "Foster parent" },
+  { value: "other", label: "Other" },
+] as const;
+
+const guardianRelationshipValues: [string, ...string[]] = [
+  "father",
+  "mother",
+  "grandfather",
+  "grandmother",
+  "brother",
+  "sister",
+  "uncle",
+  "aunt",
+  "legal_guardian",
+  "foster_parent",
+  "other",
+  // Keep values accepted by older clients while new screens use the
+  // structured options above.
+  "parent",
+  "guardian",
+];
+const guardianRelationship = z.enum(guardianRelationshipValues);
+
+const guardianDetailsFields = z.object({
+  firstName: z.string().trim().min(2).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  relationship: guardianRelationship,
+  customRelationship: z.string().trim().max(80).optional().or(z.literal("")),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
+  occupation: z.string().trim().max(120).optional().or(z.literal("")),
+  address: z.string().trim().max(500).optional().or(z.literal("")),
+  custodyNotes: z.string().trim().max(1000).optional().or(z.literal("")),
+  isPrimary: z.boolean().optional(),
+  isEmergencyContact: z.boolean().optional(),
+  isBillingContact: z.boolean().optional(),
+});
+
+function requireCustomRelationship<T extends { relationship: string; customRelationship?: string }>(schema: z.ZodType<T>) {
+  return schema.superRefine((input, context) => {
+  if (input.relationship === "other" && !input.customRelationship) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["customRelationship"],
+      message: "Specify the relationship when Other is selected.",
+    });
+  }
+  });
+}
+
+export const guardianDetailsSchema = requireCustomRelationship(guardianDetailsFields);
+
 export const studentSchema = z.object({
   admissionNumber: z.string().trim().min(2).max(40),
   firstName: z.string().trim().min(2).max(80),
@@ -13,13 +75,14 @@ export const studentSchema = z.object({
   classId: z.string().trim().min(1).optional().or(z.literal("")),
   sectionId: z.string().trim().min(1).optional().or(z.literal("")),
   rollNumber: z.string().trim().max(30).optional(),
-  guardian: z.object({
-    firstName: z.string().trim().min(2).max(80),
-    lastName: z.string().trim().min(1).max(80),
-    relationship: z.string().trim().min(2).max(40),
-    email: z.string().email().optional().or(z.literal("")),
-    phone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
-  }).optional(),
+  guardian: requireCustomRelationship(guardianDetailsFields.pick({
+    firstName: true,
+    lastName: true,
+    relationship: true,
+    customRelationship: true,
+    email: true,
+    phone: true,
+  })).optional(),
 }).superRefine((input, context) => {
   const enrollmentFields = [input.academicYearId, input.classId, input.sectionId];
   if (enrollmentFields.some(Boolean) && !enrollmentFields.every(Boolean)) {
@@ -39,22 +102,17 @@ export const studentUpdateSchema = z.object({
 });
 export type StudentUpdateInput = z.infer<typeof studentUpdateSchema>;
 
-export const guardianSchema = z.object({
+export const guardianSchema = requireCustomRelationship(guardianDetailsFields.extend({
   studentId: z.string().min(1),
   guardianId: z.string().min(1).optional(),
-  firstName: z.string().trim().min(2).max(80),
-  lastName: z.string().trim().min(1).max(80),
-  relationship: z.string().trim().min(2).max(40),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
-  occupation: z.string().trim().max(120).optional().or(z.literal("")),
-  address: z.string().trim().max(500).optional().or(z.literal("")),
-  custodyNotes: z.string().trim().max(1000).optional().or(z.literal("")),
-  isPrimary: z.boolean().optional(),
-});
+}));
 export type GuardianInput = z.infer<typeof guardianSchema>;
 
-export const guardianUpdateSchema = guardianSchema.extend({ id: z.string().min(1) });
+export const guardianUpdateSchema = requireCustomRelationship(guardianDetailsFields.extend({
+  studentId: z.string().min(1),
+  guardianId: z.string().min(1).optional(),
+  id: z.string().min(1),
+}));
 export type GuardianUpdateInput = z.infer<typeof guardianUpdateSchema>;
 
 export const guardianUnlinkSchema = z.object({

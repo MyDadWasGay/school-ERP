@@ -1,10 +1,11 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { importJobs, jobRuns } from "@/db/schema";
+import { academicYears, campuses, classes, importJobs, jobRuns, sections, students } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import { writeAuditLog } from "@/lib/audit/audit-log";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createStudentRecord } from "@/features/students/services/students.service";
+import type { StudentInput } from "@/features/students/schemas/student.schema";
 import { encryptSecret } from "@/lib/security/secret-box";
 import { enqueueJob } from "@/lib/jobs/job-store";
 import { createId } from "@/lib/utils/ids";
@@ -18,6 +19,10 @@ type StudentImportOptions = {
   queueLarge?: boolean;
   idempotencyKey?: string;
   existingImportJobId?: string;
+};
+
+type ResolvedStudentImportParseResult = Omit<StudentImportParseResult, "validRows"> & {
+  validRows: Array<{ rowNumber: number; data: StudentInput }>;
 };
 
 async function createImportJob(user: CurrentUser, parsed: StudentImportParseResult, status: "queued" | "processing") {
@@ -51,16 +56,116 @@ async function updateImportProgress(user: CurrentUser, importJobId: string, proc
   return job;
 }
 
-async function processParsedStudentImport(user: CurrentUser, parsed: StudentImportParseResult, importJobId: string) {
+function normalized(value: string | undefined) {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+type ScopedReference = { id: string; name: string; code?: string | null; campusId?: string | null; classId?: string | null };
+
+function resolveReference(
+  label: string,
+  idValue: string | undefined,
+  friendlyValue: string | undefined,
+  rows: ScopedReference[],
+) {
+  if (idValue) {
+    const byId = rows.find((row) => row.id === idValue);
+    if (!byId) return { error: `${label} ID is not available in your organization or campus scope.` };
+    if (friendlyValue && ![byId.name, byId.code].some((value) => normalized(value ?? undefined) === normalized(friendlyValue))) {
+      return { error: `${label} does not match the supplied ${label.toLowerCase()} ID.` };
+    }
+    return { row: byId };
+  }
+  const value = normalized(friendlyValue);
+  const matches = rows.filter((row) => normalized(row.name) === value || normalized(row.code ?? undefined) === value);
+  if (matches.length === 0) return { error: `${label} "${friendlyValue ?? ""}" was not found in your accessible active records.` };
+  if (matches.length > 1) return { error: `${label} "${friendlyValue}" is ambiguous. Use the exact code or a more specific value.` };
+  return { row: matches[0] };
+}
+
+async function resolveStudentImportRows(user: CurrentUser, parsed: StudentImportParseResult): Promise<ResolvedStudentImportParseResult> {
+  const campusScope = user.campusIds?.length
+    ? inArray(campuses.id, user.campusIds)
+    : user.campusId
+      ? eq(campuses.id, user.campusId)
+      : undefined;
+  const [campusRows, yearRows, classRows, sectionRows] = await Promise.all([
+    getDb().select({ id: campuses.id, name: campuses.name, code: campuses.code, campusId: campuses.id }).from(campuses).where(and(eq(campuses.organizationId, user.organizationId), eq(campuses.status, "active"), campusScope)),
+    getDb().select({ id: academicYears.id, name: academicYears.name, campusId: academicYears.campusId }).from(academicYears).where(and(eq(academicYears.organizationId, user.organizationId), eq(academicYears.status, "active"), user.campusIds?.length ? inArray(academicYears.campusId, user.campusIds) : user.campusId ? eq(academicYears.campusId, user.campusId) : undefined)),
+    getDb().select({ id: classes.id, name: classes.name, code: classes.code, campusId: classes.campusId }).from(classes).where(and(eq(classes.organizationId, user.organizationId), eq(classes.status, "active"), user.campusIds?.length ? inArray(classes.campusId, user.campusIds) : user.campusId ? eq(classes.campusId, user.campusId) : undefined)),
+    getDb().select({ id: sections.id, name: sections.name, campusId: sections.campusId, classId: sections.classId }).from(sections).where(and(eq(sections.organizationId, user.organizationId), eq(sections.status, "active"), user.campusIds?.length ? inArray(sections.campusId, user.campusIds) : user.campusId ? eq(sections.campusId, user.campusId) : undefined)),
+  ]);
+  const validRows: Array<{ rowNumber: number; data: StudentInput }> = [];
+  const errors = [...parsed.errors];
+  for (const entry of parsed.validRows) {
+    const row = entry.data;
+    const campusResult = resolveReference("Campus", row.campusId, row.campus, campusRows);
+    if (!campusResult.row) {
+      errors.push({ row: entry.rowNumber, fields: { campus: [campusResult.error ?? "Campus is invalid."] } });
+      continue;
+    }
+    const campusId = campusResult.row.id;
+    const yearResult = resolveReference("Academic year", row.academicYearId, row.academicYear, yearRows.filter((item) => item.campusId === campusId));
+    const classResult = resolveReference("Class", row.classId, row.class, classRows.filter((item) => item.campusId === campusId));
+    if (!yearResult.row || !classResult.row) {
+      const fields: Record<string, string[]> = {};
+      if (!yearResult.row) fields.academicYear = [yearResult.error ?? "Academic year is invalid."];
+      if (!classResult.row) fields.class = [classResult.error ?? "Class is invalid."];
+      errors.push({ row: entry.rowNumber, fields });
+      continue;
+    }
+    const sectionResult = resolveReference("Section", row.sectionId, row.section, sectionRows.filter((item) => item.campusId === campusId && item.classId === classResult.row?.id));
+    if (!sectionResult.row) {
+      errors.push({ row: entry.rowNumber, fields: { section: [sectionResult.error ?? "Section is invalid for the selected class."] } });
+      continue;
+    }
+    validRows.push({
+      rowNumber: entry.rowNumber,
+      data: {
+        admissionNumber: row.admissionNumber,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        campusId,
+        academicYearId: yearResult.row.id,
+        classId: classResult.row.id,
+        sectionId: sectionResult.row.id,
+        rollNumber: row.rollNumber,
+        gender: "",
+      },
+    });
+  }
+  return { validRows, errors, totalRows: parsed.totalRows };
+}
+
+export async function previewStudentImport(user: CurrentUser, csv: string) {
+  const raw = parseStudentCsv(csv);
+  if (raw.totalRows > MAX_IMPORT_ROWS) throw new AppError("VALIDATION_ERROR", `Imports are limited to ${MAX_IMPORT_ROWS} rows per request.`, 422);
+  const parsed = await resolveStudentImportRows(user, raw);
+  if (!parsed.validRows.length) return parsed;
+  const existingRows = await getDb().select({ admissionNumber: students.admissionNumber }).from(students).where(and(
+    eq(students.organizationId, user.organizationId),
+    inArray(students.admissionNumber, parsed.validRows.map((entry) => entry.data.admissionNumber)),
+  ));
+  const existing = new Set(existingRows.map((row) => row.admissionNumber));
+  const errors = [...parsed.errors];
+  const validRows = parsed.validRows.filter((entry) => {
+    if (!existing.has(entry.data.admissionNumber)) return true;
+    errors.push({ row: entry.rowNumber, fields: { admissionNumber: ["That admission number is already in use."] } });
+    return false;
+  });
+  return { validRows, errors, totalRows: parsed.totalRows };
+}
+
+async function processParsedStudentImport(user: CurrentUser, parsed: ResolvedStudentImportParseResult, importJobId: string) {
   const errors = [...parsed.errors];
   let importedRows = 0;
   await updateImportProgress(user, importJobId, 0, errors.length, "processing", errors);
-  for (const [index, row] of parsed.validRows.entries()) {
+  for (const [index, entry] of parsed.validRows.entries()) {
     try {
-      await createStudentRecord(user, { ...row, gender: "" });
+      await createStudentRecord(user, entry.data);
       importedRows += 1;
     } catch (error) {
-      errors.push({ row: index + 2, fields: { row: [error instanceof Error ? error.message : "Unable to import row."] } });
+      errors.push({ row: entry.rowNumber, fields: { row: [error instanceof Error ? error.message : "Unable to import row."] } });
     }
     if ((index + 1) % 25 === 0 || index === parsed.validRows.length - 1) {
       await updateImportProgress(user, importJobId, index + 1, errors.length, "processing", errors);
@@ -72,8 +177,9 @@ async function processParsedStudentImport(user: CurrentUser, parsed: StudentImpo
 }
 
 export async function runStudentImport(user: CurrentUser, csv: string, options: StudentImportOptions = {}) {
-  const parsed = parseStudentCsv(csv);
-  if (parsed.totalRows > MAX_IMPORT_ROWS) throw new AppError("VALIDATION_ERROR", `Imports are limited to ${MAX_IMPORT_ROWS} rows per request.`, 422);
+  const raw = parseStudentCsv(csv);
+  if (raw.totalRows > MAX_IMPORT_ROWS) throw new AppError("VALIDATION_ERROR", `Imports are limited to ${MAX_IMPORT_ROWS} rows per request.`, 422);
+  const parsed = await resolveStudentImportRows(user, raw);
   if (options.existingImportJobId) {
     const existingJob = await getDb().query.importJobs.findFirst({ where: and(
       eq(importJobs.id, options.existingImportJobId),

@@ -1,6 +1,6 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
-export const admissionsEnquiries = sqliteTable("admissions_enquiries", { id: idColumn("enquiry"), ...tenantColumns(), applicantName: text("applicant_name").notNull(), guardianEmail: text("guardian_email"), source: text("source"), campaign: text("campaign"), nextFollowUpAt: integer("next_follow_up_at", { mode: "timestamp" }), lostReason: text("lost_reason"), ...auditColumns(), status: statusColumn("new") }, (table) => [index("enquiries_org_status_idx").on(table.organizationId, table.status)]);
+export const admissionsEnquiries = sqliteTable("admissions_enquiries", { id: idColumn("enquiry"), ...tenantColumns(), applicantName: text("applicant_name").notNull(), guardianName: text("guardian_name"), guardianEmail: text("guardian_email"), guardianPhone: text("guardian_phone"), notes: text("notes"), source: text("source"), campaign: text("campaign"), nextFollowUpAt: integer("next_follow_up_at", { mode: "timestamp" }), lostReason: text("lost_reason"), ...auditColumns(), status: statusColumn("new") }, (table) => [index("enquiries_org_status_idx").on(table.organizationId, table.status)]);
 export const applications = sqliteTable("applications", {
   id: idColumn("application"), ...tenantColumns(), applicationNumber: text("application_number").notNull(),
   applicantName: text("applicant_name").notNull(), dateOfBirth: integer("date_of_birth", { mode: "timestamp" }),

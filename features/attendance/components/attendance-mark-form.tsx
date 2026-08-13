@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/forms/field-error";
+import { EntityCombobox } from "@/components/forms/entity-combobox";
 import { markAttendanceAction } from "../actions/attendance.actions";
 import { attendanceSchema, type AttendanceInput } from "../schemas/attendance.schema";
 
-export function AttendanceMarkForm({ students }: { students: Array<{ id: string; name: string }> }) {
+export function AttendanceMarkForm({ students }: { students: Array<{ id: string; name: string; label?: string; detail?: string }> }) {
   const [message, setMessage] = useState("");
   const form = useForm<AttendanceInput>({
     resolver: zodResolver(attendanceSchema) as Resolver<AttendanceInput>,
@@ -27,11 +28,7 @@ export function AttendanceMarkForm({ students }: { students: Array<{ id: string;
   });
   return <form onSubmit={submit} className="mb-6 rounded-lg border p-4" noValidate>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-      <Field label="Student" error={form.formState.errors.studentId?.message}>
-        <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" {...form.register("studentId")}>
-          {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-        </select>
-      </Field>
+      <EntityCombobox label="Student" value={form.watch("studentId")} onChange={(value) => form.setValue("studentId", value, { shouldValidate: true })} endpoint="/api/v1/attendance/students/options" initialOptions={students.map((student) => ({ id: student.id, label: student.label ?? student.name, detail: student.detail }))} required error={form.formState.errors.studentId?.message} description="Search by student name or admission number." />
       <Field label="Date" error={form.formState.errors.attendanceDate?.message}>
         <Input type="date" defaultValue={new Date().toISOString().slice(0, 10)} {...form.register("attendanceDate", { setValueAs: (value) => new Date(`${value}T00:00:00`) })} />
       </Field>

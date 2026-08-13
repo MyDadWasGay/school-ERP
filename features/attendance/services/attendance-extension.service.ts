@@ -1,6 +1,6 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { employees, staffAttendanceRecords, studentAttendanceRecords, students } from "@/db/schema";
+import { academicYears, employees, staffAttendanceRecords, studentAttendanceRecords, students } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
@@ -27,6 +27,8 @@ export async function recordStaffAttendance(user: CurrentUser, input: StaffAtten
 }
 
 export async function listLowAttendance(user: CurrentUser, thresholdPercent = 75) {
-  const rows = await getDb().select({ studentId: students.id, student: sql<string>`${students.firstName} || ' ' || ${students.lastName}`, total: count(studentAttendanceRecords.id), attended: sql<number>`sum(case when ${studentAttendanceRecords.state} in ('present', 'late') then 1 else 0 end)` }).from(students).leftJoin(studentAttendanceRecords, and(eq(studentAttendanceRecords.studentId, students.id), eq(studentAttendanceRecords.organizationId, user.organizationId))).where(and(eq(students.organizationId, user.organizationId), user.campusId ? eq(students.campusId, user.campusId) : undefined, eq(students.status, "active"))).groupBy(students.id, students.firstName, students.lastName).orderBy(asc(students.firstName)).limit(500);
+  const yearRows = await getDb().select({ id: academicYears.id }).from(academicYears).where(and(eq(academicYears.organizationId, user.organizationId), eq(academicYears.status, "active"), eq(academicYears.isActive, true), user.campusId ? eq(academicYears.campusId, user.campusId) : undefined));
+  if (!yearRows.length) return [];
+  const rows = await getDb().select({ studentId: students.id, student: sql<string>`${students.firstName} || ' ' || ${students.lastName}`, total: count(studentAttendanceRecords.id), attended: sql<number>`sum(case when ${studentAttendanceRecords.state} in ('present', 'late') then 1 else 0 end)` }).from(students).leftJoin(studentAttendanceRecords, and(eq(studentAttendanceRecords.studentId, students.id), eq(studentAttendanceRecords.organizationId, user.organizationId), eq(studentAttendanceRecords.status, "active"), inArray(studentAttendanceRecords.academicYearId, yearRows.map((row) => row.id)))).where(and(eq(students.organizationId, user.organizationId), user.campusId ? eq(students.campusId, user.campusId) : undefined, eq(students.status, "active"))).groupBy(students.id, students.firstName, students.lastName).orderBy(asc(students.firstName)).limit(500);
   return rows.map((row) => { const total = Number(row.total); const attended = Number(row.attended ?? 0); const percentage = total ? Number(((attended / total) * 100).toFixed(1)) : 100; return { ...row, total, attended, percentage }; }).filter((row) => row.total > 0 && row.percentage < thresholdPercent);
 }

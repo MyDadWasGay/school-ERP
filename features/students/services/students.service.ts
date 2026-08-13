@@ -484,6 +484,7 @@ export async function createStudentRecord(
         studentId: student.id,
         guardianId: guardian.id,
         relationship: input.guardian.relationship,
+        customRelationship: input.guardian.customRelationship || undefined,
         isPrimary: true,
         createdBy: user.id,
         updatedBy: user.id,
@@ -510,11 +511,19 @@ export async function getStudentProfile(user: CurrentUser, studentId: string) {
       getDb()
         .select({
           id: guardians.id,
+          linkId: studentGuardianLinks.id,
           firstName: guardians.firstName,
           lastName: guardians.lastName,
           relationship: studentGuardianLinks.relationship,
+          customRelationship: studentGuardianLinks.customRelationship,
           isPrimary: studentGuardianLinks.isPrimary,
+          isEmergencyContact: studentGuardianLinks.isEmergencyContact,
+          isBillingContact: studentGuardianLinks.isBillingContact,
+          email: guardians.email,
           phone: guardians.phone,
+          occupation: guardians.occupation,
+          address: guardians.addressJson,
+          custodyNotes: guardians.custodyNotes,
         })
         .from(studentGuardianLinks)
         .innerJoin(
@@ -712,7 +721,10 @@ export async function createGuardianAndLink(
             .update(studentGuardianLinks)
             .set({
               relationship: input.relationship,
+              customRelationship: input.relationship === "other" ? input.customRelationship || null : null,
               isPrimary: input.isPrimary,
+              isEmergencyContact: input.isEmergencyContact,
+              isBillingContact: input.isBillingContact,
               updatedAt: new Date(),
               updatedBy: user.id,
             })
@@ -733,7 +745,10 @@ export async function createGuardianAndLink(
               studentId: student.id,
               guardianId: guardian.id,
               relationship: input.relationship,
+              customRelationship: input.relationship === "other" ? input.customRelationship || undefined : undefined,
               isPrimary: input.isPrimary,
+              isEmergencyContact: input.isEmergencyContact,
+              isBillingContact: input.isBillingContact,
               createdBy: user.id,
               updatedBy: user.id,
             })

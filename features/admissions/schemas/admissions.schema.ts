@@ -3,8 +3,11 @@ import { z } from "zod";
 export const enquirySchema = z.object({
   campusId: z.string().min(1),
   applicantName: z.string().trim().min(2).max(160),
+  guardianName: z.string().trim().max(160).optional().or(z.literal("")),
   guardianEmail: z.string().email().optional().or(z.literal("")),
+  guardianPhone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
   source: z.string().trim().min(2).max(80),
+  notes: z.string().trim().max(1_000).optional().or(z.literal("")),
   nextFollowUpAt: z.coerce.date().optional(),
 });
 
