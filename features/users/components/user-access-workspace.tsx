@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/common/status-badge";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 
 type CampusOption = { id: string; name: string };
 type ClassSectionOption = {
@@ -186,7 +187,7 @@ export function UserAccessWorkspace({
       {delegationMessage ? <p role="status" className="rounded-md bg-muted p-3 text-sm">{delegationMessage}</p> : null}
       <div className="space-y-2">
         {delegations.length === 0 ? <p className="text-sm text-muted-foreground">No delegated access records.</p> : delegations.map((delegation) => <div key={delegation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-          <div><p className="text-sm font-medium">{delegation.permissionKey}</p><p className="text-xs text-muted-foreground">{delegation.startsAt.toLocaleString()} - {delegation.endsAt.toLocaleString()}</p></div>
+          <div><p className="text-sm font-medium">{delegation.permissionKey}</p><p className="text-xs text-muted-foreground">{formatIndiaDateTime(delegation.startsAt)} - {formatIndiaDateTime(delegation.endsAt)}</p></div>
           <div className="flex items-center gap-2"><StatusBadge status={delegation.status} />{canManage && delegation.status === "active" ? <ConfirmDialog label="Revoke" title="Revoke delegated access?" description={`Revoke ${delegation.permissionKey} access for ${user.displayName}? The user will lose this temporary permission immediately.`} triggerVariant="outline" triggerSize="sm" onConfirm={() => revokeDelegation(delegation.id)} /> : null}</div>
         </div>)}
       </div>

@@ -1,5 +1,6 @@
 import { and, count, eq, gte, sql, sum } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { formatIndiaMonth } from "@/lib/utils/india-time";
 import {
   employees,
   feeInvoices,
@@ -106,7 +107,7 @@ export async function getDashboardTrends(user: CurrentUser): Promise<DashboardTr
     const date = new Date(start.getFullYear(), start.getMonth() + index, 1);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     return {
-      month: date.toLocaleDateString("en", { month: "short" }),
+      month: formatIndiaMonth(date),
       attendance: Number((attendanceByMonth.get(key) ?? 0).toFixed(1)),
       collection: Number((collectionByMonth.get(key) ?? 0).toFixed(1)),
     };

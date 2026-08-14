@@ -314,7 +314,9 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: { threshold?: number } }>("/attendance/low", authenticated, async (request) => {
     const user = requireApiPermission(request, "attendance:read");
-    return apiSuccess(request, await listLowAttendance(user, request.query.threshold));
+    const rawThreshold = request.query.threshold ?? 75;
+    const threshold = Number.isFinite(rawThreshold) ? Math.min(100, Math.max(0, rawThreshold)) : 75;
+    return apiSuccess(request, await listLowAttendance(user, threshold));
   });
 
   app.post<{ Body: unknown }>("/attendance/staff", { ...mutation, schema: routeSchema("Record staff attendance") }, async (request, reply) => {

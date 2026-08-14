@@ -39,20 +39,30 @@ export async function enqueueJob(user: CurrentUser, input: EnqueueJobInput) {
       ) });
       if (existing) return existing;
     }
-    const [row] = await tx.insert(jobRuns).values({
-      id: createId("job"),
-      organizationId: user.organizationId,
-      campusId: input.campusId ?? user.campusId,
-      jobType: input.jobType,
-      payloadJson: input.payloadJson,
-      status: "queued",
-      attempts: 0,
-      maxAttempts,
-      runAfter: input.runAfter ?? new Date(),
-      idempotencyKey: input.idempotencyKey,
-      createdBy: user.id,
-      updatedBy: user.id,
-    }).returning();
+    let row: JobRecord | undefined;
+    try {
+      [row] = await tx.insert(jobRuns).values({
+        id: createId("job"),
+        organizationId: user.organizationId,
+        campusId: input.campusId ?? user.campusId,
+        jobType: input.jobType,
+        payloadJson: input.payloadJson,
+        status: "queued",
+        attempts: 0,
+        maxAttempts,
+        runAfter: input.runAfter ?? new Date(),
+        idempotencyKey: input.idempotencyKey,
+        createdBy: user.id,
+        updatedBy: user.id,
+      }).returning();
+    } catch (error) {
+      if (!input.idempotencyKey) throw error;
+      row = await tx.query.jobRuns.findFirst({ where: and(
+        eq(jobRuns.organizationId, user.organizationId),
+        eq(jobRuns.idempotencyKey, input.idempotencyKey),
+      ) });
+      if (!row) throw error;
+    }
     if (!row) throw new AppError("DATABASE_ERROR", "Unable to enqueue job.", 500);
     return row;
   });

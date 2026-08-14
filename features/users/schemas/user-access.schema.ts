@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SUPPORTED_ROLES } from "@/config/constants";
 import { permissionKeys } from "@/config/permissions";
+import { parseIndiaDateTimeValue } from "@/lib/utils/india-time";
 
 const roleSchema = z.enum(SUPPORTED_ROLES);
 
@@ -32,8 +33,8 @@ export const delegationCreateSchema = z.object({
     (value) => permissionKeys.includes(value),
     "Choose a known permission.",
   ),
-  startsAt: z.coerce.date(),
-  endsAt: z.coerce.date(),
+  startsAt: z.preprocess(parseIndiaDateTimeValue, z.coerce.date()),
+  endsAt: z.preprocess(parseIndiaDateTimeValue, z.coerce.date()),
 }).refine((input) => input.endsAt > input.startsAt, {
   path: ["endsAt"],
   message: "Delegated access must end after it starts.",

@@ -281,6 +281,27 @@
       "when": 1786257000000,
       "tag": "0039_admission_enquiry_lead_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1786257600000,
+      "tag": "0040_india_timezone",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786258200000,
+      "tag": "0041_workflow_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786258800000,
+      "tag": "0042_workflow_integrity_repair",
+      "breakpoints": true
     }
   ]
 }

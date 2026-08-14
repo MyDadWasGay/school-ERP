@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { addLibraryCopyAction, createLibraryItemAction, issueLibraryCopyAction, createDigitalResourceAction, reserveLibraryItemAction, renewLibraryCopyAction, returnLibraryCopyAction } from "../actions/library.actions";
+import { formatIndiaDate, indiaTodayKey } from "@/lib/utils/india-time";
 
 type LibraryItem = { id: string; title: string; author: string | null; isbn: string | null; totalCopies: number; availableCopies: number };
 type LibraryCopy = { id: string; accessionNumber: string; title: string; itemId: string; status: string };
@@ -46,7 +47,7 @@ export function LibraryCopyForm({ items }: { items: LibraryItem[] }) {
 export function IssueLibraryForm({ copies, borrowers }: { copies: LibraryCopy[]; borrowers: Borrowers }) {
   const [borrowerType, setBorrowerType] = useState<"student" | "user">("student");
   const [message, setMessage] = useState("");
-  const defaultDueDate = useMemo(() => { const date = new Date(); date.setDate(date.getDate() + 14); return date.toISOString().slice(0, 10); }, []);
+  const defaultDueDate = useMemo(() => { const date = new Date(`${indiaTodayKey()}T00:00:00+05:30`); date.setUTCDate(date.getUTCDate() + 14); return indiaTodayKey(date); }, []);
   const options = borrowerType === "student" ? borrowers.students : borrowers.users;
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,7 +74,7 @@ export function ActiveLibraryIssues({ issues, canUpdate }: { issues: ActiveIssue
     if (result.ok) router.refresh();
   }
   if (!issues.length) return <EmptyState title="No active library issues" description="Issued copies will appear here until they are returned or otherwise closed." />;
-  return <div className="space-y-3">{issues.map((issue) => <div key={issue.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium">{issue.title} · {issue.accessionNumber}</p><p className="text-sm text-muted-foreground">{issue.borrowerType}: {issue.borrowerId ?? "unknown"} · Due {issue.dueAt ? new Date(issue.dueAt).toLocaleDateString() : "not set"}</p></div><Badge variant={issue.renewalCount >= 2 ? "warning" : "secondary"}>{issue.renewalCount}/2 renewals</Badge></div>{messages[issue.id] ? <p className="mt-2 text-sm text-muted-foreground" role="status">{messages[issue.id]}</p> : null}{canUpdate ? <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" onClick={() => closeIssue(issue, "returned")}>Return</Button><Button size="sm" variant="outline" onClick={() => renew(issue)} disabled={issue.renewalCount >= 2}>Renew</Button><ConfirmDialog label="Mark damaged" title={`Mark ${issue.title} as damaged?`} description="The copy will be closed with a damaged outcome and may require replacement or fine follow-up." triggerVariant="outline" onConfirm={() => closeIssue(issue, "damaged", true)} /><ConfirmDialog label="Mark lost" title={`Mark ${issue.title} as lost?`} description="The copy will be closed as lost and may require replacement or fine follow-up." triggerVariant="outline" onConfirm={() => closeIssue(issue, "lost", true)} /></div> : null}</div>)}</div>;
+  return <div className="space-y-3">{issues.map((issue) => <div key={issue.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium">{issue.title} · {issue.accessionNumber}</p><p className="text-sm text-muted-foreground">{issue.borrowerType}: {issue.borrowerId ?? "unknown"} · Due {issue.dueAt ? formatIndiaDate(issue.dueAt) : "not set"}</p></div><Badge variant={issue.renewalCount >= 2 ? "warning" : "secondary"}>{issue.renewalCount}/2 renewals</Badge></div>{messages[issue.id] ? <p className="mt-2 text-sm text-muted-foreground" role="status">{messages[issue.id]}</p> : null}{canUpdate ? <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" onClick={() => closeIssue(issue, "returned")}>Return</Button><Button size="sm" variant="outline" onClick={() => renew(issue)} disabled={issue.renewalCount >= 2}>Renew</Button><ConfirmDialog label="Mark damaged" title={`Mark ${issue.title} as damaged?`} description="The copy will be closed with a damaged outcome and may require replacement or fine follow-up." triggerVariant="outline" onConfirm={() => closeIssue(issue, "damaged", true)} /><ConfirmDialog label="Mark lost" title={`Mark ${issue.title} as lost?`} description="The copy will be closed as lost and may require replacement or fine follow-up." triggerVariant="outline" onConfirm={() => closeIssue(issue, "lost", true)} /></div> : null}</div>)}</div>;
 }
 
 export function LibraryReservationForm({ items }: { items: LibraryItem[] }) {

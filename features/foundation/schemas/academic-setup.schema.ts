@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateValue } from "@/lib/utils/india-time";
 
 const campusId = z.string().min(1);
 const name = z.string().trim().min(2).max(120);
@@ -8,8 +9,8 @@ export const academicSetupSchema = z.discriminatedUnion("kind", [
     kind: z.literal("academic_year"),
     campusId,
     name,
-    startsOn: z.coerce.date(),
-    endsOn: z.coerce.date(),
+    startsOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
+    endsOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
     isActive: z.boolean().default(false),
   }),
   z.object({
@@ -47,7 +48,7 @@ export type AcademicSetupInput = z.infer<typeof academicSetupSchema>;
 export type AcademicSetupKind = AcademicSetupInput["kind"];
 
 export const academicSetupUpdateSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("academic_year"), id: z.string().min(1), name, startsOn: z.coerce.date(), endsOn: z.coerce.date(), isActive: z.boolean().default(false) }),
+  z.object({ kind: z.literal("academic_year"), id: z.string().min(1), name, startsOn: z.preprocess(parseIndiaDateValue, z.coerce.date()), endsOn: z.preprocess(parseIndiaDateValue, z.coerce.date()), isActive: z.boolean().default(false) }),
   z.object({ kind: z.literal("class"), id: z.string().min(1), name, code: z.string().trim().min(1).max(30).transform((value) => value.toUpperCase()), sortOrder: z.coerce.number().int().min(0).max(1000) }),
   z.object({ kind: z.literal("section"), id: z.string().min(1), name, capacity: z.coerce.number().int().min(1).max(500) }),
   z.object({ kind: z.literal("subject"), id: z.string().min(1), name, code: z.string().trim().min(1).max(30).transform((value) => value.toUpperCase()), isOptional: z.boolean().default(false) }),

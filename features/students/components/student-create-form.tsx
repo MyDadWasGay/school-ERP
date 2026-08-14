@@ -3,7 +3,7 @@
 import { forwardRef, useState } from "react";
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { createStudentAction } from "../actions/student.actions";
 import { guardianRelationshipOptions, studentSchema, type StudentInput } from "../schemas/student.schema";
 import type { StudentFormOptions } from "../types";
@@ -11,6 +11,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/forms/field-error";
+import { parseIndiaDateInput } from "@/lib/utils/india-time";
 
 const defaultStudentValues = { campusId: "", academicYearId: "", classId: "", sectionId: "" };
 
@@ -20,7 +21,7 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
   const [result, setResult] = useState("");
   const [createdStudentId, setCreatedStudentId] = useState<string>();
   const form = useForm<StudentInput>({
-    resolver: zodResolver(studentSchema),
+    resolver: zodResolver(studentSchema) as Resolver<StudentInput>,
     defaultValues: { ...defaultStudentValues, campusId: options.campuses[0]?.id ?? "" },
   });
   const campusId = form.watch("campusId");
@@ -71,7 +72,7 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
         <FormField label="Admission number" error={form.formState.errors.admissionNumber?.message}><Input {...form.register("admissionNumber")} /></FormField>
         <FormField label="First name" error={form.formState.errors.firstName?.message}><Input {...form.register("firstName")} /></FormField>
         <FormField label="Last name" error={form.formState.errors.lastName?.message}><Input {...form.register("lastName")} /></FormField>
-        <FormField label="Date of birth" error={form.formState.errors.dateOfBirth?.message}><Input type="date" {...form.register("dateOfBirth", { setValueAs: (value) => value ? new Date(value) : undefined })} /></FormField>
+        <FormField label="Date of birth" error={form.formState.errors.dateOfBirth?.message}><Input type="date" {...form.register("dateOfBirth", { setValueAs: (value) => value ? parseIndiaDateInput(value) : undefined })} /></FormField>
         <FormField label="Gender" error={form.formState.errors.gender?.message}><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" {...form.register("gender")}><option value="">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="non_binary">Non-binary</option><option value="prefer_not_to_say">Prefer not to say</option></select></FormField>
       </div>
     </fieldset>

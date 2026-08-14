@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors/app-error";
 import { hasPermission } from "@/lib/rbac/permissions";
 import type { CurrentUser } from "@/lib/auth/types";
 import type { DisciplineIncidentInput } from "../schemas/discipline.schema";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 
 function canViewSensitive(user: CurrentUser) {
   return hasPermission(user, "students:view_sensitive") || hasPermission(user, "safety:read") || hasPermission(user, "safety:view_sensitive");
@@ -54,7 +55,7 @@ export async function listDisciplineIncidents(user: CurrentUser) {
     eq(disciplineIncidents.organizationId, user.organizationId),
     user.campusId ? eq(disciplineIncidents.campusId, user.campusId) : undefined,
   )).orderBy(desc(disciplineIncidents.occurredAt)).limit(100);
-  return rows.map((row) => ({ ...row, student: `${row.firstName} ${row.lastName}`, occurredAt: row.occurredAt.toLocaleDateString() }));
+  return rows.map((row) => ({ ...row, student: `${row.firstName} ${row.lastName}`, occurredAt: formatIndiaDateTime(row.occurredAt) }));
 }
 
 export async function updateDisciplineStatus(user: CurrentUser, incidentId: string, status: "open" | "resolved" | "dismissed") {

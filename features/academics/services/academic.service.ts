@@ -15,7 +15,9 @@ import {
 } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
+import { hasPermission } from "@/lib/rbac/permissions";
 import { createId } from "@/lib/utils/ids";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 import type { AcademicKind, AcademicRecordInput } from "../schemas/academic.schema";
 
 type CatalogTable = typeof curriculums;
@@ -25,7 +27,9 @@ export type AcademicEntityKind = (typeof academicEntityKinds)[number];
 export type AcademicEntityOption = { id: string; label: string; detail: string; campusId?: string | null; classId?: string | null };
 
 function campusScope(user: CurrentUser, column: AnyColumn) {
-  return user.campusIds?.length ? inArray(column, user.campusIds) : user.campusId ? eq(column, user.campusId) : undefined;
+  if (user.campusIds?.length) return inArray(column, user.campusIds);
+  if (user.campusId) return eq(column, user.campusId);
+  return hasPermission(user, "organizations:update") ? undefined : eq(column, "__no_campus__");
 }
 
 /**
@@ -37,14 +41,17 @@ export async function listAcademicEntityOptions(user: CurrentUser, kind: Academi
   const query = search?.trim();
   if (kind === "teacher") {
     const rows = await getDb().select({ id: users.id, label: users.displayName, email: users.email, campusId: users.campusId }).from(users).where(and(
-      eq(users.organizationId, user.organizationId), eq(users.status, "active"), eq(users.role, "teacher"), campusScope(user, users.campusId),
+      eq(users.organizationId, user.organizationId), eq(users.status, "active"), eq(users.role, "teacher"), user.role === "teacher" ? eq(users.id, user.id) : undefined, campusScope(user, users.campusId),
       query ? or(like(users.displayName, `%${query}%`), like(users.email, `%${query}%`)) : undefined,
     )).orderBy(users.displayName).limit(50);
     return rows.map((row): AcademicEntityOption => ({ id: row.id, label: row.label, detail: row.email, campusId: row.campusId }));
   }
   if (kind === "class") {
+    const teacherClassIds = user.role === "teacher" ? [...new Set((user.classSectionScopes ?? []).map((scope) => scope.classId))] : undefined;
+    if (teacherClassIds && teacherClassIds.length === 0) return [];
     const rows = await getDb().select({ id: classes.id, label: classes.name, code: classes.code, campusId: classes.campusId }).from(classes).where(and(
       eq(classes.organizationId, user.organizationId), eq(classes.status, "active"), campusScope(user, classes.campusId),
+      teacherClassIds ? inArray(classes.id, teacherClassIds) : undefined,
       query ? or(like(classes.name, `%${query}%`), like(classes.code, `%${query}%`)) : undefined,
     )).orderBy(classes.sortOrder, classes.name).limit(50);
     return rows.map((row): AcademicEntityOption => ({ id: row.id, label: row.label, detail: row.code, campusId: row.campusId }));
@@ -75,7 +82,7 @@ const catalogTables: Record<Exclude<AcademicKind, "lesson-plans" | "assignments"
 function scope(user: CurrentUser, table: CatalogTable) {
   return and(
     eq(table.organizationId, user.organizationId),
-    user.campusId ? eq(table.campusId, user.campusId) : undefined,
+    campusScope(user, table.campusId),
     ne(table.status, "archived"),
   );
 }
@@ -125,6 +132,15 @@ async function assertAcademicReferences(user: CurrentUser, input: AcademicRecord
   if (input.teacherId && !teacher) throw new AppError("NOT_FOUND", "Teacher is outside your campus scope.", 404);
   if (input.classId && !classRow) throw new AppError("NOT_FOUND", "Class is outside your campus scope.", 404);
   if (input.subjectId && !subject) throw new AppError("NOT_FOUND", "Subject is outside your campus scope.", 404);
+  if (user.role === "teacher" && input.classId && !(user.classSectionScopes ?? []).some((scope) => scope.classId === input.classId)) {
+    throw new AppError("FORBIDDEN", "You are not assigned to the selected class.", 403);
+  }
+  const referenceCampusIds = [teacher?.campusId, classRow?.campusId, subject?.campusId].filter((value): value is string => Boolean(value));
+  const uniqueCampusIds = [...new Set(referenceCampusIds)];
+  if (uniqueCampusIds.length > 1) throw new AppError("VALIDATION_ERROR", "Teacher, class and subject must belong to the same campus.", 422);
+  const campusId = uniqueCampusIds[0] ?? user.campusId ?? null;
+  if (user.campusId && campusId && user.campusId !== campusId) throw new AppError("TENANT_SCOPE_ERROR", "Academic references must belong to the current campus.", 403);
+  return { campusId };
 }
 
 export async function listAcademicRecords(user: CurrentUser, kind: AcademicKind, search?: string) {
@@ -132,22 +148,22 @@ export async function listAcademicRecords(user: CurrentUser, kind: AcademicKind,
   if (kind === "lesson-plans") {
     const rows = await getDb().select().from(lessonPlans).where(and(
       eq(lessonPlans.organizationId, user.organizationId),
-      user.campusId ? eq(lessonPlans.campusId, user.campusId) : undefined,
+      campusScope(user, lessonPlans.campusId),
       ne(lessonPlans.status, "archived"),
       query ? or(like(lessonPlans.title, `%${query}%`), like(lessonPlans.subjectId, `%${query}%`), like(lessonPlans.classId, `%${query}%`)) : undefined,
     )).orderBy(desc(lessonPlans.createdAt)).limit(200);
     rows.forEach((row) => { row.classId = "Class and subject linked"; row.subjectId = "context"; });
-    return rows.map((row) => ({ id: row.id, name: row.title, detail: `${row.classId} · ${row.subjectId}${row.scheduledFor ? ` · ${row.scheduledFor.toISOString()}` : ""}`, status: row.status }));
+      return rows.map((row) => ({ id: row.id, name: row.title, detail: `${row.classId} · ${row.subjectId}${row.scheduledFor ? ` · ${formatIndiaDateTime(row.scheduledFor)}` : ""}`, status: row.status }));
   }
   if (kind === "assignments") {
     const rows = await getDb().select().from(assignments).where(and(
       eq(assignments.organizationId, user.organizationId),
-      user.campusId ? eq(assignments.campusId, user.campusId) : undefined,
+      campusScope(user, assignments.campusId),
       ne(assignments.status, "archived"),
       query ? or(like(assignments.title, `%${query}%`), like(assignments.subjectId, `%${query}%`), like(assignments.classId, `%${query}%`)) : undefined,
     )).orderBy(desc(assignments.createdAt)).limit(200);
     rows.forEach((row) => { row.classId = "Class and subject linked"; row.subjectId = "context"; });
-    return rows.map((row) => ({ id: row.id, name: row.title, detail: `${row.classId} · ${row.subjectId} · due ${row.dueAt.toISOString()}`, status: row.status }));
+      return rows.map((row) => ({ id: row.id, name: row.title, detail: `${row.classId} · ${row.subjectId} · due ${formatIndiaDateTime(row.dueAt)}`, status: row.status }));
   }
   const table = catalogTables[kind];
   const rows = await getDb().select().from(table).where(and(
@@ -158,11 +174,11 @@ export async function listAcademicRecords(user: CurrentUser, kind: AcademicKind,
 }
 
 export async function createAcademicRecord(user: CurrentUser, input: AcademicRecordInput) {
-  await assertAcademicReferences(user, input);
+  const { campusId } = await assertAcademicReferences(user, input);
   if (input.kind === "lesson-plans") {
     if (!input.teacherId || !input.classId || !input.subjectId || !input.scheduledFor) throw new AppError("VALIDATION_ERROR", "Lesson plans require a teacher, class, subject and scheduled date.", 422);
     const [row] = await getDb().insert(lessonPlans).values({
-      id: createId("lesson_plan"), organizationId: user.organizationId, campusId: user.campusId,
+      id: createId("lesson_plan"), organizationId: user.organizationId, campusId,
       teacherId: input.teacherId, classId: input.classId, subjectId: input.subjectId, title: input.name,
       scheduledFor: input.scheduledFor, status: "draft", createdBy: user.id, updatedBy: user.id,
     }).returning();
@@ -172,7 +188,7 @@ export async function createAcademicRecord(user: CurrentUser, input: AcademicRec
   if (input.kind === "assignments") {
     if (!input.teacherId || !input.classId || !input.subjectId || !input.dueAt) throw new AppError("VALIDATION_ERROR", "Assignments require a teacher, class, subject and due date.", 422);
     const [row] = await getDb().insert(assignments).values({
-      id: createId("assignment"), organizationId: user.organizationId, campusId: user.campusId,
+      id: createId("assignment"), organizationId: user.organizationId, campusId,
       teacherId: input.teacherId, classId: input.classId, subjectId: input.subjectId, title: input.name,
       dueAt: input.dueAt, status: "draft", createdBy: user.id, updatedBy: user.id,
     }).returning();
@@ -181,7 +197,7 @@ export async function createAcademicRecord(user: CurrentUser, input: AcademicRec
   }
   const table = catalogTables[input.kind];
   const [row] = await getDb().insert(table).values({
-    id: createId(input.kind.replaceAll("-", "_")), organizationId: user.organizationId, campusId: user.campusId,
+    id: createId(input.kind.replaceAll("-", "_")), organizationId: user.organizationId, campusId,
     name: input.name, code: input.code ?? null, referenceId: input.referenceId ?? null,
     effectiveAt: input.scheduledFor ?? null, detailsJson: detailFromInput(input), status: "draft",
     createdBy: user.id, updatedBy: user.id,
@@ -192,17 +208,17 @@ export async function createAcademicRecord(user: CurrentUser, input: AcademicRec
 
 export async function archiveAcademicRecord(user: CurrentUser, kind: AcademicKind, id: string) {
   if (kind === "lesson-plans") {
-    const result = await getDb().update(lessonPlans).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(lessonPlans.id, id), eq(lessonPlans.organizationId, user.organizationId), user.campusId ? eq(lessonPlans.campusId, user.campusId) : undefined)).returning({ id: lessonPlans.id });
+    const result = await getDb().update(lessonPlans).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(lessonPlans.id, id), eq(lessonPlans.organizationId, user.organizationId), campusScope(user, lessonPlans.campusId))).returning({ id: lessonPlans.id });
     if (!result[0]) throw new AppError("NOT_FOUND", "Lesson plan not found in your scope.", 404);
     return result[0];
   }
   if (kind === "assignments") {
-    const result = await getDb().update(assignments).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(assignments.id, id), eq(assignments.organizationId, user.organizationId), user.campusId ? eq(assignments.campusId, user.campusId) : undefined)).returning({ id: assignments.id });
+    const result = await getDb().update(assignments).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(assignments.id, id), eq(assignments.organizationId, user.organizationId), campusScope(user, assignments.campusId))).returning({ id: assignments.id });
     if (!result[0]) throw new AppError("NOT_FOUND", "Assignment not found in your scope.", 404);
     return result[0];
   }
   const table = catalogTables[kind];
-  const result = await getDb().update(table).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(table.id, id), eq(table.organizationId, user.organizationId), user.campusId ? eq(table.campusId, user.campusId) : undefined)).returning({ id: table.id });
+  const result = await getDb().update(table).set({ status: "archived", updatedAt: new Date(), updatedBy: user.id }).where(and(eq(table.id, id), eq(table.organizationId, user.organizationId), campusScope(user, table.campusId))).returning({ id: table.id });
   if (!result[0]) throw new AppError("NOT_FOUND", "Academic record not found in your scope.", 404);
   return result[0];
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateTimeValue } from "@/lib/utils/india-time";
 
 export const disciplineIncidentSchema = z.object({
   studentId: z.string().min(1),
@@ -6,7 +7,7 @@ export const disciplineIncidentSchema = z.object({
   title: z.string().trim().min(3).max(160),
   details: z.string().trim().max(2000).optional(),
   confidential: z.coerce.boolean().default(true),
-  occurredAt: z.coerce.date(),
+  occurredAt: z.preprocess(parseIndiaDateTimeValue, z.coerce.date()),
 });
 
 export type DisciplineIncidentInput = z.infer<typeof disciplineIncidentSchema>;

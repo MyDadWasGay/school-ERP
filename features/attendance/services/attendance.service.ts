@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or, type AnyColumn } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   academicYears,
@@ -11,24 +11,34 @@ import {
 } from "@/db/schema";
 import { ATTENDANCE_DIRECT_EDIT_HOURS } from "@/config/constants";
 import { AppError } from "@/lib/errors/app-error";
+import { indiaDayRange, normalizeIndiaCalendarDate } from "@/lib/utils/india-time";
+import { resolvePermittedStudentIds } from "@/features/students/services/students.service";
 import type { CurrentUser } from "@/lib/auth/types";
+import { hasPermission } from "@/lib/rbac/permissions";
 import type { AttendanceInput } from "../schemas/attendance.schema";
 
+function campusScope(user: CurrentUser, column: AnyColumn) {
+  if (user.campusIds?.length) return inArray(column, user.campusIds);
+  if (user.campusId) return eq(column, user.campusId);
+  return hasPermission(user, "organizations:update") ? undefined : eq(column, "__no_campus__");
+}
+
 export async function markAttendanceRecord(user: CurrentUser, input: AttendanceInput) {
-  const attendanceDate = new Date(input.attendanceDate);
-  attendanceDate.setHours(0, 0, 0, 0);
+  const attendanceDate = normalizeIndiaCalendarDate(input.attendanceDate);
+  const day = indiaDayRange(attendanceDate);
   const student = await getDb().query.students.findFirst({ where: and(
     eq(students.id, input.studentId),
     eq(students.organizationId, user.organizationId),
-    user.campusId ? eq(students.campusId, user.campusId) : undefined,
+    campusScope(user, students.campusId),
     eq(students.status, "active"),
   ) });
   if (!student) throw new AppError("NOT_FOUND", "Student not found in your campus scope.", 404);
   const enrollment = await getDb().query.enrollments.findFirst({ where: and(
     eq(enrollments.organizationId, user.organizationId),
     eq(enrollments.studentId, student.id),
-    lte(enrollments.startsOn, attendanceDate),
-    or(isNull(enrollments.endsOn), gte(enrollments.endsOn, attendanceDate)),
+    student.campusId ? eq(enrollments.campusId, student.campusId) : undefined,
+    lt(enrollments.startsOn, day.end),
+    or(isNull(enrollments.endsOn), gte(enrollments.endsOn, day.start)),
     eq(enrollments.status, "active"),
   ) });
   if (!enrollment) throw new AppError("CONFLICT", "The student has no active enrollment for this date.", 409);
@@ -51,7 +61,8 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
     const existing = await tx.query.studentAttendanceRecords.findFirst({ where: and(
       eq(studentAttendanceRecords.organizationId, user.organizationId),
       eq(studentAttendanceRecords.studentId, student.id),
-      eq(studentAttendanceRecords.attendanceDate, attendanceDate),
+      gte(studentAttendanceRecords.attendanceDate, day.start),
+      lt(studentAttendanceRecords.attendanceDate, day.end),
       eq(studentAttendanceRecords.periodKey, input.periodKey),
     ) });
     const correctionCutoff = Date.now() - ATTENDANCE_DIRECT_EDIT_HOURS * 60 * 60 * 1000;
@@ -94,7 +105,8 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
         eq(studentAttendanceSessions.organizationId, user.organizationId),
         eq(studentAttendanceSessions.classId, enrollment.classId),
         eq(studentAttendanceSessions.sectionId, enrollment.sectionId),
-        eq(studentAttendanceSessions.attendanceDate, attendanceDate),
+        gte(studentAttendanceSessions.attendanceDate, day.start),
+        lt(studentAttendanceSessions.attendanceDate, day.end),
         eq(studentAttendanceSessions.periodKey, input.periodKey),
       ) });
     }
@@ -159,11 +171,13 @@ export async function reviewAttendanceCorrection(
   correctionId: string,
   decision: "approved" | "rejected",
 ) {
+  const permittedIds = await resolvePermittedStudentIds(user);
+  if (permittedIds && permittedIds.length === 0) throw new AppError("FORBIDDEN", "No students are assigned to your attendance scope.", 403);
   return getDb().transaction(async (tx) => {
     const correction = await tx.query.attendanceCorrectionRequests.findFirst({ where: and(
       eq(attendanceCorrectionRequests.id, correctionId),
       eq(attendanceCorrectionRequests.organizationId, user.organizationId),
-      user.campusId ? eq(attendanceCorrectionRequests.campusId, user.campusId) : undefined,
+      campusScope(user, attendanceCorrectionRequests.campusId),
       eq(attendanceCorrectionRequests.status, "pending"),
     ) });
     if (!correction) throw new AppError("NOT_FOUND", "Pending correction request not found.", 404);
@@ -172,6 +186,7 @@ export async function reviewAttendanceCorrection(
       eq(studentAttendanceRecords.organizationId, user.organizationId),
     ) });
     if (!attendance) throw new AppError("NOT_FOUND", "The original attendance record no longer exists.", 404);
+    if (permittedIds && !permittedIds.includes(attendance.studentId)) throw new AppError("FORBIDDEN", "This correction is outside your assigned student scope.", 403);
     const now = new Date();
     if (decision === "approved") {
       await tx.update(studentAttendanceRecords).set({

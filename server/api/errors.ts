@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { AppError } from "../../lib/errors/app-error";
+import { databaseErrorIncludes } from "../../lib/errors/database-error";
 
 function zodFields(error: ZodError) {
   return error.flatten().fieldErrors;
@@ -28,6 +29,42 @@ export function registerApiErrorHandler(app: FastifyInstance) {
             message: "The request is invalid.",
             requestId,
             fields: zodFields(error),
+          },
+        });
+      }
+      if (databaseErrorIncludes(error, "SECTION_CAPACITY_REACHED")) {
+        return reply.code(409).send({
+          error: {
+            code: "CONFLICT",
+            message: "The selected section reached capacity while this request was being saved.",
+            requestId,
+          },
+        });
+      }
+      if (databaseErrorIncludes(error, "ROLL_NUMBER_IN_USE")) {
+        return reply.code(409).send({
+          error: {
+            code: "DUPLICATE_RECORD",
+            message: "That roll number is already in use in the selected section.",
+            requestId,
+          },
+        });
+      }
+      if (databaseErrorIncludes(error, "applications_org_source_enquiry_unique")) {
+        return reply.code(409).send({
+          error: {
+            code: "CONFLICT",
+            message: "This enquiry has already been converted into an application.",
+            requestId,
+          },
+        });
+      }
+      if (databaseErrorIncludes(error, "import_jobs_org_entity_idempotency_idx")) {
+        return reply.code(409).send({
+          error: {
+            code: "CONFLICT",
+            message: "An import with this idempotency key already exists.",
+            requestId,
           },
         });
       }

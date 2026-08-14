@@ -22,6 +22,7 @@ import {
 import { requirePermission } from "@/lib/auth/guards";
 import { createServerApiClient } from "@/lib/api-client/server";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { formatIndiaDate, formatIndiaDateTime } from "@/lib/utils/india-time";
 
 const tabs = [
   "profile",
@@ -235,7 +236,7 @@ export default async function StudentDetailPage({
                   {
                     key: "uploaded",
                     header: "Uploaded",
-                    cell: (row) => new Date(row.createdAt).toLocaleString(),
+                    cell: (row) => formatIndiaDateTime(row.createdAt),
                   },
                   {
                     key: "status",
@@ -343,7 +344,7 @@ export default async function StudentDetailPage({
                   {
                     key: "issued",
                     header: "Issued",
-                    cell: (row) => row.issuedAt.toLocaleDateString(),
+                    cell: (row) => formatIndiaDate(row.issuedAt),
                   },
                   {
                     key: "status",
@@ -379,7 +380,7 @@ export default async function StudentDetailPage({
                 {
                   key: "date",
                   header: "Occurred",
-                  cell: (row) => row.occurredAt.toLocaleString(),
+                  cell: (row) => formatIndiaDateTime(row.occurredAt),
                 },
               ]}
               emptyTitle="No timeline events"
@@ -397,7 +398,7 @@ export default async function StudentDetailPage({
                   key: "date",
                   header: "Date",
                   cell: (row) =>
-                    new Date(row.attendanceDate).toLocaleDateString(),
+                    formatIndiaDate(new Date(row.attendanceDate)),
                 },
                 {
                   key: "period",
@@ -432,12 +433,12 @@ export default async function StudentDetailPage({
                 {
                   key: "issued",
                   header: "Issued",
-                  cell: (row) => new Date(row.issuedOn).toLocaleDateString(),
+                  cell: (row) => formatIndiaDate(row.issuedOn),
                 },
                 {
                   key: "due",
                   header: "Due",
-                  cell: (row) => new Date(row.dueOn).toLocaleDateString(),
+                  cell: (row) => formatIndiaDate(row.dueOn),
                 },
                 {
                   key: "total",
@@ -511,7 +512,7 @@ export default async function StudentDetailPage({
                   header: "Published",
                   cell: (row) =>
                     row.publishedAt
-                      ? new Date(row.publishedAt).toLocaleString()
+                      ? formatIndiaDateTime(row.publishedAt)
                       : "-",
                 },
               ]}

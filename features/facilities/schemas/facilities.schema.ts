@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { parseIndiaDateTimeValue } from "@/lib/utils/india-time";
 
-const dateInput = z.coerce.date();
+const dateInput = z.preprocess(parseIndiaDateTimeValue, z.coerce.date());
 
 export const facilityBookingSchema = z.object({
   facilityName: z.string().trim().min(2).max(160),

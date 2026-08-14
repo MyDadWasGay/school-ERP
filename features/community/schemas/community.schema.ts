@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { parseIndiaDateTimeValue, parseIndiaDateValue } from "@/lib/utils/india-time";
 
-const dateInput = z.coerce.date();
+const dateInput = z.preprocess(parseIndiaDateValue, z.coerce.date());
+const dateTimeInput = z.preprocess(parseIndiaDateTimeValue, z.coerce.date());
 
 export const clubSchema = z.object({
   name: z.string().trim().min(2).max(160),
@@ -24,7 +26,7 @@ export const sportsTeamSchema = z.object({
 export const sportsFixtureSchema = z.object({
   teamId: z.string().min(1),
   opponent: z.string().trim().min(2).max(160),
-  startsAt: dateInput,
+  startsAt: dateTimeInput,
   venue: z.string().trim().min(2).max(200),
 });
 
@@ -40,7 +42,7 @@ export const alumniProfileSchema = z.object({
 
 export const alumniEventSchema = z.object({
   name: z.string().trim().min(2).max(160),
-  startsAt: dateInput,
+  startsAt: dateTimeInput,
   details: z.string().trim().min(2).max(1_000),
 });
 

@@ -6,6 +6,7 @@ import { UserAccessWorkspace } from "@/features/users/components/user-access-wor
 import { getUserAccessDetail } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,7 +35,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       <CardHeader><CardTitle>Recent login audit</CardTitle></CardHeader>
       <CardContent className="space-y-2">
         {detail.loginHistory.length === 0 ? <p className="text-sm text-muted-foreground">No login events recorded.</p> : detail.loginHistory.map((login) => <div key={login.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
-          <span>{login.createdAt.toLocaleString()}</span>
+          <span>{formatIndiaDateTime(login.createdAt)}</span>
           <span className="text-muted-foreground">{login.ipAddress ?? "IP unavailable"}</span>
           <StatusBadge status={login.success ? "success" : "failed"} />
         </div>)}

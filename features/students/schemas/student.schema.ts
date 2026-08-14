@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateInput } from "@/lib/utils/india-time";
 
 export const guardianRelationshipOptions = [
   { value: "father", label: "Father" },
@@ -32,6 +33,16 @@ const guardianRelationshipValues: [string, ...string[]] = [
   "guardian",
 ];
 const guardianRelationship = z.enum(guardianRelationshipValues);
+
+function indiaDate(value: unknown) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    try { return parseIndiaDateInput(value); } catch { return value; }
+  }
+  return value;
+}
+
+const optionalIndiaDate = z.preprocess(indiaDate, z.coerce.date().optional());
+const requiredIndiaDate = z.preprocess(indiaDate, z.coerce.date());
 
 const guardianDetailsFields = z.object({
   firstName: z.string().trim().min(2).max(80),
@@ -68,7 +79,7 @@ export const studentSchema = z.object({
   lastName: z.string().trim().min(1).max(80),
   campusId: z.string().trim().min(1),
   gender: z.enum(["female", "male", "non_binary", "prefer_not_to_say"]).optional().or(z.literal("")),
-  dateOfBirth: z.coerce.date().optional(),
+  dateOfBirth: optionalIndiaDate,
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
   academicYearId: z.string().trim().min(1).optional().or(z.literal("")),
@@ -127,7 +138,7 @@ export const enrollmentTransferSchema = z.object({
   classId: z.string().min(1),
   sectionId: z.string().min(1),
   rollNumber: z.string().trim().max(30).optional().or(z.literal("")),
-  startsOn: z.coerce.date(),
+  startsOn: requiredIndiaDate,
 });
 export type EnrollmentTransferInput = z.infer<typeof enrollmentTransferSchema>;
 

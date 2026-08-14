@@ -2,8 +2,8 @@ import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqli
 import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
 
 export const guardians = sqliteTable("guardians", {
-  id: idColumn("guardian"), ...tenantColumns(), firstName: text("first_name").notNull(), lastName: text("last_name").notNull(), email: text("email"), phone: text("phone"), occupation: text("occupation"), addressJson: text("address_json"), custodyNotes: text("custody_notes"), ...auditColumns(), status: statusColumn(),
-}, (table) => [index("guardians_org_idx").on(table.organizationId)]);
+  id: idColumn("guardian"), ...tenantColumns(), firstName: text("first_name").notNull(), lastName: text("last_name").notNull(), email: text("email"), emailNormalized: text("email_normalized"), phone: text("phone"), phoneNormalized: text("phone_normalized"), occupation: text("occupation"), addressJson: text("address_json"), custodyNotes: text("custody_notes"), ...auditColumns(), status: statusColumn(),
+}, (table) => [index("guardians_org_idx").on(table.organizationId), index("guardians_email_normalized_idx").on(table.organizationId, table.emailNormalized), index("guardians_phone_normalized_idx").on(table.organizationId, table.phoneNormalized)]);
 
 export const students = sqliteTable("students", {
   id: idColumn("student"), ...tenantColumns(), admissionNumber: text("admission_number").notNull(), firstName: text("first_name").notNull(), lastName: text("last_name").notNull(), dateOfBirth: integer("date_of_birth", { mode: "timestamp" }), gender: text("gender"), email: text("email"), phone: text("phone"), addressJson: text("address_json"), photoUrl: text("photo_url"), houseId: text("house_id"), bloodGroup: text("blood_group"), joinedOn: integer("joined_on", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()), ...auditColumns(), status: statusColumn(),

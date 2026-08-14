@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
+import { formatIndiaDate, normalizeIndiaCalendarDate } from "@/lib/utils/india-time";
 import type { AcademicSetupArchiveInput, AcademicSetupInput, AcademicSetupKind, AcademicSetupUpdateInput } from "../schemas/academic-setup.schema";
 
 export type AcademicSetupRow = { id: string; name: string; detail: string; status: string; code?: string; startsOn?: Date; endsOn?: Date; isActive?: boolean; classId?: string; sortOrder?: number; capacity?: number; isOptional?: boolean };
@@ -60,7 +61,7 @@ export async function listAcademicSetup(user: CurrentUser, kind: AcademicSetupKi
       eq(academicYears.organizationId, user.organizationId),
       user.campusId ? eq(academicYears.campusId, user.campusId) : undefined,
     )).orderBy(asc(academicYears.startsOn));
-    return rows.map((row) => ({ id: row.id, name: row.name, detail: `${row.startsOn.toLocaleDateString()} - ${row.endsOn.toLocaleDateString()}`, status: row.isActive ? "active" : row.status, startsOn: row.startsOn, endsOn: row.endsOn, isActive: row.isActive }));
+    return rows.map((row) => ({ id: row.id, name: row.name, detail: `${formatIndiaDate(row.startsOn)} - ${formatIndiaDate(row.endsOn)}`, status: row.isActive ? "active" : row.status, startsOn: row.startsOn, endsOn: row.endsOn, isActive: row.isActive }));
   }
   if (kind === "class") {
     const rows = await getDb().select().from(classes).where(and(
@@ -94,6 +95,7 @@ export async function createAcademicSetup(user: CurrentUser, input: AcademicSetu
           updatedBy: user.id,
         }).where(and(
           eq(academicYears.organizationId, user.organizationId),
+          eq(academicYears.campusId, input.campusId),
           eq(academicYears.isActive, true),
         ));
       }
@@ -101,8 +103,8 @@ export async function createAcademicSetup(user: CurrentUser, input: AcademicSetu
         organizationId: user.organizationId,
         campusId: input.campusId,
         name: input.name,
-        startsOn: input.startsOn,
-        endsOn: input.endsOn,
+        startsOn: normalizeIndiaCalendarDate(input.startsOn),
+        endsOn: normalizeIndiaCalendarDate(input.endsOn),
         isActive: input.isActive,
         createdBy: user.id,
         updatedBy: user.id,
@@ -172,8 +174,8 @@ export async function updateAcademicSetup(user: CurrentUser, input: AcademicSetu
   return getDb().transaction(async (tx) => {
     const now = new Date();
     if (input.kind === "academic_year") {
-      if (input.isActive) await tx.update(academicYears).set({ isActive: false, updatedAt: now, updatedBy: user.id }).where(and(eq(academicYears.organizationId, user.organizationId), ne(academicYears.id, input.id), eq(academicYears.isActive, true)));
-      const [row] = await tx.update(academicYears).set({ name: input.name, startsOn: input.startsOn, endsOn: input.endsOn, isActive: input.isActive, updatedAt: now, updatedBy: user.id }).where(and(eq(academicYears.id, input.id), eq(academicYears.organizationId, user.organizationId))).returning();
+      if (input.isActive) await tx.update(academicYears).set({ isActive: false, updatedAt: now, updatedBy: user.id }).where(and(eq(academicYears.organizationId, user.organizationId), existing.campusId ? eq(academicYears.campusId, existing.campusId) : undefined, ne(academicYears.id, input.id), eq(academicYears.isActive, true)));
+      const [row] = await tx.update(academicYears).set({ name: input.name, startsOn: normalizeIndiaCalendarDate(input.startsOn), endsOn: normalizeIndiaCalendarDate(input.endsOn), isActive: input.isActive, updatedAt: now, updatedBy: user.id }).where(and(eq(academicYears.id, input.id), eq(academicYears.organizationId, user.organizationId))).returning();
       return row;
     }
     if (input.kind === "class") {

@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
 import { normalizePagination } from "@/lib/utils/pagination";
+import { formatIndiaDate, formatIndiaDateTime } from "@/lib/utils/india-time";
 import {
   getReadableStudent,
   listStudents,
@@ -80,7 +81,7 @@ export async function listExamResults(user: CurrentUser) {
     name: row.name,
     maxMarks: row.maxMarks,
     status: row.publicationStatus === "published" ? "published" : row.status,
-    publishedAt: row.publishedAt?.toLocaleString(),
+    publishedAt: row.publishedAt ? formatIndiaDateTime(row.publishedAt) : undefined,
   }));
 }
 
@@ -212,8 +213,8 @@ export async function listExamPlanning(user: CurrentUser): Promise<ExamPlanningR
     .limit(100);
   return rows.map((row) => ({
     ...row,
-    startsOn: row.startsOn?.toLocaleDateString(),
-    endsOn: row.endsOn?.toLocaleDateString(),
+    startsOn: row.startsOn ? formatIndiaDate(row.startsOn) : undefined,
+    endsOn: row.endsOn ? formatIndiaDate(row.endsOn) : undefined,
     scheduleCount: Number(row.scheduleCount),
   }));
 }

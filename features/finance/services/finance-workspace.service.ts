@@ -12,6 +12,7 @@ import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
 import { normalizePagination } from "@/lib/utils/pagination";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 import {
   getReadableStudent,
   resolvePermittedStudentIds,
@@ -287,7 +288,7 @@ export async function listPayments(user: CurrentUser) {
     receiptNumber: row.receiptNumber,
     amount: money(row.amountMinor),
     method: row.method.replaceAll("_", " "),
-    paidAt: row.paidAt.toLocaleString(),
+    paidAt: formatIndiaDateTime(row.paidAt),
     status: row.status,
   }));
 }

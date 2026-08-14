@@ -4,6 +4,7 @@ import { leaveRequests } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import type { LeaveRequestInput } from "../schemas/leave.schema";
+import { formatIndiaDate } from "@/lib/utils/india-time";
 import {
   getReadableStudent,
   resolvePermittedStudentIds,
@@ -132,8 +133,8 @@ export async function listLeaveRequests(user: CurrentUser) {
       ownStudentIds.includes(row.requesterId)
         ? "My request"
         : `${row.requesterType} · ${row.requesterId}`,
-    startsOn: row.startsOn.toLocaleDateString(),
-    endsOn: row.endsOn.toLocaleDateString(),
+    startsOn: formatIndiaDate(row.startsOn),
+    endsOn: formatIndiaDate(row.endsOn),
     reason: row.reason,
     status: row.status,
     canReview:

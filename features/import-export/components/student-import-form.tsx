@@ -9,7 +9,7 @@ import { parseStudentCsv, parseStudentWorkbook, type ImportRowError, type Studen
 import { studentImportColumns, studentImportHeaderNames } from "../schemas/student-import.schema";
 
 type ImportResponse = {
-  data?: { queued?: boolean; jobId?: string; importedRows?: number; errorRows?: number; errors?: ImportRowError[] };
+  data?: { queued?: boolean; jobId?: string; importJobId?: string; importedRows?: number; errorRows?: number; errors?: ImportRowError[] };
   error?: { message?: string };
 };
 
@@ -25,8 +25,8 @@ async function readFile(file: File): Promise<{ parsed: StudentImportParseResult;
   const buffer = await file.arrayBuffer();
   const parsed = parseStudentWorkbook(buffer);
   const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
-  const firstSheet = workbook.SheetNames[0];
-  return { parsed, csv: firstSheet ? XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheet]) : "" };
+  const sheetName = workbook.SheetNames.find((name) => name.trim().toLocaleLowerCase() === "students") ?? workbook.SheetNames[0];
+  return { parsed, csv: sheetName ? XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]) : "" };
 }
 
 async function validateOnServer(csv: string, local: StudentImportParseResult) {
@@ -65,6 +65,7 @@ export function StudentImportForm() {
   const [preview, setPreview] = useState<StudentImportParseResult | null>(null);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<ImportResponse["data"]>();
 
   const previewErrors = useMemo(() => preview ? formatErrors(preview.errors.slice(0, 8)) : [], [preview]);
@@ -74,6 +75,7 @@ export function StudentImportForm() {
     setPreview(null);
     setResult(undefined);
     setMessage("");
+    setIdempotencyKey(crypto.randomUUID());
     if (!nextFile) return;
     try {
       const prepared = await readFile(nextFile);
@@ -99,7 +101,7 @@ export function StudentImportForm() {
       if (validated.errors.length) { setMessage("Fix the preview errors before importing."); return; }
       const response = await browserApiFetch("/api/v1/imports/students", {
         method: "POST",
-        headers: { "Content-Type": "text/csv", "X-Idempotency-Key": crypto.randomUUID() },
+        headers: { "Content-Type": "text/csv", "X-Idempotency-Key": idempotencyKey },
         body: prepared.csv,
       });
       const payload = await response.json() as ImportResponse;
@@ -142,7 +144,7 @@ export function StudentImportForm() {
       {preview.totalRows > 10 ? <p className="text-xs text-muted-foreground">Showing the first 10 valid rows. The server validates the complete file again before writing.</p> : null}
       {previewErrors.length ? <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm" role="alert"><p className="font-medium">Fix these preview errors:</p><ul className="mt-1 list-inside list-disc">{previewErrors.map((error) => <li key={error}>{error}</li>)}</ul>{preview.errors.length > previewErrors.length ? <p className="mt-1 text-xs">{preview.errors.length - previewErrors.length} more error(s) are included in the downloadable job report.</p> : null}</div> : null}
     </div> : null}
-    {result && !result.queued ? <div className="grid gap-3 text-sm sm:grid-cols-3"><div className="rounded-md border p-3"><span className="block text-muted-foreground">Imported</span><span className="text-lg font-semibold">{result.importedRows ?? 0}</span></div><div className="rounded-md border p-3"><span className="block text-muted-foreground">Failed</span><span className="text-lg font-semibold">{result.errorRows ?? 0}</span>{result.errorRows ? <a className="mt-1 block text-primary underline" href={`/api/v1/imports/students/${result.jobId}/errors`}>Download failed rows</a> : null}</div><div className="rounded-md border p-3"><span className="block text-muted-foreground">Job</span><span className="break-all font-semibold">{result.jobId ?? "—"}</span></div></div> : null}
+    {result && !result.queued ? <div className="grid gap-3 text-sm sm:grid-cols-3"><div className="rounded-md border p-3"><span className="block text-muted-foreground">Imported</span><span className="text-lg font-semibold">{result.importedRows ?? 0}</span></div><div className="rounded-md border p-3"><span className="block text-muted-foreground">Failed</span><span className="text-lg font-semibold">{result.errorRows ?? 0}</span>{result.errorRows ? <a className="mt-1 block text-primary underline" href={`/api/v1/imports/students/${result.importJobId ?? result.jobId}/errors`}>Download failed rows</a> : null}</div><div className="rounded-md border p-3"><span className="block text-muted-foreground">Job</span><span className="break-all font-semibold">{result.importJobId ?? result.jobId ?? "—"}</span></div></div> : null}
     {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
     <div className="flex justify-end"><Button disabled={!file || pending || Boolean(preview?.errors.length)}>{pending ? "Checking…" : "Confirm and import"}</Button></div>
   </form>;

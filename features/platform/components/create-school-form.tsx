@@ -49,7 +49,7 @@ export function CreateSchoolForm() {
       <Field id="campus-name" label="First campus" value={values.campusName} onChange={(value) => update("campusName", value)} required />
       <Field id="campus-code" label="Campus code" value={values.campusCode} onChange={(value) => update("campusCode", value)} required />
       <Field id="campus-address" label="Campus address" value={values.campusAddress} onChange={(value) => update("campusAddress", value)} />
-      <Field id="timezone" label="Time zone" value={values.timezone} onChange={(value) => update("timezone", value)} required />
+      <Field id="timezone" label="Time zone" value={values.timezone} onChange={(value) => update("timezone", value)} required readOnly />
     </div>
     <div className="border-t pt-5">
       <p className="mb-3 text-sm font-semibold">Initial school administrator</p>
@@ -65,6 +65,6 @@ export function CreateSchoolForm() {
   </form>;
 }
 
-function Field({ id, label, value, onChange, type = "text", required = false }: { id: string; label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
-  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label><Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} /></div>;
+function Field({ id, label, value, onChange, type = "text", required = false, readOnly = false }: { id: string; label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; readOnly?: boolean }) {
+  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label><Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} readOnly={readOnly} aria-readonly={readOnly} />{readOnly ? <p className="text-xs text-muted-foreground">School dates and attendance use Indian Standard Time.</p> : null}</div>;
 }

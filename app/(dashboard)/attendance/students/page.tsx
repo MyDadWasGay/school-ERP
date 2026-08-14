@@ -21,7 +21,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     listAttendancePage(user, { page: Number(query.page) || 1, date: query.date }),
     getAttendanceStudentOptions(user),
   ]);
-  const selectedDate = query.date ?? result.attendanceDate.toISOString().slice(0, 10);
+  const selectedDate = query.date ?? result.attendanceDate;
   return <div>
     <PageHeader title="Student attendance" description="Teachers can mark students in their assigned class or section; leadership permissions can oversee the campus. Older changes automatically enter the correction approval workflow." />
     {hasPermission(user, "attendance:mark") ? <AttendanceMarkForm students={students} /> : null}

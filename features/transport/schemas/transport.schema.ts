@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateValue } from "@/lib/utils/india-time";
 
 export const transportRouteSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -26,7 +27,7 @@ export const vehicleSchema = z.object({
 export const vehicleDocumentSchema = z.object({
   vehicleId: z.string().min(1),
   documentType: z.string().trim().min(2).max(80),
-  expiresOn: z.coerce.date(),
+  expiresOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
 });
 
 export type TransportRouteInput = z.infer<typeof transportRouteSchema>;

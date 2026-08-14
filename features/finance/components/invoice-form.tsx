@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/forms/field-error";
 import { createInvoiceAction } from "../actions/invoice.actions";
+import { parseIndiaDateInput } from "@/lib/utils/india-time";
 
 const invoiceFormSchema = z.object({
   studentId: z.string().min(1),
@@ -28,7 +29,7 @@ export function InvoiceForm({ students }: { students: Array<{ id: string; name: 
   const submit = form.handleSubmit(async (input) => {
     const result = await createInvoiceAction({
       studentId: input.studentId,
-      dueOn: new Date(`${input.dueOn}T00:00:00`),
+      dueOn: parseIndiaDateInput(input.dueOn),
       description: input.description,
       amountMinor: Math.round(input.amountRupees * 100),
     });

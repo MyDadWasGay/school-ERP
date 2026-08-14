@@ -10,6 +10,7 @@ import {
   createLeaveRequestAction,
   reviewLeaveRequestAction,
 } from "../actions/attendance.actions";
+import { parseIndiaDateInput } from "@/lib/utils/india-time";
 
 export function LeaveRequestForm({
   students = [],
@@ -22,8 +23,8 @@ export function LeaveRequestForm({
     const data = new FormData(event.currentTarget);
     const result = await createLeaveRequestAction({
       studentId: String(data.get("studentId") ?? "").trim() || undefined,
-      startsOn: new Date(`${String(data.get("startsOn"))}T00:00:00`),
-      endsOn: new Date(`${String(data.get("endsOn"))}T23:59:59`),
+      startsOn: parseIndiaDateInput(String(data.get("startsOn") ?? "")),
+      endsOn: new Date(parseIndiaDateInput(String(data.get("endsOn") ?? "")).getTime() + 24 * 60 * 60 * 1000 - 1),
       reason: String(data.get("reason") ?? ""),
     });
     setMessage(

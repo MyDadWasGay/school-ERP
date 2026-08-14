@@ -23,6 +23,7 @@ import {
   studentResultsSchema,
 } from "../schemas/student-data.schemas";
 import { apiSuccess, pageQuery, queryString, routeSchema } from "./route-utils";
+import { hasPermission } from "../../../lib/rbac/permissions";
 
 type StudentParams = { studentId: string };
 type PaginationQuery = { page?: number; pageSize?: number };
@@ -71,6 +72,7 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
     async (request) => {
       const user = requireApiPermission(request, "students:read");
       const profile = await getStudentProfile(user, request.params.studentId);
+      const canViewSensitiveGuardianData = hasPermission(user, "students:view_sensitive") || hasPermission(user, "*");
       return {
         data: {
           student: {
@@ -98,11 +100,11 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
             isPrimary: Boolean(guardian.isPrimary),
             isEmergencyContact: Boolean(guardian.isEmergencyContact),
             isBillingContact: Boolean(guardian.isBillingContact),
-            email: guardian.email ?? null,
-            phone: guardian.phone ?? null,
-            occupation: guardian.occupation ?? null,
-            address: guardian.address ?? null,
-            custodyNotes: guardian.custodyNotes ?? null,
+            email: canViewSensitiveGuardianData || guardian.id === user.linkedGuardianId ? guardian.email ?? null : null,
+            phone: canViewSensitiveGuardianData || guardian.id === user.linkedGuardianId ? guardian.phone ?? null : null,
+            occupation: canViewSensitiveGuardianData ? guardian.occupation ?? null : null,
+            address: canViewSensitiveGuardianData ? guardian.address ?? null : null,
+            custodyNotes: canViewSensitiveGuardianData ? guardian.custodyNotes ?? null : null,
           })),
           enrollments: profile.enrollments.map((enrollment) => ({
             id: enrollment.id,

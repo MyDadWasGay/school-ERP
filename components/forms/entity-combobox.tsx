@@ -34,8 +34,14 @@ export function EntityCombobox({ label, value, onChange, endpoint, initialOption
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [retryToken, setRetryToken] = useState(0);
   const requestNumber = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef(options);
   const selected = options.find((option) => option.id === value);
+
+  useEffect(() => { optionsRef.current = options; }, [options]);
 
   useEffect(() => {
     setOptions((current) => {
@@ -49,27 +55,41 @@ export function EntityCombobox({ label, value, onChange, endpoint, initialOption
   }, [open, value]);
 
   useEffect(() => {
+    function closeOnOutside(event: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutside);
+    return () => document.removeEventListener("pointerdown", closeOnOutside);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const currentRequest = ++requestNumber.current;
+    const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLoading(true);
+      setLoadError("");
       try {
         const url = new URL(endpoint, window.location.origin);
         if (query.trim()) url.searchParams.set("search", query.trim());
-        const response = await browserApiFetch(url.pathname + url.search);
+        const response = await browserApiFetch(url.pathname + url.search, { signal: controller.signal });
         const payload = await response.json() as { data?: unknown };
         if (currentRequest === requestNumber.current && response.ok) {
-          setOptions(Array.isArray(payload.data) ? payload.data.filter(isOption) : []);
+          const fetched = Array.isArray(payload.data) ? payload.data.filter(isOption) : [];
+          const selectedOption = optionsRef.current.find((option) => option.id === value);
+          setOptions(selectedOption && !fetched.some((option) => option.id === selectedOption.id) ? [selectedOption, ...fetched] : fetched);
           setActiveIndex(-1);
+        } else if (currentRequest === requestNumber.current && !response.ok) {
+          setLoadError("Could not load options.");
         }
-      } catch {
-        if (currentRequest === requestNumber.current) setOptions([]);
+      } catch (error) {
+        if (currentRequest === requestNumber.current && (error as Error).name !== "AbortError") setLoadError("Could not load options.");
       } finally {
         if (currentRequest === requestNumber.current) setLoading(false);
       }
     }, 250);
-    return () => window.clearTimeout(timer);
-  }, [endpoint, open, query]);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [endpoint, open, query, value, retryToken]);
 
   function choose(option: EntityOption) {
     onChange(option.id);
@@ -85,7 +105,7 @@ export function EntityCombobox({ label, value, onChange, endpoint, initialOption
   }
 
   const inputValue = open ? query : selected?.label ?? (value ? "Selected record" : query);
-  return <div className="space-y-1">
+  return <div ref={containerRef} className="space-y-1">
     <label htmlFor={inputId} className="text-sm font-medium leading-none">{label}{required ? " *" : ""}</label>
     <div className="relative">
       <input
@@ -113,7 +133,8 @@ export function EntityCombobox({ label, value, onChange, endpoint, initialOption
       {value ? <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-xs text-muted-foreground hover:bg-muted" onClick={clear} aria-label={`Clear ${label}`}>Clear</button> : null}
       {open ? <div id={listId} role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-background p-1 shadow-lg">
         {loading ? <div className="px-3 py-2 text-sm text-muted-foreground" role="status">Searching…</div> : null}
-        {!loading && options.length === 0 ? <div className="px-3 py-2 text-sm text-muted-foreground">No matching {label.toLowerCase()} records.</div> : null}
+        {loadError ? <div className="px-3 py-2 text-sm" role="alert"><span className="text-destructive">{loadError}</span> <button type="button" className="underline" onClick={() => { setLoadError(""); setRetryToken((current) => current + 1); }}>Retry</button></div> : null}
+        {!loading && !loadError && options.length === 0 ? <div className="px-3 py-2 text-sm text-muted-foreground">No matching {label.toLowerCase()} records.</div> : null}
         {!loading ? options.map((option, index) => <button type="button" key={option.id} id={`${listId}-option-${index}`} role="option" aria-selected={option.id === value} className={`block w-full rounded px-3 py-2 text-left text-sm ${index === activeIndex ? "bg-muted" : "hover:bg-muted/70"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(option)}><span className="block font-medium">{option.label}</span>{option.detail ? <span className="block text-xs text-muted-foreground">{option.detail}</span> : null}</button>) : null}
       </div> : null}
     </div>

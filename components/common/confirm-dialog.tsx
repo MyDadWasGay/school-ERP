@@ -85,11 +85,9 @@ export function ConfirmDialog({
     };
 
     focusFirst();
-    const frame = window.requestAnimationFrame(focusFirst);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       window.queueMicrotask(() => lastTriggerRef.current?.focus());
     };

@@ -31,7 +31,7 @@ export default async function AdmissionSeatMatrixPage({ searchParams }: { search
       { key: "section", header: "Section", cell: (row) => row.sectionName },
       { key: "capacity", header: "Capacity", cell: (row) => row.capacity },
       { key: "occupied", header: "Enrolled", cell: (row) => row.occupied },
-      { key: "available", header: "Available", cell: (row) => <span className="flex items-center gap-2">{row.available}<StatusBadge status={row.available > 0 ? "open" : "full"} /></span> },
+      { key: "available", header: "Available", cell: (row) => <span className="flex items-center gap-2">{row.available}<StatusBadge status={row.overbooked ? "overbooked" : row.available > 0 ? "open" : "full"} /></span> },
     ]} emptyTitle="No active sections found" emptyDescription="Try a wider campus or academic-year filter." /></CardContent></Card>
   </div>;
 }

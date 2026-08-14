@@ -11,6 +11,7 @@ export const applications = sqliteTable("applications", {
 }, (table) => [
   index("applications_org_status_idx").on(table.organizationId, table.status),
   uniqueIndex("applications_org_number_unique").on(table.organizationId, table.applicationNumber),
+  uniqueIndex("applications_org_source_enquiry_unique").on(table.organizationId, table.sourceEnquiryId),
 ]);
 
 export const admissionFollowUps = sqliteTable("admission_follow_ups", {

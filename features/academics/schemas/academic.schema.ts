@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateTimeValue } from "@/lib/utils/india-time";
 
 export const academicKinds = [
   "curriculum",
@@ -25,8 +26,8 @@ export const academicRecordSchema = z.object({
   classId: optionalText(120),
   subjectId: optionalText(120),
   title: optionalText(160),
-  scheduledFor: z.preprocess((value) => typeof value === "string" && value ? new Date(value) : undefined, z.date().optional()),
-  dueAt: z.preprocess((value) => typeof value === "string" && value ? new Date(value) : undefined, z.date().optional()),
+  scheduledFor: z.preprocess((value) => value === "" || value === null || value === undefined ? undefined : parseIndiaDateTimeValue(value), z.coerce.date().optional()),
+  dueAt: z.preprocess((value) => value === "" || value === null || value === undefined ? undefined : parseIndiaDateTimeValue(value), z.coerce.date().optional()),
   details: optionalText(2_000),
 });
 

@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { auditLogs } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 
 export async function listAuditLogs(user: CurrentUser, limit = 100) {
   const rows = await getDb().select().from(auditLogs).where(and(
@@ -13,6 +14,6 @@ export async function listAuditLogs(user: CurrentUser, limit = 100) {
     action: row.action.replaceAll("_", " "),
     entity: `${row.entityType.replaceAll("_", " ")}${row.entityId ? ` · ${row.entityId}` : ""}`,
     actor: row.actorRole?.replaceAll("_", " ") ?? "System",
-    occurredAt: row.createdAt.toLocaleString(),
+    occurredAt: formatIndiaDateTime(row.createdAt),
   }));
 }

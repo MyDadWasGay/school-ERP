@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createAcademicRecordAction, archiveAcademicRecordAction } from "../actions/academic.actions";
 import type { AcademicKind } from "../schemas/academic.schema";
+import { parseIndiaDateTimeInput } from "@/lib/utils/india-time";
 
 type Row = { id: string; name: string; detail: string; status: string };
 const labels: Record<AcademicKind, string> = { curriculum: "Curriculum", "lesson-plans": "Lesson plan", "teacher-allocation": "Teacher allocation", timetable: "Timetable template", substitutions: "Substitution", assignments: "Assignment", resources: "Teaching resource" };
@@ -32,7 +33,8 @@ export function AcademicWorkspace({ kind, rows, canCreate, canDelete }: { kind: 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
-    const result = await createAcademicRecordAction({ kind, name, code, teacherId, classId, subjectId, scheduledFor: kind === "assignments" ? undefined : date, dueAt: kind === "assignments" ? date : undefined, details });
+    const instant = date ? parseIndiaDateTimeInput(date) : undefined;
+    const result = await createAcademicRecordAction({ kind, name, code, teacherId, classId, subjectId, scheduledFor: kind === "assignments" ? undefined : instant, dueAt: kind === "assignments" ? instant : undefined, details });
     setMessage(result.ok ? result.message ?? `${label} created.` : result.error);
     if (result.ok) {
       setName("");

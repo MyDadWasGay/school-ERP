@@ -6,6 +6,7 @@ import { listGoodsReceipts, listPurchaseOrders } from "@/lib/api-client/server-q
 import { listInventoryItems } from "@/lib/api-client/server-queries";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 
 export default async function ProcurementGoodsReceiptsPage() {
   const user = await requirePermission("procurement:read");
@@ -14,6 +15,6 @@ export default async function ProcurementGoodsReceiptsPage() {
   return <div className="space-y-6">
     <PageHeader title="Goods receipts" description="Post received goods as one transaction that updates stock, records the receipt, and closes the purchase order." />
     {hasPermission(user, "procurement:update") ? <Card><CardHeader><CardTitle>Post receipt</CardTitle></CardHeader><CardContent><GoodsReceiptForm orders={ordered} items={items} /></CardContent></Card> : null}
-    <Card><CardHeader><CardTitle>Receipt history</CardTitle></CardHeader><CardContent>{receipts.length ? <div className="space-y-3">{receipts.map((receipt) => <div key={receipt.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><div><p className="font-medium">{receipt.name}</p><p className="text-xs text-muted-foreground">{receipt.purchaseOrderId ?? "No purchase order reference"} · {new Date(receipt.createdAt).toLocaleString()}</p></div><StatusBadge status={receipt.status} /></div>)}</div> : <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No goods receipts found.</p>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Receipt history</CardTitle></CardHeader><CardContent>{receipts.length ? <div className="space-y-3">{receipts.map((receipt) => <div key={receipt.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><div><p className="font-medium">{receipt.name}</p><p className="text-xs text-muted-foreground">{receipt.purchaseOrderId ?? "No purchase order reference"} · {formatIndiaDateTime(receipt.createdAt)}</p></div><StatusBadge status={receipt.status} /></div>)}</div> : <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No goods receipts found.</p>}</CardContent></Card>
   </div>;
 }

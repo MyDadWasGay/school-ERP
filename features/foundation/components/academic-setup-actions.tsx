@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import type { AcademicSetupKind } from "../schemas/academic-setup.schema";
 import { archiveAcademicSetupAction, updateAcademicSetupAction } from "../actions/academic-setup.actions";
 import type { AcademicSetupRow } from "../services/academic-setup.service";
+import { indiaDateKey } from "@/lib/utils/india-time";
 
 export function AcademicSetupActions({ kind, row }: { kind: AcademicSetupKind; row: AcademicSetupRow }) {
   const router = useRouter();
@@ -55,7 +56,7 @@ export function AcademicSetupActions({ kind, row }: { kind: AcademicSetupKind; r
   }
   if (editing) return <form onSubmit={handleSave} className="min-w-72 space-y-2 rounded-md border bg-background p-3">
     <Input name="name" defaultValue={row.name} aria-label="Name" required />
-    {kind === "academic_year" ? <><Input name="startsOn" type="date" defaultValue={row.startsOn?.toISOString().slice(0, 10)} aria-label="Starts on" required /><Input name="endsOn" type="date" defaultValue={row.endsOn?.toISOString().slice(0, 10)} aria-label="Ends on" required /><label className="flex items-center gap-2 text-xs"><input name="isActive" type="checkbox" defaultChecked={row.isActive} /> Active year</label></> : null}
+    {kind === "academic_year" ? <><Input name="startsOn" type="date" defaultValue={row.startsOn ? indiaDateKey(row.startsOn) : undefined} aria-label="Starts on" required /><Input name="endsOn" type="date" defaultValue={row.endsOn ? indiaDateKey(row.endsOn) : undefined} aria-label="Ends on" required /><label className="flex items-center gap-2 text-xs"><input name="isActive" type="checkbox" defaultChecked={row.isActive} /> Active year</label></> : null}
     {kind === "class" ? <><Input name="code" defaultValue={row.code} aria-label="Code" required /><Input name="sortOrder" type="number" defaultValue={row.sortOrder ?? 0} aria-label="Sort order" required /></> : null}
     {kind === "section" ? <Input name="capacity" type="number" min="1" defaultValue={row.capacity ?? 40} aria-label="Capacity" required /> : null}
     {kind === "subject" ? <><Input name="code" defaultValue={row.code} aria-label="Code" required /><label className="flex items-center gap-2 text-xs"><input name="isOptional" type="checkbox" defaultChecked={row.isOptional} /> Optional subject</label></> : null}

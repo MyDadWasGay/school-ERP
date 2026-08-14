@@ -1,4 +1,23 @@
 import { z } from "zod";
+import { parseIndiaDateInput, parseIndiaDateTimeInput } from "@/lib/utils/india-time";
+
+function indiaDate(value: unknown) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    try { return parseIndiaDateInput(value); } catch { return value; }
+  }
+  return value;
+}
+
+function indiaDateTime(value: unknown) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(value)) {
+    try { return parseIndiaDateTimeInput(value); } catch { return value; }
+  }
+  return value;
+}
+
+const optionalIndiaDateTime = z.preprocess(indiaDateTime, z.coerce.date().optional());
+const requiredIndiaDateTime = z.preprocess(indiaDateTime, z.coerce.date());
+const optionalIndiaDate = z.preprocess(indiaDate, z.coerce.date().optional());
 
 export const enquirySchema = z.object({
   campusId: z.string().min(1),
@@ -8,13 +27,13 @@ export const enquirySchema = z.object({
   guardianPhone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
   source: z.string().trim().min(2).max(80),
   notes: z.string().trim().max(1_000).optional().or(z.literal("")),
-  nextFollowUpAt: z.coerce.date().optional(),
+  nextFollowUpAt: optionalIndiaDateTime,
 });
 
 export const applicationSchema = z.object({
   campusId: z.string().min(1),
   applicantName: z.string().trim().min(2).max(160),
-  dateOfBirth: z.coerce.date().optional(),
+  dateOfBirth: optionalIndiaDate,
   gender: z.enum(["female", "male", "non_binary", "prefer_not_to_say"]).optional().or(z.literal("")),
   academicYearId: z.string().min(1),
   classId: z.string().min(1),
@@ -53,7 +72,11 @@ export const enquiryUpdateSchema = z.object({
   source: z.string().trim().min(2).max(80),
   campaign: z.string().trim().max(120).optional().or(z.literal("")),
   lostReason: z.string().trim().max(500).optional().or(z.literal("")),
-  nextFollowUpAt: z.coerce.date().optional(),
+  guardianName: z.string().trim().max(160).optional().or(z.literal("")),
+  guardianEmail: z.string().email().optional().or(z.literal("")),
+  guardianPhone: z.string().trim().min(7).max(20).optional().or(z.literal("")),
+  notes: z.string().trim().max(1_000).optional().or(z.literal("")),
+  nextFollowUpAt: optionalIndiaDateTime,
 }).superRefine((input, context) => {
   if (input.status === "lost" && !input.lostReason) context.addIssue({ code: z.ZodIssueCode.custom, path: ["lostReason"], message: "A lost reason is required." });
 });
@@ -61,7 +84,7 @@ export type EnquiryUpdateInput = z.infer<typeof enquiryUpdateSchema>;
 
 export const followUpSchema = z.object({
   enquiryId: z.string().min(1),
-  dueAt: z.coerce.date(),
+  dueAt: requiredIndiaDateTime,
   note: z.string().trim().min(2).max(1000),
   assignedTo: z.string().min(1).optional().or(z.literal("")),
 });
@@ -77,7 +100,7 @@ export const assessmentSchema = z.object({
   applicationId: z.string().min(1),
   campusId: z.string().min(1),
   assessmentType: z.enum(["entrance_test", "interview", "interaction"]),
-  scheduledAt: z.coerce.date(),
+  scheduledAt: requiredIndiaDateTime,
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 export type AssessmentInput = z.infer<typeof assessmentSchema>;

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, sql, type AnyColumn } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   academicYears,
@@ -9,15 +9,24 @@ import {
   students,
 } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
+import { hasPermission } from "@/lib/rbac/permissions";
+import { AppError } from "@/lib/errors/app-error";
 import { normalizePagination } from "@/lib/utils/pagination";
+import { formatIndiaDateTime, indiaDateKey, indiaDayRange, normalizeIndiaCalendarDate, parseIndiaDateInput } from "@/lib/utils/india-time";
 import {
   getReadableStudent,
   listStudents,
   resolvePermittedStudentIds,
 } from "@/features/students/services/students.service";
 
+function campusScope(user: CurrentUser, column: AnyColumn) {
+  if (user.campusIds?.length) return inArray(column, user.campusIds);
+  if (user.campusId) return eq(column, user.campusId);
+  return hasPermission(user, "organizations:update") ? undefined : eq(column, "__no_campus__");
+}
+
 export async function getAttendanceStudentOptions(user: CurrentUser, search?: string) {
-  const rows = await listStudents(user, search);
+  const rows = await listStudents(user, search, true);
   return rows.map((row) => ({ id: row.id, name: row.name, label: row.name, detail: row.detail }));
 }
 
@@ -26,16 +35,23 @@ export async function listAttendancePage(
   input?: { page?: number; pageSize?: number; date?: string },
 ) {
   const pagination = normalizePagination(input);
-  const attendanceDate = input?.date ? new Date(`${input.date}T00:00:00`) : new Date();
-  attendanceDate.setHours(0, 0, 0, 0);
+  let attendanceDate: Date;
+  try {
+    attendanceDate = input?.date ? parseIndiaDateInput(input.date) : normalizeIndiaCalendarDate(new Date());
+  } catch {
+    throw new AppError("VALIDATION_ERROR", "Attendance date must use the YYYY-MM-DD format.", 422);
+  }
+  const day = indiaDayRange(attendanceDate);
+  const attendanceDateKey = indiaDateKey(attendanceDate);
   const permittedIds = await resolvePermittedStudentIds(user);
   if (permittedIds && permittedIds.length === 0) {
-    return { rows: [], pageInfo: { page: pagination.page, pageSize: pagination.pageSize, total: 0, pageCount: 0 }, attendanceDate };
+    return { rows: [], pageInfo: { page: pagination.page, pageSize: pagination.pageSize, total: 0, pageCount: 0 }, attendanceDate: attendanceDateKey };
   }
   const where = and(
     eq(studentAttendanceRecords.organizationId, user.organizationId),
-    user.campusId ? eq(studentAttendanceRecords.campusId, user.campusId) : undefined,
-    eq(studentAttendanceRecords.attendanceDate, attendanceDate),
+    campusScope(user, studentAttendanceRecords.campusId),
+    gte(studentAttendanceRecords.attendanceDate, day.start),
+    lt(studentAttendanceRecords.attendanceDate, day.end),
     permittedIds ? inArray(studentAttendanceRecords.studentId, permittedIds) : undefined,
   );
   const [rows, totals] = await Promise.all([
@@ -64,10 +80,10 @@ export async function listAttendancePage(
       student: `${row.firstName} ${row.lastName}`,
       state: row.state,
       period: row.period,
-      markedAt: row.markedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      markedAt: formatIndiaDateTime(row.markedAt),
     })),
     pageInfo: { page: pagination.page, pageSize: pagination.pageSize, total, pageCount: Math.ceil(total / pagination.pageSize) },
-    attendanceDate,
+    attendanceDate: attendanceDateKey,
   };
 }
 
@@ -76,7 +92,7 @@ export async function getAttendanceOverview(user: CurrentUser) {
     eq(academicYears.organizationId, user.organizationId),
     eq(academicYears.status, "active"),
     eq(academicYears.isActive, true),
-    user.campusId ? eq(academicYears.campusId, user.campusId) : undefined,
+    campusScope(user, academicYears.campusId),
   ));
   const permittedIds = await resolvePermittedStudentIds(user);
   const activeYearIds = activeYearRows.map((row) => row.id);
@@ -85,7 +101,7 @@ export async function getAttendanceOverview(user: CurrentUser) {
     eq(studentAttendanceRecords.organizationId, user.organizationId),
     eq(studentAttendanceRecords.status, "active"),
     inArray(studentAttendanceRecords.academicYearId, activeYearIds),
-    user.campusId ? eq(studentAttendanceRecords.campusId, user.campusId) : undefined,
+    campusScope(user, studentAttendanceRecords.campusId),
     permittedIds ? inArray(studentAttendanceRecords.studentId, permittedIds) : undefined,
   );
   const [stateRows, groupRows] = await Promise.all([
@@ -166,6 +182,8 @@ export async function listStudentAttendance(
 }
 
 export async function listAttendanceCorrections(user: CurrentUser) {
+  const permittedIds = await resolvePermittedStudentIds(user);
+  if (permittedIds && permittedIds.length === 0) return [];
   const rows = await getDb().select({
     id: attendanceCorrectionRequests.id,
     firstName: students.firstName,
@@ -185,8 +203,9 @@ export async function listAttendanceCorrections(user: CurrentUser) {
     ))
     .where(and(
       eq(attendanceCorrectionRequests.organizationId, user.organizationId),
-      user.campusId ? eq(attendanceCorrectionRequests.campusId, user.campusId) : undefined,
+      campusScope(user, attendanceCorrectionRequests.campusId),
       eq(attendanceCorrectionRequests.status, "pending"),
+      permittedIds ? inArray(studentAttendanceRecords.studentId, permittedIds) : undefined,
     ))
     .orderBy(desc(attendanceCorrectionRequests.createdAt))
     .limit(100);

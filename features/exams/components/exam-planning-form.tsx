@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createExamAction } from "../actions/exam.actions";
+import { parseIndiaDateInput } from "@/lib/utils/india-time";
 
 type Option = { id: string; name: string };
 
@@ -19,8 +20,8 @@ export function ExamPlanningForm({ academicYears }: { academicYears: Option[] })
       academicYearId: String(data.get("academicYearId") ?? ""),
       name: String(data.get("name") ?? ""),
       maxMarks: String(data.get("maxMarks") ?? ""),
-      startsOn: startsOn ? new Date(`${startsOn}T00:00:00`) : undefined,
-      endsOn: endsOn ? new Date(`${endsOn}T23:59:59`) : undefined,
+      startsOn: startsOn ? parseIndiaDateInput(startsOn) : undefined,
+      endsOn: endsOn ? new Date(parseIndiaDateInput(endsOn).getTime() + 24 * 60 * 60 * 1000 - 1) : undefined,
     });
     setMessage(result.ok ? result.message ?? "Exam created." : result.error);
     if (result.ok) event.currentTarget.reset();

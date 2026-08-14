@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,12 +10,13 @@ import { FieldError } from "@/components/forms/field-error";
 import { createEnquiryAction } from "../actions/admissions.actions";
 import { enquirySchema, type EnquiryInput } from "../schemas/admissions.schema";
 import type { AdmissionOption } from "../services/admissions.service";
+import { parseIndiaDateTimeInput } from "@/lib/utils/india-time";
 
 export function EnquiryForm({ campuses }: { campuses: AdmissionOption[] }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const form = useForm<EnquiryInput>({
-    resolver: zodResolver(enquirySchema),
+    resolver: zodResolver(enquirySchema) as Resolver<EnquiryInput>,
     defaultValues: { campusId: campuses[0]?.id ?? "", source: "website", guardianName: "", guardianEmail: "", guardianPhone: "", notes: "" },
   });
   const submit = form.handleSubmit(async (input) => {
@@ -44,7 +45,7 @@ export function EnquiryForm({ campuses }: { campuses: AdmissionOption[] }) {
       <Field label="Guardian phone" error={form.formState.errors.guardianPhone?.message}><Input type="tel" {...form.register("guardianPhone")} /></Field>
       <Field label="Source" error={form.formState.errors.source?.message}><Input {...form.register("source")} /></Field>
       <Field label="Next follow-up" error={form.formState.errors.nextFollowUpAt?.message}>
-        <Input type="datetime-local" {...form.register("nextFollowUpAt", { setValueAs: (value) => value ? new Date(value) : undefined })} />
+        <Input type="datetime-local" {...form.register("nextFollowUpAt", { setValueAs: (value) => value ? parseIndiaDateTimeInput(value) : undefined })} />
       </Field>
       <Field label="Notes" error={form.formState.errors.notes?.message}><textarea className="min-h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" {...form.register("notes")} placeholder="Grade interest, questions, or context for the next conversation" /></Field>
     </div>

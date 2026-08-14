@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateValue } from "@/lib/utils/india-time";
 
 export const accountSchema = z.object({
   code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9._-]+$/),
@@ -11,7 +12,7 @@ export const expenseSchema = z.object({
   accountId: z.string().min(1),
   description: z.string().trim().min(2).max(240),
   amountMinor: z.coerce.number().int().positive().max(2_000_000_000),
-  incurredOn: z.coerce.date(),
+  incurredOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
 });
 
 export type AccountInput = z.infer<typeof accountSchema>;
@@ -23,7 +24,7 @@ export const donationSchema = z.object({
   amountMinor: z.coerce.number().int().positive().max(2_000_000_000),
   purpose: z.string().trim().min(2).max(240),
   paymentReference: z.string().trim().max(160).optional().or(z.literal("")),
-  receivedAt: z.coerce.date(),
+  receivedAt: z.preprocess(parseIndiaDateValue, z.coerce.date()),
 });
 
 export type DonationInput = z.infer<typeof donationSchema>;

@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { indiaDateKey, indiaTodayKey, parseIndiaDateValue } from "@/lib/utils/india-time";
 
 export const invoiceSchema = z.object({
   studentId: z.string().min(1),
-  dueOn: z.coerce.date(),
+  dueOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
   description: z.string().trim().min(2).max(160),
   amountMinor: z.coerce.number().int().positive(),
 }).refine(
-  (input) => input.dueOn.getTime() >= new Date().setHours(0, 0, 0, 0),
+  (input) => indiaDateKey(input.dueOn) >= indiaTodayKey(),
   { message: "Due date cannot be in the past.", path: ["dueOn"] },
 );
 

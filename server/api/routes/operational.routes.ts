@@ -242,7 +242,7 @@ export const operationalRoutes: FastifyPluginAsync = async (app) => {
       const csv = requestBodyText(request);
       if (!csv.trim() || csv.length > 5_000_000) throw new AppError("VALIDATION_ERROR", "A CSV body between 1 byte and 5 MB is required.", 422);
       const result = await previewStudentImport(user, csv);
-      return apiSuccess(request, { totalRows: result.totalRows, readyRows: result.validRows.length, errors: result.errors.slice(0, 200) });
+      return apiSuccess(request, { totalRows: result.totalRows, readyRows: result.validRows.length, errors: result.errors });
     },
   );
 
@@ -267,7 +267,7 @@ export const operationalRoutes: FastifyPluginAsync = async (app) => {
           importJobId: result.importJobId,
           importedRows: result.importedRows,
           errorRows: result.errors.length,
-          errors: result.errors.slice(0, 50),
+          errors: result.errors,
         },
         meta: { requestId: request.id },
       });
@@ -312,13 +312,15 @@ export const operationalRoutes: FastifyPluginAsync = async (app) => {
       const csv = requestBodyText(request);
       if (!csv.trim() || csv.length > 5_000_000)
         throw new AppError("VALIDATION_ERROR", "A CSV body between 1 byte and 5 MB is required.", 422);
-      const result = await runEmployeeImport(user, csv, headerValue(request, "x-idempotency-key"));
+      const idempotencyKey = headerValue(request, "x-idempotency-key");
+      if (!idempotencyKey) throw new AppError("VALIDATION_ERROR", "X-Idempotency-Key is required for employee imports.", 422);
+      const result = await runEmployeeImport(user, csv, idempotencyKey);
       return reply.code(201).send({
         data: {
           jobId: result.job.id,
           importedRows: result.importedRows,
           errorRows: result.errors.length,
-          errors: result.errors.slice(0, 50),
+          errors: result.errors,
           idempotent: result.idempotent,
         },
         meta: { requestId: request.id },

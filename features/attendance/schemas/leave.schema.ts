@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { parseIndiaDateValue } from "@/lib/utils/india-time";
 
 export const leaveRequestSchema = z
   .object({
     studentId: z.string().trim().min(1).max(200).optional(),
-    startsOn: z.coerce.date(),
-    endsOn: z.coerce.date(),
+    startsOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
+    endsOn: z.preprocess(parseIndiaDateValue, z.coerce.date()),
     reason: z.string().trim().min(3).max(500),
   })
   .superRefine((input, context) => {

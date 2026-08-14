@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateTimeValue, parseIndiaDateValue } from "@/lib/utils/india-time";
 
 export const examStatusValues = [
   "draft",
@@ -29,8 +30,8 @@ export const examSchema = z.object({
   examSchemeId: z.string().trim().min(1).optional(),
   name: z.string().trim().min(2).max(120),
   maxMarks: z.coerce.number().int().positive().max(100000),
-  startsOn: z.coerce.date().optional(),
-  endsOn: z.coerce.date().optional(),
+  startsOn: z.preprocess(parseIndiaDateValue, z.coerce.date().optional()),
+  endsOn: z.preprocess(parseIndiaDateValue, z.coerce.date().optional()),
 }).superRefine((input, context) => {
   if (input.startsOn && input.endsOn && input.endsOn < input.startsOn) {
     context.addIssue({ code: "custom", message: "Exam end date must be on or after the start date.", path: ["endsOn"] });
@@ -43,8 +44,8 @@ export const examScheduleSchema = z.object({
   examId: z.string().min(1),
   subjectId: z.string().min(1),
   classId: z.string().min(1),
-  startsAt: z.coerce.date(),
-  endsAt: z.coerce.date(),
+  startsAt: z.preprocess(parseIndiaDateTimeValue, z.coerce.date()),
+  endsAt: z.preprocess(parseIndiaDateTimeValue, z.coerce.date()),
   roomId: z.string().trim().max(80).optional(),
 }).superRefine((input, context) => {
   if (input.endsAt <= input.startsAt) {

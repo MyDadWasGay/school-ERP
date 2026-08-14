@@ -19,6 +19,7 @@ import { normalizePagination } from "@/lib/utils/pagination";
 import type { CurrentUser } from "@/lib/auth/types";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { createId } from "@/lib/utils/ids";
+import { normalizeIndiaCalendarDate } from "@/lib/utils/india-time";
 import type {
   CertificateIssueInput,
   EnrollmentTransferInput,
@@ -42,11 +43,30 @@ function hasCampusScope(
   user: CurrentUser,
   campusId: string | null | undefined,
 ) {
+  if (hasPermission(user, "organizations:update")) return true;
   if (!campusId) return true;
   const campusIds =
     user.campusIds ??
     [user.campusId].filter((value): value is string => Boolean(value));
   return campusIds.length === 0 || campusIds.includes(campusId);
+}
+
+function campusCondition(user: CurrentUser, column: Parameters<typeof eq>[0]) {
+  if (hasPermission(user, "organizations:update")) return undefined;
+  if (user.role === "student" || user.role === "parent") return undefined;
+  if (user.campusIds?.length) return inArray(column, user.campusIds);
+  if (user.campusId) return eq(column, user.campusId);
+  return eq(column, "__no_campus__");
+}
+
+function normalizeGuardianEmail(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized || null;
+}
+
+function normalizeGuardianPhone(value: string | null | undefined) {
+  const normalized = value?.replace(/\D/g, "");
+  return normalized || null;
 }
 
 export async function getReadableStudent(
@@ -136,6 +156,7 @@ export async function getStudentFormOptions(
         and(
           eq(academicYears.organizationId, user.organizationId),
           eq(academicYears.status, "active"),
+          eq(academicYears.isActive, true),
           academicYearScope,
         ),
       )
@@ -221,7 +242,7 @@ export async function resolvePermittedStudentIds(user: CurrentUser) {
           and(
             eq(enrollments.organizationId, user.organizationId),
             eq(enrollments.status, "active"),
-            user.campusId ? eq(enrollments.campusId, user.campusId) : undefined,
+            campusCondition(user, enrollments.campusId),
             enrollmentScope,
           ),
         );
@@ -233,7 +254,7 @@ export async function resolvePermittedStudentIds(user: CurrentUser) {
 
 export async function listStudentsPage(
   user: CurrentUser,
-  input?: { search?: string; page?: number; pageSize?: number },
+  input?: { search?: string; page?: number; pageSize?: number; activeOnly?: boolean },
 ) {
   const pagination = normalizePagination(input);
   const search = input?.search?.trim();
@@ -258,8 +279,9 @@ export async function listStudentsPage(
   }
   const where = and(
     eq(students.organizationId, user.organizationId),
-    user.campusId ? eq(students.campusId, user.campusId) : undefined,
+    campusCondition(user, students.campusId),
     permittedIds ? inArray(students.id, permittedIds) : undefined,
+    input?.activeOnly ? eq(students.status, "active") : undefined,
     searchCondition,
   );
   const [rows, totalRows] = await Promise.all([
@@ -289,8 +311,8 @@ export async function listStudentsPage(
   };
 }
 
-export async function listStudents(user: CurrentUser, search?: string) {
-  return (await listStudentsPage(user, { search, pageSize: 100 })).rows;
+export async function listStudents(user: CurrentUser, search?: string, activeOnly = false) {
+  return (await listStudentsPage(user, { search, pageSize: 100, activeOnly })).rows;
 }
 
 export async function listStudentsForExport(
@@ -325,7 +347,7 @@ export async function createStudentRecord(
   if (
     !campus ||
     (!hasPermission(user, "organizations:update") &&
-      !(user.campusIds ?? [user.campusId]).includes(campus.id))
+      !(user.campusIds?.length ? user.campusIds : user.campusId ? [user.campusId] : []).includes(campus.id))
   ) {
     throw new AppError(
       "TENANT_SCOPE_ERROR",
@@ -352,7 +374,8 @@ export async function createStudentRecord(
           eq(academicYears.id, input.academicYearId),
           eq(academicYears.organizationId, user.organizationId),
           eq(academicYears.campusId, input.campusId),
-          eq(academicYears.status, "active"),
+      eq(academicYears.status, "active"),
+      eq(academicYears.isActive, true),
         ),
       }),
       getDb().query.classes.findFirst({
@@ -386,6 +409,7 @@ export async function createStudentRecord(
         and(
           eq(enrollments.organizationId, user.organizationId),
           eq(enrollments.academicYearId, input.academicYearId),
+          eq(enrollments.campusId, input.campusId),
           eq(enrollments.sectionId, input.sectionId),
           eq(enrollments.status, "active"),
         ),
@@ -402,6 +426,7 @@ export async function createStudentRecord(
         where: and(
           eq(enrollments.organizationId, user.organizationId),
           eq(enrollments.academicYearId, input.academicYearId),
+          eq(enrollments.campusId, input.campusId),
           eq(enrollments.classId, input.classId),
           eq(enrollments.sectionId, input.sectionId),
           eq(enrollments.rollNumber, input.rollNumber),
@@ -442,25 +467,25 @@ export async function createStudentRecord(
         classId: input.classId,
         sectionId: input.sectionId,
         rollNumber: input.rollNumber,
-        startsOn: new Date(),
+        startsOn: normalizeIndiaCalendarDate(new Date()),
         createdBy: user.id,
         updatedBy: user.id,
       });
     }
     if (input.guardian) {
-      const guardianMatch = input.guardian.email
-        ? eq(guardians.email, input.guardian.email)
-        : input.guardian.phone
-          ? eq(guardians.phone, input.guardian.phone)
-          : undefined;
-      const existingGuardian = guardianMatch
-        ? await tx.query.guardians.findFirst({
-            where: and(
-              eq(guardians.organizationId, user.organizationId),
-              guardianMatch,
-            ),
-          })
-        : undefined;
+      const guardianEmail = normalizeGuardianEmail(input.guardian.email);
+      const guardianPhone = normalizeGuardianPhone(input.guardian.phone);
+      const [guardianByEmail, guardianByPhone] = await Promise.all([
+        guardianEmail ? tx.query.guardians.findFirst({ where: and(eq(guardians.organizationId, user.organizationId), eq(guardians.emailNormalized, guardianEmail)) }) : undefined,
+        guardianPhone ? tx.query.guardians.findFirst({ where: and(eq(guardians.organizationId, user.organizationId), eq(guardians.phoneNormalized, guardianPhone)) }) : undefined,
+      ]);
+      if (guardianByEmail && guardianByPhone && guardianByEmail.id !== guardianByPhone.id) {
+        throw new AppError("CONFLICT", "The guardian email and phone belong to different existing guardians.", 409);
+      }
+      const existingGuardian = guardianByEmail ?? guardianByPhone;
+      if (existingGuardian && existingGuardian.campusId && existingGuardian.campusId !== input.campusId && !hasPermission(user, "organizations:update")) {
+        throw new AppError("FORBIDDEN", "Guardian is outside the selected campus.", 403);
+      }
       const guardian =
         existingGuardian ??
         (
@@ -472,12 +497,15 @@ export async function createStudentRecord(
               firstName: input.guardian.firstName,
               lastName: input.guardian.lastName,
               email: input.guardian.email || undefined,
+              emailNormalized: guardianEmail || undefined,
               phone: input.guardian.phone || undefined,
+              phoneNormalized: guardianPhone || undefined,
               createdBy: user.id,
               updatedBy: user.id,
             })
             .returning()
         )[0];
+      if (!guardian) throw new AppError("DATABASE_ERROR", "Guardian could not be saved.", 500);
       await tx.insert(studentGuardianLinks).values({
         organizationId: user.organizationId,
         campusId: input.campusId,
@@ -637,22 +665,29 @@ export async function createGuardianAndLink(
       : undefined;
     if (input.guardianId && !guardian)
       throw new AppError("NOT_FOUND", "Guardian not found.", 404);
-    if (!guardian && (input.email || input.phone)) {
-      guardian = await tx.query.guardians.findFirst({
-        where: and(
-          eq(guardians.organizationId, user.organizationId),
-          input.email
-            ? eq(guardians.email, input.email)
-            : eq(guardians.phone, input.phone ?? ""),
-        ),
-      });
+    const guardianEmail = normalizeGuardianEmail(input.email);
+    const guardianPhone = normalizeGuardianPhone(input.phone);
+    const [guardianByEmail, guardianByPhone] = await Promise.all([
+      guardianEmail ? tx.query.guardians.findFirst({ where: and(eq(guardians.organizationId, user.organizationId), eq(guardians.emailNormalized, guardianEmail)) }) : undefined,
+      guardianPhone ? tx.query.guardians.findFirst({ where: and(eq(guardians.organizationId, user.organizationId), eq(guardians.phoneNormalized, guardianPhone)) }) : undefined,
+    ]);
+    if (guardianByEmail && guardianByPhone && guardianByEmail.id !== guardianByPhone.id) {
+      throw new AppError("CONFLICT", "The guardian email and phone belong to different existing guardians.", 409);
     }
+    const contactGuardian = guardianByEmail ?? guardianByPhone;
+    if (guardian && contactGuardian && guardian.id !== contactGuardian.id) {
+      throw new AppError("CONFLICT", "The supplied guardian contacts belong to a different existing guardian.", 409);
+    }
+    guardian = guardian ?? contactGuardian;
     if (guardian && !hasCampusScope(user, guardian.campusId)) {
       throw new AppError(
         "FORBIDDEN",
         "Guardian is outside your campus scope.",
         403,
       );
+    }
+    if (guardian && guardian.campusId && student.campusId && guardian.campusId !== student.campusId && !hasPermission(user, "organizations:update")) {
+      throw new AppError("FORBIDDEN", "Guardian is outside the student campus.", 403);
     }
     if (guardian) {
       const [updated] = await tx
@@ -661,7 +696,9 @@ export async function createGuardianAndLink(
           firstName: input.firstName,
           lastName: input.lastName,
           email: input.email || null,
+          emailNormalized: guardianEmail,
           phone: input.phone || null,
+          phoneNormalized: guardianPhone,
           occupation: input.occupation || null,
           addressJson: input.address || null,
           custodyNotes: input.custodyNotes || null,
@@ -685,7 +722,9 @@ export async function createGuardianAndLink(
           firstName: input.firstName,
           lastName: input.lastName,
           email: input.email || undefined,
+          emailNormalized: guardianEmail || undefined,
           phone: input.phone || undefined,
+          phoneNormalized: guardianPhone || undefined,
           occupation: input.occupation || undefined,
           addressJson: input.address || undefined,
           custodyNotes: input.custodyNotes || undefined,
@@ -754,6 +793,18 @@ export async function createGuardianAndLink(
             })
             .returning()
         )[0];
+    if (!link) throw new AppError("DATABASE_ERROR", "Guardian relationship could not be saved.", 500);
+    const primaryLink = await tx.query.studentGuardianLinks.findFirst({ where: and(
+      eq(studentGuardianLinks.organizationId, user.organizationId),
+      eq(studentGuardianLinks.studentId, student.id),
+      eq(studentGuardianLinks.isPrimary, true),
+    ) });
+    if (!primaryLink) {
+      await tx.update(studentGuardianLinks).set({ isPrimary: true, updatedAt: new Date(), updatedBy: user.id }).where(and(
+        eq(studentGuardianLinks.id, link.id),
+        eq(studentGuardianLinks.organizationId, user.organizationId),
+      ));
+    }
     await tx.insert(studentTimelineEvents).values({
       organizationId: user.organizationId,
       campusId: student.campusId,
@@ -786,29 +837,9 @@ export async function updateGuardian(
   });
   if (!link)
     throw new AppError("NOT_FOUND", "Guardian relationship not found.", 404);
-  const [guardian] = await getDb()
-    .update(guardians)
-    .set({
-      firstName: input.firstName,
-      lastName: input.lastName,
-      email: input.email || null,
-      phone: input.phone || null,
-      occupation: input.occupation || null,
-      addressJson: input.address || null,
-      custodyNotes: input.custodyNotes || null,
-      updatedAt: new Date(),
-      updatedBy: user.id,
-    })
-    .where(
-      and(
-        eq(guardians.id, link.guardianId),
-        eq(guardians.organizationId, user.organizationId),
-      ),
-    )
-    .returning();
   return createGuardianAndLink(user, {
     ...input,
-    guardianId: guardian?.id ?? link.guardianId,
+    guardianId: link.guardianId,
   });
 }
 
@@ -835,7 +866,12 @@ export async function unlinkGuardian(
           eq(studentGuardianLinks.organizationId, user.organizationId),
         ),
       );
-    if (link.isPrimary) {
+    const primary = await tx.query.studentGuardianLinks.findFirst({ where: and(
+      eq(studentGuardianLinks.organizationId, user.organizationId),
+      eq(studentGuardianLinks.studentId, student.id),
+      eq(studentGuardianLinks.isPrimary, true),
+    ) });
+    if (!primary) {
       const [replacement] = await tx
         .select()
         .from(studentGuardianLinks)
@@ -889,6 +925,7 @@ export async function transferStudentEnrollment(
           eq(academicYears.organizationId, user.organizationId),
           eq(academicYears.campusId, campusId),
           eq(academicYears.status, "active"),
+          eq(academicYears.isActive, true),
         ),
       }),
       tx.query.classes.findFirst({
@@ -949,6 +986,7 @@ export async function transferStudentEnrollment(
         and(
           eq(enrollments.organizationId, user.organizationId),
           eq(enrollments.academicYearId, input.academicYearId),
+          eq(enrollments.campusId, campusId),
           eq(enrollments.classId, input.classId),
           eq(enrollments.sectionId, input.sectionId),
           eq(enrollments.status, "active"),
@@ -961,6 +999,7 @@ export async function transferStudentEnrollment(
         where: and(
           eq(enrollments.organizationId, user.organizationId),
           eq(enrollments.academicYearId, input.academicYearId),
+          eq(enrollments.campusId, campusId),
           eq(enrollments.classId, input.classId),
           eq(enrollments.sectionId, input.sectionId),
           eq(enrollments.rollNumber, input.rollNumber),

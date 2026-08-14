@@ -10,6 +10,7 @@ import { FieldError } from "@/components/forms/field-error";
 import { EntityCombobox } from "@/components/forms/entity-combobox";
 import { markAttendanceAction } from "../actions/attendance.actions";
 import { attendanceSchema, type AttendanceInput } from "../schemas/attendance.schema";
+import { indiaTodayKey, parseIndiaDateInput } from "@/lib/utils/india-time";
 
 export function AttendanceMarkForm({ students }: { students: Array<{ id: string; name: string; label?: string; detail?: string }> }) {
   const [message, setMessage] = useState("");
@@ -30,7 +31,7 @@ export function AttendanceMarkForm({ students }: { students: Array<{ id: string;
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       <EntityCombobox label="Student" value={form.watch("studentId")} onChange={(value) => form.setValue("studentId", value, { shouldValidate: true })} endpoint="/api/v1/attendance/students/options" initialOptions={students.map((student) => ({ id: student.id, label: student.label ?? student.name, detail: student.detail }))} required error={form.formState.errors.studentId?.message} description="Search by student name or admission number." />
       <Field label="Date" error={form.formState.errors.attendanceDate?.message}>
-        <Input type="date" defaultValue={new Date().toISOString().slice(0, 10)} {...form.register("attendanceDate", { setValueAs: (value) => new Date(`${value}T00:00:00`) })} />
+        <Input type="date" defaultValue={indiaTodayKey()} {...form.register("attendanceDate", { setValueAs: (value) => value ? parseIndiaDateInput(value) : undefined })} />
       </Field>
       <Field label="Period" error={form.formState.errors.periodKey?.message}><Input {...form.register("periodKey")} /></Field>
       <Field label="Status" error={form.formState.errors.state?.message}>

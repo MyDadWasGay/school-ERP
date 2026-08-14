@@ -16,6 +16,7 @@ import { AppError } from "@/lib/errors/app-error";
 import { databaseErrorIncludes } from "@/lib/errors/database-error";
 import { decryptSecret, encryptSecret } from "@/lib/security/secret-box";
 import { createId } from "@/lib/utils/ids";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
 import type { CurrentUser } from "@/lib/auth/types";
 import type {
   ApiKeyCreateInput,
@@ -100,7 +101,7 @@ export async function listIntegrationConfigs(user: CurrentUser) {
     .orderBy(integrationConfigs.provider);
   return rows.map((row) => ({
     ...row,
-    updatedAt: row.updatedAt.toLocaleString(),
+    updatedAt: formatIndiaDateTime(row.updatedAt),
   }));
 }
 
@@ -186,7 +187,7 @@ export async function listIntegrationLogs(user: CurrentUser) {
     .limit(100);
   return rows.map((row) => ({
     ...row,
-    createdAt: row.createdAt.toLocaleString(),
+    createdAt: formatIndiaDateTime(row.createdAt),
   }));
 }
 
@@ -241,8 +242,8 @@ export async function listApiKeys(user: CurrentUser) {
     .orderBy(desc(apiKeys.createdAt));
   return rows.map((row) => ({
     ...row,
-    createdAt: row.createdAt.toLocaleString(),
-    updatedAt: row.updatedAt.toLocaleString(),
+    createdAt: formatIndiaDateTime(row.createdAt),
+    updatedAt: formatIndiaDateTime(row.updatedAt),
   }));
 }
 
@@ -287,7 +288,7 @@ export async function listWebhookEvents(user: CurrentUser) {
     .limit(100);
   return rows.map((row) => ({
     ...row,
-    createdAt: row.createdAt.toLocaleString(),
+    createdAt: formatIndiaDateTime(row.createdAt),
   }));
 }
 

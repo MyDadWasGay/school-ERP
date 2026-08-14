@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { scheduleExamAction } from "../actions/exam.actions";
+import { parseIndiaDateTimeInput } from "@/lib/utils/india-time";
 
 type Option = { id: string; name: string };
 
@@ -19,8 +20,8 @@ export function ExamScheduleForm({ exams, subjects, classes }: { exams: Option[]
       examId: String(data.get("examId") ?? ""),
       subjectId: String(data.get("subjectId") ?? ""),
       classId: String(data.get("classId") ?? ""),
-      startsAt: startsAt ? new Date(startsAt) : undefined,
-      endsAt: endsAt ? new Date(endsAt) : undefined,
+      startsAt: startsAt ? parseIndiaDateTimeInput(startsAt) : undefined,
+      endsAt: endsAt ? parseIndiaDateTimeInput(endsAt) : undefined,
       roomId: String(data.get("roomId") ?? "") || undefined,
     });
     setMessage(result.ok ? result.message ?? "Schedule saved." : result.error);

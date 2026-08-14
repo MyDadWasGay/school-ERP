@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { employees, payrollPayslips, payrollRuns, users } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
+import { hasPermission } from "@/lib/rbac/permissions";
 import { createId } from "@/lib/utils/ids";
 import type { EmployeeInput, PayrollRunInput } from "../schemas/hr.schema";
 import { calculatePayrollAmounts } from "./payroll-calculation";
@@ -10,7 +11,8 @@ export { calculatePayrollAmounts } from "./payroll-calculation";
 
 function campusScope(user: CurrentUser, column: AnyColumn) {
   if (user.campusIds && user.campusIds.length > 0) return inArray(column, user.campusIds);
-  return user.campusId ? eq(column, user.campusId) : undefined;
+  if (hasPermission(user, "organizations:update")) return undefined;
+  return user.campusId ? eq(column, user.campusId) : eq(column, "__no_campus__");
 }
 
 function money(minor: number) {
@@ -40,6 +42,8 @@ export async function listEmployees(user: CurrentUser, search?: string) {
 }
 
 export async function createEmployee(user: CurrentUser, input: EmployeeInput) {
+  if (!user.campusId && !hasPermission(user, "organizations:update"))
+    throw new AppError("FORBIDDEN", "Select an active campus before creating an employee.", 403);
   if (input.linkedUserId) {
     const linkedUser = await getDb().query.users.findFirst({ where: and(
       eq(users.id, input.linkedUserId),

@@ -14,8 +14,10 @@ import {
 } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
+import { hasPermission } from "@/lib/rbac/permissions";
 import { createId } from "@/lib/utils/ids";
 import { normalizePagination } from "@/lib/utils/pagination";
+import { formatIndiaDate } from "@/lib/utils/india-time";
 import type {
   ApplicationInput,
   ApplicationReviewInput,
@@ -37,9 +39,10 @@ export type AdmissionOptions = {
 };
 
 function campusCondition(user: CurrentUser, campusId: AnyColumn, allAccessibleCampuses = false) {
+  if (hasPermission(user, "organizations:update") && allAccessibleCampuses) return undefined;
   if (allAccessibleCampuses && user.campusIds?.length) return inArray(campusId, user.campusIds);
   if (user.campusId) return eq(campusId, user.campusId);
-  return user.campusIds?.length ? inArray(campusId, user.campusIds) : undefined;
+  return user.campusIds?.length ? inArray(campusId, user.campusIds) : hasPermission(user, "organizations:update") ? undefined : eq(campusId, "__no_campus__");
 }
 
 async function assertCampus(user: CurrentUser, campusId: string) {
@@ -48,7 +51,9 @@ async function assertCampus(user: CurrentUser, campusId: string) {
     eq(campuses.organizationId, user.organizationId),
     eq(campuses.status, "active"),
   ) });
-  if (!campus || (user.campusIds?.length ? !user.campusIds.includes(campus.id) : false)) {
+  const accessible = hasPermission(user, "organizations:update")
+    || (user.campusIds?.length ? user.campusIds.includes(campus?.id ?? "") : user.campusId === campus?.id);
+  if (!campus || !accessible) {
     throw new AppError("TENANT_SCOPE_ERROR", "Campus is outside your assigned scope.", 403);
   }
   return campus;
@@ -64,6 +69,7 @@ export async function getAdmissionOptions(user: CurrentUser, options: { allAcces
     getDb().select({ id: academicYears.id, name: academicYears.name, campusId: academicYears.campusId }).from(academicYears).where(and(
       eq(academicYears.organizationId, user.organizationId),
       eq(academicYears.status, "active"),
+      eq(academicYears.isActive, true),
       campusCondition(user, academicYears.campusId, options.allAccessibleCampuses),
     )).orderBy(desc(academicYears.startsOn)),
     getDb().select({ id: classes.id, name: classes.name, campusId: classes.campusId }).from(classes).where(and(
@@ -96,8 +102,10 @@ export async function listEnquiriesPage(
     campusCondition(user, admissionsEnquiries.campusId),
     search ? or(
       like(admissionsEnquiries.applicantName, `%${search}%`),
+      like(admissionsEnquiries.guardianName, `%${search}%`),
       like(admissionsEnquiries.guardianEmail, `%${search}%`),
       like(admissionsEnquiries.guardianPhone, `%${search}%`),
+      like(admissionsEnquiries.notes, `%${search}%`),
     ) : undefined,
   );
   const [rows, totals] = await Promise.all([
@@ -120,13 +128,14 @@ export async function listEnquiriesPage(
       source: row.source,
       campaign: row.campaign,
       guardianName: row.guardianName,
+      guardianEmail: row.guardianEmail,
       guardianPhone: row.guardianPhone,
       notes: row.notes,
       nextFollowUpAt: row.nextFollowUpAt,
       lostReason: row.lostReason,
       openFollowUp: firstFollowUp.get(row.id),
       name: row.applicantName,
-      detail: `${row.source ?? "Direct"}${row.nextFollowUpAt ? ` - follow-up ${row.nextFollowUpAt.toLocaleDateString()}` : ""}`,
+      detail: `${row.source ?? "Direct"}${row.nextFollowUpAt ? ` - follow-up ${formatIndiaDate(row.nextFollowUpAt)}` : ""}`,
       status: row.status,
     })),
     pageInfo: { page: pagination.page, pageSize: pagination.pageSize, total, pageCount: Math.ceil(total / pagination.pageSize) },
@@ -200,6 +209,7 @@ export async function createApplication(user: CurrentUser, input: ApplicationInp
       eq(academicYears.organizationId, user.organizationId),
       eq(academicYears.campusId, input.campusId),
       eq(academicYears.status, "active"),
+      eq(academicYears.isActive, true),
     ) }),
     getDb().query.classes.findFirst({ where: and(
       eq(classes.id, input.classId),
@@ -219,6 +229,7 @@ export async function createApplication(user: CurrentUser, input: ApplicationInp
         eq(admissionsEnquiries.id, input.sourceEnquiryId),
         eq(admissionsEnquiries.organizationId, user.organizationId),
         eq(admissionsEnquiries.campusId, input.campusId),
+        or(eq(admissionsEnquiries.status, "new"), eq(admissionsEnquiries.status, "qualified")),
       ) })
       : undefined,
   ]);
@@ -243,14 +254,16 @@ export async function createApplication(user: CurrentUser, input: ApplicationInp
       updatedBy: user.id,
     }).returning();
     if (sourceEnquiry) {
-      await tx.update(admissionsEnquiries).set({
+      const converted = await tx.update(admissionsEnquiries).set({
         status: "converted",
         updatedAt: new Date(),
         updatedBy: user.id,
       }).where(and(
         eq(admissionsEnquiries.id, sourceEnquiry.id),
         eq(admissionsEnquiries.organizationId, user.organizationId),
-      ));
+        or(eq(admissionsEnquiries.status, "new"), eq(admissionsEnquiries.status, "qualified")),
+      )).returning();
+      if (!converted.length) throw new AppError("CONFLICT", "This enquiry has already been converted.", 409);
     }
     return row;
   });
@@ -274,7 +287,9 @@ export async function reviewApplication(user: CurrentUser, input: ApplicationRev
   }).where(and(
     eq(applications.id, application.id),
     eq(applications.organizationId, user.organizationId),
+    eq(applications.status, application.status),
   )).returning();
+  if (!updated) throw new AppError("CONFLICT", "The application changed while it was being reviewed. Refresh and try again.", 409);
   return { before: application, updated };
 }
 
@@ -308,11 +323,20 @@ export async function updateEnquiry(user: CurrentUser, input: EnquiryUpdateInput
     status: input.status,
     source: input.source,
     campaign: input.campaign || null,
+    guardianName: input.guardianName || null,
+    guardianEmail: input.guardianEmail || null,
+    guardianPhone: input.guardianPhone || null,
+    notes: input.notes || null,
     lostReason: input.status === "lost" ? input.lostReason || null : null,
     nextFollowUpAt: input.nextFollowUpAt,
     updatedAt: new Date(),
     updatedBy: user.id,
-  }).where(and(eq(admissionsEnquiries.id, existing.id), eq(admissionsEnquiries.organizationId, user.organizationId))).returning();
+  }).where(and(
+    eq(admissionsEnquiries.id, existing.id),
+    eq(admissionsEnquiries.organizationId, user.organizationId),
+    eq(admissionsEnquiries.status, existing.status),
+  )).returning();
+  if (!updated) throw new AppError("CONFLICT", "The enquiry changed while it was being updated. Refresh and try again.", 409);
   return { before: existing, updated };
 }
 
@@ -323,6 +347,7 @@ export async function createEnquiryFollowUp(user: CurrentUser, input: FollowUpIn
     campusCondition(user, admissionsEnquiries.campusId),
   ) });
   if (!enquiry) throw new AppError("NOT_FOUND", "Enquiry not found.", 404);
+  if (enquiry.status === "lost" || enquiry.status === "converted") throw new AppError("CONFLICT", "Closed enquiries cannot receive new follow-ups.", 409);
   if (input.assignedTo) {
     const assignedUser = await getDb().query.users.findFirst({ where: and(eq(users.id, input.assignedTo), eq(users.organizationId, user.organizationId), eq(users.status, "active")) });
     if (!assignedUser) throw new AppError("VALIDATION_ERROR", "Assigned user is invalid.", 422);
@@ -338,12 +363,17 @@ export async function createEnquiryFollowUp(user: CurrentUser, input: FollowUpIn
       createdBy: user.id,
       updatedBy: user.id,
     }).returning();
-    await tx.update(admissionsEnquiries).set({
+    const [updatedEnquiry] = await tx.update(admissionsEnquiries).set({
       status: enquiry.status === "new" ? "contacted" : enquiry.status,
       nextFollowUpAt: input.dueAt,
       updatedAt: new Date(),
       updatedBy: user.id,
-    }).where(and(eq(admissionsEnquiries.id, enquiry.id), eq(admissionsEnquiries.organizationId, user.organizationId)));
+    }).where(and(
+      eq(admissionsEnquiries.id, enquiry.id),
+      eq(admissionsEnquiries.organizationId, user.organizationId),
+      eq(admissionsEnquiries.status, enquiry.status),
+    )).returning();
+    if (!updatedEnquiry) throw new AppError("CONFLICT", "The enquiry changed while the follow-up was being scheduled.", 409);
     return followUp;
   });
 }
@@ -401,7 +431,8 @@ export type AdmissionSeatMatrixFilters = {
 
 function requestedSeatCampusCondition(user: CurrentUser, campusId: AnyColumn, requestedCampusId?: string) {
   if (requestedCampusId) {
-    const accessible = user.campusIds?.length ? user.campusIds.includes(requestedCampusId) : !user.campusId || user.campusId === requestedCampusId;
+    const accessible = hasPermission(user, "organizations:update")
+      || (user.campusIds?.length ? user.campusIds.includes(requestedCampusId) : user.campusId === requestedCampusId);
     if (!accessible) throw new AppError("TENANT_SCOPE_ERROR", "Campus is outside your assigned scope.", 403);
     return eq(campusId, requestedCampusId);
   }
@@ -442,5 +473,8 @@ export async function getAdmissionSeatMatrix(user: CurrentUser, filters: Admissi
     ))
     .groupBy(classes.id, classes.name, sections.id, sections.name, sections.campusId, sections.capacity)
     .orderBy(asc(classes.name), asc(sections.name));
-  return rows.map((row) => ({ ...row, occupied: Number(row.occupied), available: Math.max(0, row.capacity - Number(row.occupied)) }));
+  return rows.map((row) => {
+    const occupied = Number(row.occupied);
+    return { ...row, occupied, available: Math.max(0, row.capacity - occupied), overbooked: occupied > row.capacity };
+  });
 }

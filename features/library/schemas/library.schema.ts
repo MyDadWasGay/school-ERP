@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { parseIndiaDateValue } from "@/lib/utils/india-time";
 
-const dateInput = z.coerce.date().refine((value) => !Number.isNaN(value.getTime()), "Enter a valid date.");
+const dateInput = z.preprocess(parseIndiaDateValue, z.coerce.date()).refine((value) => !Number.isNaN(value.getTime()), "Enter a valid date.");
 
 export const libraryItemSchema = z.object({
   title: z.string().trim().min(2).max(160),

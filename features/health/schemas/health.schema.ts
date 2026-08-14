@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseIndiaDateTimeValue } from "@/lib/utils/india-time";
 
 export const healthProfileSchema = z.object({
   studentId: z.string().min(1),
@@ -8,7 +9,7 @@ export const healthProfileSchema = z.object({
 
 export const clinicVisitSchema = z.object({
   studentId: z.string().min(1),
-  visitedAt: z.coerce.date(),
+  visitedAt: z.preprocess(parseIndiaDateTimeValue, z.coerce.date()),
   summary: z.string().trim().min(2).max(4_000),
 });
 

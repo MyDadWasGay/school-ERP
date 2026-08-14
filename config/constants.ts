@@ -1,4 +1,6 @@
 export const APP_NAME = "School ERP";
+export const INDIA_TIME_ZONE = "Asia/Kolkata";
+export const INDIA_LOCALE = "en-IN";
 export const PLATFORM_ADMIN_ROLE = "PLATFORM_ADMIN" as const;
 export const SESSION_COOKIE = "school_erp_session";
 export const ACTIVE_CAMPUS_COOKIE = "school_erp_active_campus";

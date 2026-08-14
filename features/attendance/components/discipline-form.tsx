@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createDisciplineIncidentAction, updateDisciplineStatusAction } from "../actions/attendance.actions";
+import { parseIndiaDateTimeInput } from "@/lib/utils/india-time";
 
 export function DisciplineForm({ students }: { students: Array<{ id: string; name: string }> }) {
   const [message, setMessage] = useState("");
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const result = await createDisciplineIncidentAction({ studentId: String(data.get("studentId") ?? ""), severity: String(data.get("severity") ?? "medium"), title: String(data.get("title") ?? ""), details: String(data.get("details") ?? "") || undefined, confidential: data.get("confidential") === "on", occurredAt: new Date(String(data.get("occurredAt") ?? "")) });
+    const result = await createDisciplineIncidentAction({ studentId: String(data.get("studentId") ?? ""), severity: String(data.get("severity") ?? "medium"), title: String(data.get("title") ?? ""), details: String(data.get("details") ?? "") || undefined, confidential: data.get("confidential") === "on", occurredAt: parseIndiaDateTimeInput(String(data.get("occurredAt") ?? "")) });
     setMessage(result.ok ? result.message ?? "Incident recorded." : result.error);
     if (result.ok) event.currentTarget.reset();
   }
