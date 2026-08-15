@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +27,7 @@ import 'auth/auth_gateway.dart';
 import 'config/app_config.dart';
 import 'storage/campus_store.dart';
 import 'storage/attendance_draft_store.dart';
+import 'notifications/push_notification_service.dart';
 
 final firebaseAuthProvider = Provider<FirebaseAuth>(
   (ref) => FirebaseAuth.instance,
@@ -55,6 +58,12 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
+final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+  final service = PushNotificationService(ref.watch(apiClientProvider));
+  ref.onDispose(service.dispose);
+  return service;
+});
+
 final sessionProvider = AsyncNotifierProvider<SessionController, CurrentUser>(
   SessionController.new,
 );
@@ -74,6 +83,7 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       );
       ref.read(currentCampusIdProvider.notifier).state = me.campus?.id;
       if (me.campus != null) await store.write(me.campus!.id);
+      unawaited(ref.read(pushNotificationServiceProvider).registerCurrentDevice());
       return me;
     } on ApiError catch (error) {
       if (storedCampus == null || error.kind != ApiErrorKind.forbidden) rethrow;
@@ -82,6 +92,7 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       final me = await api.getMe(omitCampus: true);
       if (me.campus != null) await store.write(me.campus!.id);
       ref.read(currentCampusIdProvider.notifier).state = me.campus?.id;
+      unawaited(ref.read(pushNotificationServiceProvider).registerCurrentDevice());
       return me;
     }
   }
@@ -101,6 +112,7 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       ref.invalidate(studentOverviewProvider);
       ref.invalidate(noticesProvider);
       ref.invalidate(messagesProvider);
+      ref.invalidate(messageRecipientsProvider);
       ref.invalidate(academicRecordsProvider);
       ref.invalidate(leaveRequestsProvider);
       ref.invalidate(studentOptionsProvider);
@@ -183,6 +195,7 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       for (final kind in _academicSetupKinds) {
         ref.invalidate(academicSetupProvider(kind));
       }
+      unawaited(ref.read(pushNotificationServiceProvider).registerCurrentDevice());
       return me;
     });
     if (state.hasError) {
@@ -247,6 +260,13 @@ final messagesProvider = FutureProvider<List<CommunicationMessageRow>>((
   if (!me.can('communication:read')) return const [];
   return ref.watch(apiClientProvider).getMessages();
 });
+
+final messageRecipientsProvider =
+    FutureProvider<List<CommunicationRecipient>>((ref) async {
+      final me = await ref.watch(sessionProvider.future);
+      if (!me.can('communication:read')) return const [];
+      return ref.watch(apiClientProvider).getMessageRecipients();
+    });
 
 final academicRecordsProvider =
     FutureProvider.family<List<AcademicRecord>, String>((ref, kind) async {
@@ -912,12 +932,16 @@ class StudentOverview {
   const StudentOverview({
     this.attendance,
     this.invoices,
+    this.payments,
     this.results,
+    this.reportCards,
     this.documents,
   });
   final PagedRows<AttendanceRow>? attendance;
   final PagedRows<InvoiceRow>? invoices;
+  final PagedRows<StudentPaymentRow>? payments;
   final PagedRows<ResultRow>? results;
+  final List<StudentReportCardRow>? reportCards;
   final List<DocumentRow>? documents;
 }
 
@@ -933,6 +957,14 @@ final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
       Future.value(null),
     if (me.can('fees:read')) api.getInvoices(studentId) else Future.value(null),
     if (me.can('exams:read')) api.getResults(studentId) else Future.value(null),
+    if (me.can('fees:read'))
+      api.getStudentPayments(studentId)
+    else
+      Future.value(null),
+    if (me.can('exams:read'))
+      api.getStudentReportCards(studentId)
+    else
+      Future.value(null),
     if (me.can('documents:read'))
       api.getDocuments(studentId)
     else
@@ -942,7 +974,9 @@ final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
     attendance: values[0] as PagedRows<AttendanceRow>?,
     invoices: values[1] as PagedRows<InvoiceRow>?,
     results: values[2] as PagedRows<ResultRow>?,
-    documents: values[3] as List<DocumentRow>?,
+    payments: values[3] as PagedRows<StudentPaymentRow>?,
+    reportCards: values[4] as List<StudentReportCardRow>?,
+    documents: values[5] as List<DocumentRow>?,
   );
 });
 

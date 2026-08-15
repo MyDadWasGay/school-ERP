@@ -5,7 +5,8 @@ import { leaveRequestSchema } from "../../../features/attendance/schemas/leave.s
 import { listNotificationsPage } from "../../../features/communication/services/communication.service";
 import { markNotificationRead } from "../../../features/communication/services/communication.service";
 import { listStudentPublishedResults } from "../../../features/exams/services/exam-workspace.service";
-import { listStudentInvoices } from "../../../features/finance/services/finance-workspace.service";
+import { listStudentReportCards } from "../../../features/exams/services/deep-feature.service";
+import { listStudentInvoices, listStudentPayments } from "../../../features/finance/services/finance-workspace.service";
 import { getStudentFormOptions, getStudentMedicalProfile, getStudentProfile, listStudents, listStudentsPage } from "../../../features/students/services/students.service";
 import { writeAuditLog } from "../../../lib/audit/audit-log";
 import {
@@ -19,6 +20,8 @@ import {
   markNotificationReadSchema,
   studentAttendanceSchema,
   studentInvoicesSchema,
+  studentPaymentsSchema,
+  studentReportCardsSchema,
   studentProfileSchema,
   studentResultsSchema,
 } from "../schemas/student-data.schemas";
@@ -190,6 +193,23 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get<{ Params: StudentParams; Querystring: PaginationQuery }>(
+    "/students/:studentId/payments",
+    { preHandler: authenticateApiRequest, schema: studentPaymentsSchema },
+    async (request) => {
+      const user = requireApiPermission(request, "fees:read");
+      const result = await listStudentPayments(
+        user,
+        request.params.studentId,
+        request.query,
+      );
+      return {
+        data: { studentId: request.params.studentId, ...result },
+        meta: { requestId: request.id },
+      };
+    },
+  );
+
+  app.get<{ Params: StudentParams; Querystring: PaginationQuery }>(
     "/students/:studentId/results",
     { preHandler: authenticateApiRequest, schema: studentResultsSchema },
     async (request) => {
@@ -201,6 +221,18 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
       );
       return {
         data: { studentId: request.params.studentId, ...result },
+        meta: { requestId: request.id },
+      };
+    },
+  );
+
+  app.get<{ Params: StudentParams }>(
+    "/students/:studentId/report-cards",
+    { preHandler: authenticateApiRequest, schema: studentReportCardsSchema },
+    async (request) => {
+      const user = requireApiPermission(request, "exams:read");
+      return {
+        data: await listStudentReportCards(user, request.params.studentId),
         meta: { requestId: request.id },
       };
     },

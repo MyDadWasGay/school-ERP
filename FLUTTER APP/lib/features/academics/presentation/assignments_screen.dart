@@ -27,6 +27,18 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
     if (created == true) ref.invalidate(academicRecordsProvider('assignments'));
   }
 
+  Future<void> _openAssignment(String id, CurrentUser user) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _AssignmentDetailSheet(assignmentId: id, user: user),
+    );
+    if (changed == true) {
+      ref.invalidate(academicRecordsProvider('assignments'));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final records = ref.watch(academicRecordsProvider('assignments'));
@@ -88,6 +100,9 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
                       child: Text(row.detail),
                     ),
                     trailing: ErpStatusChip(row.status),
+                    onTap: user == null
+                        ? null
+                        : () => _openAssignment(row.id, user),
                   ),
                 );
               },
@@ -104,6 +119,293 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
           : null,
     );
   }
+}
+
+class _AssignmentDetailSheet extends ConsumerStatefulWidget {
+  const _AssignmentDetailSheet({
+    required this.assignmentId,
+    required this.user,
+  });
+
+  final String assignmentId;
+  final CurrentUser user;
+
+  @override
+  ConsumerState<_AssignmentDetailSheet> createState() =>
+      _AssignmentDetailSheetState();
+}
+
+class _AssignmentDetailSheetState
+    extends ConsumerState<_AssignmentDetailSheet> {
+  late Future<AssignmentDetail> _future;
+  final _response = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
+  bool _responseInitialised = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(apiClientProvider).getAssignmentDetail(widget.assignmentId);
+  }
+
+  @override
+  void dispose() {
+    _response.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit(AssignmentDetail detail) async {
+    if (!_formKey.currentState!.validate()) return;
+    final studentId = ref.read(selectedStudentIdProvider) ??
+        (widget.user.role == 'student' ? widget.user.linkedStudentId : null);
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).submitAssignment(
+        assignmentId: detail.id,
+        studentId: studentId,
+        response: _response.text,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableApiError(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _grade(AssignmentDetail detail, AssignmentSubmission submission) async {
+    final result = await showDialog<(int?, String?)>(
+      context: context,
+      builder: (context) => _GradeDialog(submission: submission),
+    );
+    if (result == null) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).gradeAssignment(
+        assignmentId: detail.id,
+        submissionId: submission.id,
+        score: result.$1,
+        comment: result.$2,
+      );
+      if (mounted) {
+        setState(() {
+          _future = ref.read(apiClientProvider).getAssignmentDetail(detail.id);
+          _saving = false;
+        });
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableApiError(error))),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(
+      left: ErpSpacing.lg,
+      right: ErpSpacing.lg,
+      top: ErpSpacing.lg,
+      bottom: MediaQuery.viewInsetsOf(context).bottom + ErpSpacing.lg,
+    ),
+    child: FutureBuilder<AssignmentDetail>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(height: 260, child: ErpLoadingList());
+        }
+        if (snapshot.hasError) {
+          return SizedBox(
+            height: 260,
+            child: ErpErrorState(
+              error: snapshot.error!,
+              onRetry: () => setState(() {
+                _future = ref.read(apiClientProvider).getAssignmentDetail(
+                  widget.assignmentId,
+                );
+              }),
+            ),
+          );
+        }
+        final detail = snapshot.data!;
+        final selectedStudentId = ref.watch(selectedStudentIdProvider) ??
+            (widget.user.role == 'student' ? widget.user.linkedStudentId : null);
+        final ownSubmission = detail.submissions.cast<AssignmentSubmission?>().firstWhere(
+          (submission) => submission?.studentId == selectedStudentId,
+          orElse: () => null,
+        );
+        if (!_responseInitialised && ownSubmission != null) {
+          _response.text = ownSubmission.response;
+          _responseInitialised = true;
+        }
+        return SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.72,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Text(
+                detail.title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: ErpSpacing.xs),
+              Text('Due ${DateFormat('d MMM yyyy, h:mm a').format(detail.dueAt.toLocal())}'),
+              if (detail.instructions?.isNotEmpty == true) ...[
+                const SizedBox(height: ErpSpacing.md),
+                Text(detail.instructions!),
+              ],
+              const SizedBox(height: ErpSpacing.lg),
+              if (widget.user.role == 'student' || widget.user.role == 'parent')
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextFormField(
+                        controller: _response,
+                        minLines: 5,
+                        maxLines: 10,
+                        enabled: !_saving,
+                        decoration: const InputDecoration(
+                          labelText: 'Your submission',
+                          alignLabelWithHint: true,
+                          prefixIcon: Icon(Icons.edit_note_outlined),
+                        ),
+                        validator: (value) => value == null || value.trim().isEmpty
+                            ? 'Write a response before submitting.'
+                            : null,
+                      ),
+                      const SizedBox(height: ErpSpacing.md),
+                      FilledButton.icon(
+                        onPressed: _saving ? null : () => _submit(detail),
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send_outlined),
+                        label: Text(ownSubmission == null ? 'Submit assignment' : 'Update submission'),
+                      ),
+                      if (ownSubmission?.feedback != null) ...[
+                        const SizedBox(height: ErpSpacing.lg),
+                        Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.feedback_outlined),
+                            title: Text(ownSubmission!.score == null
+                                ? 'Teacher feedback'
+                                : 'Score: ${ownSubmission.score}'),
+                            subtitle: Text(ownSubmission.feedback!),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              else ...[
+                Text(
+                  'Submissions (${detail.submissions.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: ErpSpacing.sm),
+                if (detail.submissions.isEmpty)
+                  const Text('No student submissions yet.')
+                else
+                  for (final submission in detail.submissions)
+                    Card(
+                      child: ListTile(
+                        title: Text(submission.studentName),
+                        subtitle: Text(
+                          '${submission.response}\n${DateFormat('d MMM yyyy, h:mm a').format(submission.submittedAt.toLocal())}',
+                        ),
+                        isThreeLine: true,
+                        trailing: submission.score == null
+                            ? const Icon(Icons.rate_review_outlined)
+                            : Text('${submission.score}'),
+                        onTap: _saving ? null : () => _grade(detail, submission),
+                      ),
+                    ),
+              ],
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _GradeDialog extends StatefulWidget {
+  const _GradeDialog({required this.submission});
+  final AssignmentSubmission submission;
+
+  @override
+  State<_GradeDialog> createState() => _GradeDialogState();
+}
+
+class _GradeDialogState extends State<_GradeDialog> {
+  late final TextEditingController _score;
+  late final TextEditingController _comment;
+
+  @override
+  void initState() {
+    super.initState();
+    _score = TextEditingController(text: widget.submission.score?.toString());
+    _comment = TextEditingController(text: widget.submission.feedback ?? '');
+  }
+
+  @override
+  void dispose() {
+    _score.dispose();
+    _comment.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text('Review ${widget.submission.studentName}'),
+    content: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.submission.response),
+          const SizedBox(height: ErpSpacing.md),
+          TextField(
+            controller: _score,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Score (optional)'),
+          ),
+          const SizedBox(height: ErpSpacing.md),
+          TextField(
+            controller: _comment,
+            minLines: 2,
+            maxLines: 5,
+            decoration: const InputDecoration(labelText: 'Feedback'),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      FilledButton(
+        onPressed: () => Navigator.pop(
+          context,
+          (
+            int.tryParse(_score.text.trim()),
+            _comment.text.trim().isEmpty ? null : _comment.text.trim(),
+          ),
+        ),
+        child: const Text('Save review'),
+      ),
+    ],
+  );
 }
 
 class _AssignmentForm extends ConsumerStatefulWidget {

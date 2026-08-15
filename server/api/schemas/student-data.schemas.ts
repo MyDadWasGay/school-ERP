@@ -296,6 +296,83 @@ export const studentInvoicesSchema = paginatedSchema(
   },
 );
 
+export const studentPaymentsSchema = paginatedSchema(
+  "finance",
+  "List authorized student payment history",
+  {
+    type: "object",
+    required: [
+      "id",
+      "invoiceId",
+      "invoiceNumber",
+      "receiptNumber",
+      "amountMinor",
+      "currency",
+      "method",
+      "providerReference",
+      "paidAt",
+      "status",
+    ],
+    properties: {
+      id: { type: "string" },
+      invoiceId: { type: "string" },
+      invoiceNumber: { type: "string" },
+      receiptNumber: { type: "string" },
+      amountMinor: { type: "integer" },
+      currency: { type: "string" },
+      method: { type: "string" },
+      providerReference: nullableString,
+      paidAt: dateTime,
+      status: { type: "string" },
+    },
+  },
+);
+
+export const studentReportCardsSchema = {
+  tags: ["exams"],
+  summary: "List published report cards for an authorized student",
+  security: [{ firebaseBearer: [] }],
+  params: studentParams,
+  response: {
+    200: {
+      type: "object",
+      required: ["data", "meta"],
+      properties: {
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["id", "exam", "total", "maximum", "percentage", "subjects", "generatedAt", "status"],
+            properties: {
+              id: { type: "string" },
+              exam: { type: "string" },
+              total: { anyOf: [{ type: "integer" }, { type: "null" }] },
+              maximum: { anyOf: [{ type: "integer" }, { type: "null" }] },
+              percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
+              subjects: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["subjectId", "subjectName", "marks"],
+                  properties: {
+                    subjectId: nullableString,
+                    subjectName: { type: "string" },
+                    marks: { anyOf: [{ type: "integer" }, { type: "null" }] },
+                  },
+                },
+              },
+              generatedAt: dateTime,
+              status: { type: "string" },
+            },
+          },
+        },
+        meta,
+      },
+    },
+    ...securedErrors,
+  },
+} as const;
+
 export const studentResultsSchema = paginatedSchema(
   "exams",
   "List published result entries for an authorized student",

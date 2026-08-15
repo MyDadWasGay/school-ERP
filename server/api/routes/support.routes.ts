@@ -2,7 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { messageSchema } from "../../../features/communication/schemas/communication.schema";
 import { noticeSchema, noticeTransitionSchema } from "../../../features/communication/schemas/notice.schema";
-import { createMessage, listMessages, listNotificationDelivery, listNotifications, publishMessage } from "../../../features/communication/services/communication.service";
+import { createMessage, listMessageRecipients, listMessages, listNotificationDelivery, listNotifications, publishMessage, registerMobileDevice, unregisterMobileDevice } from "../../../features/communication/services/communication.service";
+import { mobileDeviceSchema } from "../../../features/communication/schemas/device.schema";
 import { createNotice, listNotices, transitionNotice } from "../../../features/communication/services/notice.service";
 import { issueLibraryCopySchema, libraryCopySchema, libraryItemSchema, renewLibraryCopySchema, returnLibraryCopySchema, digitalResourceSchema, libraryReservationSchema } from "../../../features/library/schemas/library.schema";
 import { addLibraryCopy, createDigitalResource, createLibraryItem, issueLibraryCopy, listActiveLibraryIssues, listDigitalResources, listLibraryBorrowers, listLibraryCopies, listLibraryItems, listLibraryReservations, reserveLibraryItem, renewLibraryCopy, returnLibraryCopy } from "../../../features/library/services/library.service";
@@ -27,6 +28,11 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
     return apiSuccess(request, await listMessages(user));
   });
 
+  app.get("/communication/recipients", authenticated, async (request) => {
+    const user = requireApiPermission(request, "communication:read");
+    return apiSuccess(request, await listMessageRecipients(user));
+  });
+
   app.get("/communication/notifications", authenticated, async (request) => {
     const user = requireApiPermission(request, "communication:read");
     return apiSuccess(request, await listNotifications(user));
@@ -49,7 +55,20 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
     const user = requireApiPermission(request, "communication:update");
     const result = await publishMessage(user, parseApiBody(messagePublishSchema, { messageId: request.params.id }).messageId);
     await auditCommand(user, { action: "update", module: "communication", entityType: "message", entityId: result.message.id, campusId: result.message.campusId, after: { status: result.message.status, recipientCount: result.recipientCount } });
-    return apiSuccess(request, { id: result.message.id, recipientCount: result.recipientCount });
+    return apiSuccess(request, { id: result.message.id, recipientCount: result.recipientCount, push: result.push });
+  });
+
+  app.post<{ Body: unknown }>("/notifications/devices", { ...mutation, schema: routeSchema("Register a mobile push device") }, async (request) => {
+    const user = requireApiPermission(request, "communication:read");
+    const row = await registerMobileDevice(user, parseApiBody(mobileDeviceSchema, request.body));
+    return apiSuccess(request, { id: row.id, status: row.status });
+  });
+
+  app.delete<{ Body: unknown }>("/notifications/devices", { ...mutation, schema: routeSchema("Revoke a mobile push device") }, async (request) => {
+    const user = requireApiPermission(request, "communication:read");
+    const body = parseApiBody(mobileDeviceSchema.pick({ token: true }), request.body);
+    const row = await unregisterMobileDevice(user, body.token);
+    return apiSuccess(request, { id: row?.id ?? null, status: row ? "revoked" : "not_found" });
   });
 
   app.get("/communication/notices", authenticated, async (request) => {

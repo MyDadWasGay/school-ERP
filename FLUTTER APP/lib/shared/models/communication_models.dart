@@ -30,15 +30,33 @@ class NoticeRow {
 }
 
 class CommunicationAudience {
-  const CommunicationAudience({required this.type, this.role});
+  const CommunicationAudience({required this.type, this.role, this.userIds = const []});
 
   factory CommunicationAudience.fromJson(Json json) => CommunicationAudience(
     type: asString(json['type'], 'message.audience.type'),
     role: json['role'] as String?,
+    userIds: (json['userIds'] is List)
+        ? (json['userIds']! as List).whereType<String>().toList(growable: false)
+        : const [],
   );
 
   final String type;
   final String? role;
+  final List<String> userIds;
+}
+
+class CommunicationRecipient {
+  const CommunicationRecipient({required this.id, required this.name, required this.role});
+
+  factory CommunicationRecipient.fromJson(Json json) => CommunicationRecipient(
+    id: asString(json['id'], 'recipient.id'),
+    name: asString(json['name'], 'recipient.name'),
+    role: asString(json['role'], 'recipient.role'),
+  );
+
+  final String id;
+  final String name;
+  final String role;
 }
 
 class CommunicationMessageRow {

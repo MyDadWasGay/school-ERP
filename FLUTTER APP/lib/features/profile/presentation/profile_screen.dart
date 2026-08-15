@@ -30,6 +30,11 @@ class ProfileScreen extends ConsumerWidget {
     );
     if (confirmed != true || !context.mounted) return;
     try {
+      await ref.read(pushNotificationServiceProvider).unregisterCurrentDevice();
+    } on Object {
+      // Device revocation is best effort; it must not block local sign-out.
+    }
+    try {
       await ref.read(apiClientProvider).revokeSession();
     } on Object {
       // Local sign-out must remain available during an outage. The server also

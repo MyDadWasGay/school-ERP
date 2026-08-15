@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
+import '../../../core/api/api_error.dart';
 import '../../../shared/models/student_models.dart';
 import '../../../shared/widgets/erp_states.dart';
 
@@ -71,8 +75,17 @@ class StudentOverviewScreen extends ConsumerWidget {
               data: (data) => TabBarView(
                 children: [
                   _AttendanceList(data.attendance),
-                  _ResultsList(data.results),
-                  _InvoiceList(data.invoices),
+                  _ResultsList(data.results, data.reportCards),
+                  _InvoiceList(
+                    data.invoices,
+                    payments: data.payments,
+                    studentId: selectedId,
+                    canPayOnline:
+                        ref.watch(sessionProvider).valueOrNull?.can(
+                          'fees:pay_online',
+                        ) ==
+                        true,
+                  ),
                   _DocumentsList(data.documents),
                 ],
               ),
@@ -117,17 +130,32 @@ class _DocumentsList extends StatelessWidget {
             subtitle: Text(
               '${row.category.replaceAll('_', ' ')} · ${DateFormat('d MMM yyyy').format(row.createdAt.toLocal())}',
             ),
-            trailing: IconButton(
-              tooltip: 'Copy secure document link',
-              icon: const Icon(Icons.link_outlined),
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: row.secureUrl));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Document link copied.')),
+            trailing: PopupMenuButton<String>(
+              tooltip: 'Document actions',
+              onSelected: (action) async {
+                if (action == 'open') {
+                  final launched = await launchUrl(
+                    Uri.parse(row.secureUrl),
+                    mode: LaunchMode.externalApplication,
                   );
+                  if (!launched && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not open the document.')),
+                    );
+                  }
+                } else {
+                  await Clipboard.setData(ClipboardData(text: row.secureUrl));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Document link copied.')),
+                    );
+                  }
                 }
               },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'open', child: Text('Open document')),
+                PopupMenuItem(value: 'copy', child: Text('Copy secure link')),
+              ],
             ),
           ),
         );
@@ -178,8 +206,9 @@ class _AttendanceList extends StatelessWidget {
 }
 
 class _ResultsList extends StatelessWidget {
-  const _ResultsList(this.data);
+  const _ResultsList(this.data, this.reportCards);
   final PagedRows<ResultRow>? data;
+  final List<StudentReportCardRow>? reportCards;
   @override
   Widget build(BuildContext context) {
     final rows = data?.rows ?? const <ResultRow>[];
@@ -190,7 +219,8 @@ class _ResultsList extends StatelessWidget {
         message: 'Your account does not have access to published results.',
       );
     }
-    if (rows.isEmpty) {
+    final cards = reportCards ?? const <StudentReportCardRow>[];
+    if (rows.isEmpty && cards.isEmpty) {
       return const ErpEmptyState(
         icon: Icons.workspace_premium_outlined,
         title: 'No published results',
@@ -199,10 +229,13 @@ class _ResultsList extends StatelessWidget {
     }
     return ListView.separated(
       padding: const EdgeInsets.all(ErpSpacing.lg),
-      itemCount: rows.length,
+      itemCount: cards.length + rows.length,
       separatorBuilder: (_, _) => const SizedBox(height: ErpSpacing.sm),
       itemBuilder: (context, index) {
-        final row = rows[index];
+        if (index < cards.length) {
+          return _ReportCardTile(cards[index]);
+        }
+        final row = rows[index - cards.length];
         final score = row.marks == null
             ? 'Absent'
             : '${row.marks} / ${row.maximumMarks}';
@@ -226,54 +259,268 @@ class _ResultsList extends StatelessWidget {
   }
 }
 
-class _InvoiceList extends StatelessWidget {
-  const _InvoiceList(this.data);
-  final PagedRows<InvoiceRow>? data;
+class _ReportCardTile extends StatelessWidget {
+  const _ReportCardTile(this.row);
+  final StudentReportCardRow row;
+
   @override
   Widget build(BuildContext context) {
-    final rows = data?.rows ?? const <InvoiceRow>[];
-    if (data == null) {
+    final score = row.total == null || row.maximum == null
+        ? 'Score unavailable'
+        : '${row.total} / ${row.maximum}';
+    final percentage = row.percentage == null
+        ? null
+        : '${row.percentage!.toStringAsFixed(1)}%';
+    return Card(
+      child: ExpansionTile(
+        leading: const CircleAvatar(child: Icon(Icons.assessment_outlined)),
+        title: Text(row.exam),
+        subtitle: Text(
+          '$score${percentage == null ? '' : ' Â· $percentage'} Â· Published ${DateFormat('d MMM yyyy').format(row.generatedAt.toLocal())}',
+        ),
+        children: [
+          for (final subject in row.subjects)
+            ListTile(
+              dense: true,
+              title: Text(subject.subjectName),
+              trailing: Text(subject.marks?.toString() ?? 'Absent'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InvoiceList extends ConsumerStatefulWidget {
+  const _InvoiceList(
+    this.data, {
+    required this.payments,
+    required this.studentId,
+    required this.canPayOnline,
+  });
+  final PagedRows<InvoiceRow>? data;
+  final PagedRows<StudentPaymentRow>? payments;
+  final String? studentId;
+  final bool canPayOnline;
+
+  @override
+  ConsumerState<_InvoiceList> createState() => _InvoiceListState();
+}
+
+class _InvoiceListState extends ConsumerState<_InvoiceList> {
+  late final Razorpay _razorpay;
+  String? _activeOrderId;
+  bool _paying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpay = Razorpay()
+      ..on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess)
+      ..on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError)
+      ..on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
+  }
+
+  Future<void> _pay(InvoiceRow invoice) async {
+    final studentId = widget.studentId;
+    if (_paying || studentId == null || invoice.balanceMinor <= 0) return;
+    setState(() => _paying = true);
+    try {
+      final order = await ref.read(apiClientProvider).createRazorpayOrder(
+        invoiceId: invoice.id,
+        studentId: studentId,
+        amountMinor: invoice.balanceMinor,
+        idempotencyKey:
+            'mobile-razorpay-${invoice.id}-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      if (!mounted) return;
+      _activeOrderId = order.orderId;
+      _razorpay.open({
+        'key': order.keyId,
+        'amount': order.amountMinor,
+        'currency': order.currency,
+        'name': order.name,
+        'description': order.description,
+        'order_id': order.orderId,
+        'timeout': 600,
+        'prefill': {
+          if (order.prefillName != null) 'name': order.prefillName,
+          if (order.prefillEmail != null) 'email': order.prefillEmail,
+          if (order.prefillContact != null) 'contact': order.prefillContact,
+        },
+      });
+    } on Object catch (error) {
+      _finishWithMessage(readableApiError(error));
+    }
+  }
+
+  Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    final orderId = response.orderId ?? _activeOrderId;
+    final paymentId = response.paymentId;
+    final signature = response.signature;
+    if (orderId == null || paymentId == null || signature == null) {
+      _finishWithMessage(
+        'Razorpay returned an incomplete payment response. Refresh the fee page to check the status.',
+      );
+      return;
+    }
+    try {
+      final result = await ref
+          .read(apiClientProvider)
+          .verifyRazorpayPayment(
+            orderId: orderId,
+            paymentId: paymentId,
+            signature: signature,
+          );
+      if (!mounted) return;
+      ref.invalidate(studentOverviewProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payment successful. Receipt ${result.receiptNumber} recorded.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      _finishWithMessage(
+        '${readableApiError(error)} The provider webhook will reconcile captured funds; refresh before trying again.',
+      );
+    } finally {
+      if (mounted) setState(() { _paying = false; _activeOrderId = null; });
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    _finishWithMessage(response.message ?? 'Razorpay payment was not completed.');
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    _finishWithMessage(
+      response.walletName == null
+          ? 'External wallet selected. Complete the payment in Razorpay.'
+          : 'External wallet selected: ${response.walletName}.',
+    );
+  }
+
+  void _finishWithMessage(String message) {
+    if (!mounted) return;
+    setState(() { _paying = false; _activeOrderId = null; });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+  @override
+  Widget build(BuildContext context) {
+    final rows = widget.data?.rows ?? const <InvoiceRow>[];
+    final paymentRows = widget.payments?.rows ?? const <StudentPaymentRow>[];
+    if (widget.data == null) {
       return const ErpEmptyState(
         icon: Icons.lock_outline,
         title: 'Fees are not available',
         message: 'Your account does not have access to fee information.',
       );
     }
-    if (rows.isEmpty) {
+    if (rows.isEmpty && paymentRows.isEmpty) {
       return const ErpEmptyState(
         icon: Icons.receipt_long_outlined,
         title: 'No fee invoices',
         message: 'Fee invoices will appear here when issued.',
       );
     }
-    return ListView.separated(
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(ErpSpacing.lg),
-      itemCount: rows.length,
-      separatorBuilder: (_, _) => const SizedBox(height: ErpSpacing.sm),
-      itemBuilder: (context, index) {
-        final row = rows[index];
-        final amount = NumberFormat.simpleCurrency(
-          name: row.currency,
-        ).format(row.balanceMinor / 100);
-        return Card(
-          child: ListTile(
-            leading: const Icon(Icons.receipt_long_outlined),
-            title: Text(row.invoiceNumber),
-            subtitle: Text('Due ${DateFormat('d MMM yyyy').format(row.dueOn)}'),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(amount, style: Theme.of(context).textTheme.titleSmall),
-                Text(
-                  row.status.replaceAll('_', ' '),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+      children: [
+        for (final row in rows) ...[
+          _invoiceCard(context, row),
+          const SizedBox(height: ErpSpacing.sm),
+        ],
+        if (paymentRows.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: ErpSpacing.md, bottom: ErpSpacing.sm),
+            child: Text(
+              'Payment history',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        );
-      },
+          for (final payment in paymentRows) ...[
+            _paymentCard(context, payment),
+            const SizedBox(height: ErpSpacing.sm),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _invoiceCard(BuildContext context, InvoiceRow row) {
+    final amount = NumberFormat.simpleCurrency(
+      name: row.currency,
+    ).format(row.balanceMinor / 100);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(ErpSpacing.sm),
+        child: ListTile(
+          leading: const Icon(Icons.receipt_long_outlined),
+          title: Text(row.invoiceNumber),
+          subtitle: Text('Due ${DateFormat('d MMM yyyy').format(row.dueOn)}'),
+          trailing: widget.canPayOnline && row.balanceMinor > 0
+              ? FilledButton(
+                  onPressed: _paying ? null : () => _pay(row),
+                  child: Text(_paying ? '...' : 'Pay'),
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(amount, style: Theme.of(context).textTheme.titleSmall),
+                    Text(
+                      row.status.replaceAll('_', ' '),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _paymentCard(BuildContext context, StudentPaymentRow payment) {
+    final amount = NumberFormat.simpleCurrency(
+      name: payment.currency,
+    ).format(payment.amountMinor / 100);
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(child: Icon(Icons.verified_outlined)),
+        title: Text(payment.receiptNumber),
+        subtitle: Text(
+          '${payment.invoiceNumber} Â· ${payment.method.replaceAll('_', ' ')} Â· ${DateFormat('d MMM yyyy, h:mm a').format(payment.paidAt.toLocal())}',
+        ),
+        trailing: PopupMenuButton<String>(
+          tooltip: 'Receipt actions',
+          onSelected: (action) async {
+            if (action != 'share') return;
+            await SharePlus.instance.share(
+              ShareParams(
+                text: 'School fee receipt\n'
+                    'Receipt: ${payment.receiptNumber}\n'
+                    'Invoice: ${payment.invoiceNumber}\n'
+                    'Amount: $amount\n'
+                    'Paid: ${DateFormat('d MMM yyyy, h:mm a').format(payment.paidAt.toLocal())}\n'
+                    'Status: ${payment.status.replaceAll('_', ' ')}',
+              ),
+            );
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'share', child: Text('Share receipt')),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -139,6 +139,65 @@ export async function listStudentInvoices(
   };
 }
 
+export async function listStudentPayments(
+  user: CurrentUser,
+  studentId: string,
+  input?: { page?: number; pageSize?: number },
+) {
+  const student = await getReadableStudent(user, studentId);
+  const pagination = normalizePagination(input);
+  const where = and(
+    eq(feePayments.organizationId, user.organizationId),
+    eq(feePayments.studentId, student.id),
+    student.campusId ? eq(feePayments.campusId, student.campusId) : undefined,
+    inArray(feePayments.status, ["posted", "partially_refunded", "refunded"]),
+  );
+  const [rows, totals] = await Promise.all([
+    getDb()
+      .select({
+        id: feePayments.id,
+        invoiceId: feePayments.invoiceId,
+        invoiceNumber: feeInvoices.invoiceNumber,
+        receiptNumber: feePayments.receiptNumber,
+        amountMinor: feePayments.amountMinor,
+        currency: feeInvoices.currency,
+        method: feePayments.method,
+        providerReference: feePayments.providerReference,
+        paidAt: feePayments.paidAt,
+        status: feePayments.status,
+      })
+      .from(feePayments)
+      .innerJoin(
+        feeInvoices,
+        and(
+          eq(feeInvoices.id, feePayments.invoiceId),
+          eq(feeInvoices.organizationId, user.organizationId),
+        ),
+      )
+      .where(where)
+      .orderBy(desc(feePayments.paidAt))
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    getDb()
+      .select({ value: count() })
+      .from(feePayments)
+      .where(where),
+  ]);
+  const total = totals[0]?.value ?? 0;
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      paidAt: row.paidAt.toISOString(),
+    })),
+    pageInfo: {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      total,
+      pageCount: Math.ceil(total / pagination.pageSize),
+    },
+  };
+}
+
 export async function getInvoiceStudentOptions(user: CurrentUser) {
   const permittedIds = await resolvePermittedStudentIds(user);
   if (permittedIds && permittedIds.length === 0) return [];

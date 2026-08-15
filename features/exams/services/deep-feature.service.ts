@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { exams, marksEntries, questionBankItems, reportCards, students, subjects } from "@/db/schema";
+import { exams, marksEntries, questionBankItems, reportCards, resultPublications, students, subjects } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
+import { getReadableStudent } from "@/features/students/services/students.service";
 import type { QuestionBankInput, ReportCardInput } from "../schemas/deep-feature.schema";
 
 export async function listQuestionBank(user: CurrentUser) {
@@ -41,4 +42,68 @@ export async function generateReportCard(user: CurrentUser, input: ReportCardInp
 export async function listReportCards(user: CurrentUser) {
   const rows = await getDb().select({ id: reportCards.id, exam: exams.name, student: sql<string>`${students.firstName} || ' ' || ${students.lastName}`, summaryJson: reportCards.summaryJson, generatedAt: reportCards.generatedAt, status: reportCards.status }).from(reportCards).innerJoin(exams, and(eq(exams.id, reportCards.examId), eq(exams.organizationId, user.organizationId))).innerJoin(students, and(eq(students.id, reportCards.studentId), eq(students.organizationId, user.organizationId))).where(and(eq(reportCards.organizationId, user.organizationId), user.campusId ? eq(reportCards.campusId, user.campusId) : undefined)).orderBy(desc(reportCards.generatedAt)).limit(500);
   return rows.map((row) => { let summary: { percentage?: number; total?: number; maximum?: number } = {}; try { summary = JSON.parse(row.summaryJson) as typeof summary; } catch { /* historical rows remain listable */ } return { ...row, percentage: summary.percentage ?? null, total: summary.total ?? null, maximum: summary.maximum ?? null }; });
+}
+
+export async function listStudentReportCards(user: CurrentUser, studentId: string) {
+  const student = await getReadableStudent(user, studentId);
+  const rows = await getDb()
+    .select({
+      id: reportCards.id,
+      exam: exams.name,
+      summaryJson: reportCards.summaryJson,
+      generatedAt: reportCards.generatedAt,
+      status: reportCards.status,
+    })
+    .from(reportCards)
+    .innerJoin(
+      exams,
+      and(
+        eq(exams.id, reportCards.examId),
+        eq(exams.organizationId, user.organizationId),
+      ),
+    )
+    .innerJoin(
+      resultPublications,
+      and(
+        eq(resultPublications.examId, reportCards.examId),
+        eq(resultPublications.organizationId, user.organizationId),
+        eq(resultPublications.status, "published"),
+      ),
+    )
+    .where(and(
+      eq(reportCards.organizationId, user.organizationId),
+      eq(reportCards.studentId, student.id),
+      student.campusId ? eq(reportCards.campusId, student.campusId) : undefined,
+      eq(reportCards.status, "generated"),
+    ))
+    .orderBy(desc(reportCards.generatedAt))
+    .limit(50);
+
+  return rows.map((row) => {
+    let summary: {
+      total?: number;
+      maximum?: number;
+      percentage?: number;
+      subjects?: Array<{ subjectId?: string; subjectName?: string | null; marks?: number | null }>;
+    } = {};
+    try {
+      summary = JSON.parse(row.summaryJson) as typeof summary;
+    } catch {
+      // Historical report cards remain visible with their summary omitted.
+    }
+    return {
+      id: row.id,
+      exam: row.exam,
+      total: summary.total ?? null,
+      maximum: summary.maximum ?? null,
+      percentage: summary.percentage ?? null,
+      subjects: (summary.subjects ?? []).map((subject) => ({
+        subjectId: subject.subjectId ?? null,
+        subjectName: subject.subjectName ?? "Subject",
+        marks: subject.marks ?? null,
+      })),
+      generatedAt: row.generatedAt.toISOString(),
+      status: row.status,
+    };
+  });
 }

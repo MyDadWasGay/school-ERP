@@ -174,6 +174,113 @@ class ResultRow {
   final DateTime? publishedAt;
 }
 
+class StudentPaymentRow {
+  const StudentPaymentRow({
+    required this.id,
+    required this.invoiceId,
+    required this.invoiceNumber,
+    required this.receiptNumber,
+    required this.amountMinor,
+    required this.currency,
+    required this.method,
+    required this.paidAt,
+    required this.status,
+    this.providerReference,
+  });
+
+  factory StudentPaymentRow.fromJson(Json json) => StudentPaymentRow(
+    id: asString(json['id'], 'studentPayment.id'),
+    invoiceId: asString(json['invoiceId'], 'studentPayment.invoiceId'),
+    invoiceNumber: asString(
+      json['invoiceNumber'],
+      'studentPayment.invoiceNumber',
+    ),
+    receiptNumber: asString(
+      json['receiptNumber'],
+      'studentPayment.receiptNumber',
+    ),
+    amountMinor: asInt(json['amountMinor'], 'studentPayment.amountMinor'),
+    currency: asString(json['currency'], 'studentPayment.currency'),
+    method: asString(json['method'], 'studentPayment.method'),
+    paidAt: DateTime.parse(asString(json['paidAt'], 'studentPayment.paidAt')),
+    status: asString(json['status'], 'studentPayment.status'),
+    providerReference: json['providerReference'] as String?,
+  );
+
+  final String id;
+  final String invoiceId;
+  final String invoiceNumber;
+  final String receiptNumber;
+  final int amountMinor;
+  final String currency;
+  final String method;
+  final DateTime paidAt;
+  final String status;
+  final String? providerReference;
+}
+
+class StudentReportCardSubject {
+  const StudentReportCardSubject({
+    required this.subjectName,
+    required this.marks,
+    this.subjectId,
+  });
+
+  factory StudentReportCardSubject.fromJson(Json json) =>
+      StudentReportCardSubject(
+        subjectId: json['subjectId'] as String?,
+        subjectName: asString(json['subjectName'], 'reportCard.subjectName'),
+        marks: json['marks'] == null
+            ? null
+            : asInt(json['marks'], 'reportCard.marks'),
+      );
+
+  final String? subjectId;
+  final String subjectName;
+  final int? marks;
+}
+
+class StudentReportCardRow {
+  const StudentReportCardRow({
+    required this.id,
+    required this.exam,
+    required this.generatedAt,
+    required this.status,
+    required this.subjects,
+    this.total,
+    this.maximum,
+    this.percentage,
+  });
+
+  factory StudentReportCardRow.fromJson(Json json) => StudentReportCardRow(
+    id: asString(json['id'], 'reportCard.id'),
+    exam: asString(json['exam'], 'reportCard.exam'),
+    total: json['total'] == null ? null : asInt(json['total'], 'reportCard.total'),
+    maximum: json['maximum'] == null
+        ? null
+        : asInt(json['maximum'], 'reportCard.maximum'),
+    percentage: json['percentage'] == null
+        ? null
+        : asDouble(json['percentage'], 'reportCard.percentage'),
+    subjects: asJsonList(json['subjects'], 'reportCard.subjects')
+        .map(StudentReportCardSubject.fromJson)
+        .toList(growable: false),
+    generatedAt: DateTime.parse(
+      asString(json['generatedAt'], 'reportCard.generatedAt'),
+    ),
+    status: asString(json['status'], 'reportCard.status'),
+  );
+
+  final String id;
+  final String exam;
+  final int? total;
+  final int? maximum;
+  final double? percentage;
+  final List<StudentReportCardSubject> subjects;
+  final DateTime generatedAt;
+  final String status;
+}
+
 class NotificationRow {
   const NotificationRow({
     required this.id,

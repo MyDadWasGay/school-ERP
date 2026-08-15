@@ -59,11 +59,19 @@ class _CommunicationWorkspaceScreenState
   }
 
   Future<void> _createMessage() async {
+    List<CommunicationRecipient> recipients;
+    try {
+      recipients = await ref.read(messageRecipientsProvider.future);
+    } on Object catch (error) {
+      if (mounted) _showError(error);
+      return;
+    }
+    if (!mounted) return;
     final values = await showModalBottomSheet<Map<String, String?>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const _MessageForm(),
+      builder: (_) => _MessageForm(recipients: recipients),
     );
     if (values == null || !mounted) return;
     try {
@@ -74,6 +82,9 @@ class _CommunicationWorkspaceScreenState
             body: values['body']!,
             audienceType: values['audienceType']!,
             audienceRole: values['audienceRole'],
+            recipientUserIds: values['recipientUserId'] == null
+                ? const []
+                : [values['recipientUserId']!],
           );
       ref.invalidate(messagesProvider);
     } on Object catch (error) {
@@ -285,6 +296,8 @@ class _MessagesTab extends ConsumerWidget {
             final message = rows[canCreate ? index - 1 : index];
             final audience = message.audience.type == 'role'
                 ? 'Role: ${message.audience.role ?? 'not set'}'
+                : message.audience.type == 'users'
+                ? 'Direct message'
                 : 'Everyone';
             return Card(
               child: ListTile(
@@ -393,7 +406,9 @@ class _NoticeFormState extends State<_NoticeForm> {
 }
 
 class _MessageForm extends StatefulWidget {
-  const _MessageForm();
+  const _MessageForm({required this.recipients});
+
+  final List<CommunicationRecipient> recipients;
 
   @override
   State<_MessageForm> createState() => _MessageFormState();
@@ -405,6 +420,7 @@ class _MessageFormState extends State<_MessageForm> {
   final _body = TextEditingController();
   String _audienceType = 'all';
   String? _audienceRole;
+  String? _recipientUserId;
 
   @override
   void dispose() {
@@ -435,10 +451,12 @@ class _MessageFormState extends State<_MessageForm> {
             items: const [
               DropdownMenuItem(value: 'all', child: Text('Everyone')),
               DropdownMenuItem(value: 'role', child: Text('A role')),
+              DropdownMenuItem(value: 'users', child: Text('Specific recipient')),
             ],
             onChanged: (value) => setState(() {
               _audienceType = value ?? 'all';
               if (_audienceType == 'all') _audienceRole = null;
+              if (_audienceType != 'users') _recipientUserId = null;
             }),
           ),
           if (_audienceType == 'role') ...[
@@ -453,6 +471,24 @@ class _MessageFormState extends State<_MessageForm> {
                   _audienceType == 'role' &&
                       (value == null || value.trim().isEmpty)
                   ? 'Enter a role'
+                  : null,
+            ),
+          ],
+          if (_audienceType == 'users') ...[
+            const SizedBox(height: ErpSpacing.md),
+            DropdownButtonFormField<String>(
+              initialValue: _recipientUserId,
+              decoration: const InputDecoration(labelText: 'Recipient'),
+              items: [
+                for (final recipient in widget.recipients)
+                  DropdownMenuItem(
+                    value: recipient.id,
+                    child: Text('${recipient.name} Â· ${recipient.role.replaceAll('_', ' ')}'),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _recipientUserId = value),
+              validator: (value) => _audienceType == 'users' && value == null
+                  ? 'Choose a recipient'
                   : null,
             ),
           ],
@@ -475,6 +511,7 @@ class _MessageFormState extends State<_MessageForm> {
                 'body': _body.text.trim(),
                 'audienceType': _audienceType,
                 'audienceRole': _audienceRole?.trim(),
+                'recipientUserId': _recipientUserId,
               });
             },
             child: const Text('Save draft'),

@@ -1,5 +1,96 @@
 import 'identity_models.dart';
 
+class RazorpayCheckoutOrder {
+  const RazorpayCheckoutOrder({
+    required this.paymentRequestId,
+    required this.keyId,
+    required this.orderId,
+    required this.amountMinor,
+    required this.currency,
+    required this.name,
+    required this.description,
+    required this.status,
+    this.prefillName,
+    this.prefillEmail,
+    this.prefillContact,
+  });
+
+  factory RazorpayCheckoutOrder.fromJson(Json json) {
+    final prefill = json['prefill'] is Map
+        ? Map<Object?, Object?>.from(json['prefill']! as Map)
+        : const <Object?, Object?>{};
+    return RazorpayCheckoutOrder(
+      paymentRequestId: asString(
+        json['paymentRequestId'],
+        'razorpay.paymentRequestId',
+      ),
+      keyId: asString(json['keyId'], 'razorpay.keyId'),
+      orderId: asString(json['orderId'], 'razorpay.orderId'),
+      amountMinor: asInt(json['amountMinor'], 'razorpay.amountMinor'),
+      currency: asString(json['currency'], 'razorpay.currency'),
+      name: asString(json['name'], 'razorpay.name'),
+      description: asString(json['description'], 'razorpay.description'),
+      status: asString(json['status'], 'razorpay.status'),
+      prefillName: prefill['name'] as String?,
+      prefillEmail: prefill['email'] as String?,
+      prefillContact: prefill['contact'] as String?,
+    );
+  }
+
+  final String paymentRequestId;
+  final String keyId;
+  final String orderId;
+  final int amountMinor;
+  final String currency;
+  final String name;
+  final String description;
+  final String status;
+  final String? prefillName;
+  final String? prefillEmail;
+  final String? prefillContact;
+}
+
+class OnlinePaymentResult {
+  const OnlinePaymentResult({
+    required this.id,
+    required this.invoiceId,
+    required this.studentId,
+    required this.receiptNumber,
+    required this.amountMinor,
+    required this.providerReference,
+    required this.paidAt,
+    required this.status,
+  });
+
+  factory OnlinePaymentResult.fromJson(Json json) => OnlinePaymentResult(
+    id: asString(json['id'], 'onlinePayment.id'),
+    invoiceId: asString(json['invoiceId'], 'onlinePayment.invoiceId'),
+    studentId: asString(json['studentId'], 'onlinePayment.studentId'),
+    receiptNumber: asString(
+      json['receiptNumber'],
+      'onlinePayment.receiptNumber',
+    ),
+    amountMinor: asInt(json['amountMinor'], 'onlinePayment.amountMinor'),
+    providerReference: asString(
+      json['providerReference'],
+      'onlinePayment.providerReference',
+    ),
+    paidAt: DateTime.parse(
+      asString(json['paidAt'], 'onlinePayment.paidAt'),
+    ),
+    status: asString(json['status'], 'onlinePayment.status'),
+  );
+
+  final String id;
+  final String invoiceId;
+  final String studentId;
+  final String receiptNumber;
+  final int amountMinor;
+  final String providerReference;
+  final DateTime paidAt;
+  final String status;
+}
+
 class FinanceRefundOption {
   const FinanceRefundOption({
     required this.id,

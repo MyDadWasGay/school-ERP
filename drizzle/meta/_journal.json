@@ -302,6 +302,13 @@
       "when": 1786258800000,
       "tag": "0042_workflow_integrity_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786259400000,
+      "tag": "0043_mobile_device_registrations",
+      "breakpoints": true
     }
   ]
 }

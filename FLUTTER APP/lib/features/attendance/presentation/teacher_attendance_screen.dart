@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -27,7 +29,8 @@ class TeacherAttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _TeacherAttendanceScreenState
-    extends ConsumerState<TeacherAttendanceScreen> {
+    extends ConsumerState<TeacherAttendanceScreen>
+    with WidgetsBindingObserver {
   late DateTime _date;
   final _search = TextEditingController();
   final _states = <String, String?>{};
@@ -38,6 +41,7 @@ class _TeacherAttendanceScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final now = DateTime.now();
     _date = DateTime(now.year, now.month, now.day);
     _search.addListener(
@@ -48,8 +52,17 @@ class _TeacherAttendanceScreenState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    _loadDrafts().then((_) {
+      if (mounted && _drafts.isNotEmpty) unawaited(_syncDrafts());
+    });
   }
 
   String get _dateKey =>

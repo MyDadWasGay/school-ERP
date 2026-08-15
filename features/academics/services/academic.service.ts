@@ -190,7 +190,9 @@ export async function createAcademicRecord(user: CurrentUser, input: AcademicRec
     const [row] = await getDb().insert(assignments).values({
       id: createId("assignment"), organizationId: user.organizationId, campusId,
       teacherId: input.teacherId, classId: input.classId, subjectId: input.subjectId, title: input.name,
-      dueAt: input.dueAt, status: "draft", createdBy: user.id, updatedBy: user.id,
+      dueAt: input.dueAt,
+      detailsJson: input.details ? JSON.stringify({ details: input.details }) : null,
+      status: "published", createdBy: user.id, updatedBy: user.id,
     }).returning();
     if (!row) throw new AppError("DATABASE_ERROR", "Unable to create assignment.", 500);
     return row;

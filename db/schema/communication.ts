@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
 
 export const messages = sqliteTable("messages", {
@@ -27,4 +27,19 @@ export const notificationEvents = sqliteTable("notification_events", {
 }, (table) => [
   index("notifications_recipient_idx").on(table.organizationId, table.recipientUserId),
   index("notifications_message_idx").on(table.organizationId, table.messageId),
+]);
+
+export const mobileDeviceRegistrations = sqliteTable("mobile_device_registrations", {
+  id: idColumn("mobile_device"),
+  ...tenantColumns(),
+  userId: text("user_id").notNull(),
+  token: text("token").notNull(),
+  platform: text("platform").notNull(),
+  appVersion: text("app_version"),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull(),
+  ...auditColumns(),
+  status: statusColumn("active"),
+}, (table) => [
+  uniqueIndex("mobile_devices_org_user_token_unique").on(table.organizationId, table.userId, table.token),
+  index("mobile_devices_user_idx").on(table.organizationId, table.userId, table.status),
 ]);

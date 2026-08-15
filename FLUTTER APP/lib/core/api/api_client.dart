@@ -79,6 +79,33 @@ class ApiClient {
     );
   }
 
+  Future<void> registerMobileDevice({
+    required String token,
+    required String platform,
+    String? appVersion,
+  }) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/notifications/devices',
+        data: {
+          'token': token,
+          'platform': platform,
+          if (appVersion != null && appVersion.trim().isNotEmpty)
+            'appVersion': appVersion.trim(),
+        },
+      ),
+    );
+  }
+
+  Future<void> unregisterMobileDevice(String token) async {
+    await _request(
+      () => _dio.delete<Object?>(
+        '/notifications/devices',
+        data: {'token': token, 'platform': 'android'},
+      ),
+    );
+  }
+
   Future<void> revokeSession() async {
     await _request(() => _dio.post<Object?>('/auth/revoke'));
   }
@@ -91,11 +118,17 @@ class ApiClient {
     '/communication/messages',
   )).map(CommunicationMessageRow.fromJson).toList(growable: false);
 
+  Future<List<CommunicationRecipient>> getMessageRecipients() async =>
+      (await _getList('/communication/recipients'))
+          .map(CommunicationRecipient.fromJson)
+          .toList(growable: false);
+
   Future<void> createMessage({
     required String subject,
     required String body,
     required String audienceType,
     String? audienceRole,
+    List<String> recipientUserIds = const [],
   }) async {
     await _request(
       () => _dio.post<Object?>(
@@ -106,6 +139,7 @@ class ApiClient {
           'audienceType': audienceType,
           if (audienceRole != null && audienceRole.trim().isNotEmpty)
             'audienceRole': audienceRole.trim(),
+          if (recipientUserIds.isNotEmpty) 'recipientUserIds': recipientUserIds,
         },
       ),
     );
@@ -207,6 +241,46 @@ class ApiClient {
     final envelope = asJson(response.data, 'response');
     final data = asJson(envelope['data'], 'response.data');
     return asString(data['id'], 'academic.id');
+  }
+
+  Future<AssignmentDetail> getAssignmentDetail(String assignmentId) async =>
+      AssignmentDetail.fromJson(
+        await _get('/academics/assignments/${Uri.encodeComponent(assignmentId)}'),
+      );
+
+  Future<void> submitAssignment({
+    required String assignmentId,
+    String? studentId,
+    required String response,
+  }) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/academics/assignments/${Uri.encodeComponent(assignmentId)}/submissions',
+        data: {
+          if (studentId != null && studentId.trim().isNotEmpty)
+            'studentId': studentId.trim(),
+          'response': response.trim(),
+        },
+      ),
+    );
+  }
+
+  Future<void> gradeAssignment({
+    required String assignmentId,
+    required String submissionId,
+    int? score,
+    String? comment,
+  }) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/academics/assignments/${Uri.encodeComponent(assignmentId)}/submissions/${Uri.encodeComponent(submissionId)}/feedback',
+        data: {
+          'score': ?score,
+          if (comment != null && comment.trim().isNotEmpty)
+            'comment': comment.trim(),
+        },
+      ),
+    );
   }
 
   Future<List<LeaveRequest>> getLeaveRequests() async => (await _getList(
@@ -1173,6 +1247,50 @@ class ApiClient {
   Future<List<PaymentRow>> getPayments() async => (await _getList(
     '/fees/payments',
   )).map(PaymentRow.fromJson).toList(growable: false);
+
+  Future<RazorpayCheckoutOrder> createRazorpayOrder({
+    required String invoiceId,
+    required String studentId,
+    required int amountMinor,
+    required String idempotencyKey,
+  }) async {
+    final response = await _request(
+      () => _dio.post<Object?>(
+        '/payments/razorpay/orders',
+        data: {
+          'invoiceId': invoiceId,
+          'studentId': studentId,
+          'amountMinor': amountMinor,
+          'idempotencyKey': idempotencyKey,
+        },
+      ),
+    );
+    final envelope = asJson(response.data, 'razorpayOrder.response');
+    return RazorpayCheckoutOrder.fromJson(
+      asJson(envelope['data'], 'razorpayOrder.data'),
+    );
+  }
+
+  Future<OnlinePaymentResult> verifyRazorpayPayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    final response = await _request(
+      () => _dio.post<Object?>(
+        '/payments/razorpay/verify',
+        data: {
+          'razorpayOrderId': orderId,
+          'razorpayPaymentId': paymentId,
+          'razorpaySignature': signature,
+        },
+      ),
+    );
+    final envelope = asJson(response.data, 'razorpayVerification.response');
+    return OnlinePaymentResult.fromJson(
+      asJson(envelope['data'], 'razorpayVerification.data'),
+    );
+  }
 
   Future<void> recordPayment({
     required String invoiceId,
@@ -2314,8 +2432,17 @@ class ApiClient {
       _studentRows(studentId, 'attendance', AttendanceRow.fromJson);
   Future<PagedRows<InvoiceRow>> getInvoices(String studentId) =>
       _studentRows(studentId, 'invoices', InvoiceRow.fromJson);
+  Future<PagedRows<StudentPaymentRow>> getStudentPayments(String studentId) =>
+      _studentRows(studentId, 'payments', StudentPaymentRow.fromJson);
   Future<PagedRows<ResultRow>> getResults(String studentId) =>
       _studentRows(studentId, 'results', ResultRow.fromJson);
+
+  Future<List<StudentReportCardRow>> getStudentReportCards(
+    String studentId,
+  ) async =>
+      (await _getList(
+        '/students/${Uri.encodeComponent(studentId)}/report-cards',
+      )).map(StudentReportCardRow.fromJson).toList(growable: false);
 
   Future<List<DocumentRow>> getDocuments(String studentId) async {
     final data = await _get(
