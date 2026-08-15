@@ -1,0 +1,54 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:school_erp_mobile/app/router/route_permissions.dart';
+import 'package:school_erp_mobile/shared/models/identity_models.dart';
+
+void main() {
+  test('maps protected routes to their server capabilities', () {
+    expect(permissionForPath('/exams'), 'exams:read');
+    expect(permissionForPath('/admissions'), 'admissions:read');
+    expect(permissionForPath('/finance'), 'fees:read');
+    expect(permissionForPath('/hr'), 'hr:read');
+    expect(permissionForPath('/profile'), isNull);
+    expect(permissionForPath('/operations'), isNull);
+  });
+
+  test('allows people directory for either student or staff scope', () {
+    final studentReader = CurrentUser.fromJson({
+      'id': 'user-1',
+      'email': 'admin@example.com',
+      'displayName': 'Admin',
+      'role': 'office_staff',
+      'organization': {'id': 'org-1', 'name': 'School'},
+      'campus': {'id': 'campus-1', 'name': 'Main'},
+      'campuses': [],
+      'permissions': ['students:read'],
+    });
+    final hrReader = CurrentUser.fromJson({
+      'id': 'user-2',
+      'email': 'hr@example.com',
+      'displayName': 'HR',
+      'role': 'hr',
+      'organization': {'id': 'org-1', 'name': 'School'},
+      'campus': {'id': 'campus-1', 'name': 'Main'},
+      'campuses': [],
+      'permissions': ['hr:read'],
+    });
+
+    expect(canAccessPath('/people', studentReader), isTrue);
+    expect(canAccessPath('/people', hrReader), isTrue);
+
+    expect(canAccessPath('/operations', studentReader), isFalse);
+
+    final assetReader = CurrentUser.fromJson({
+      'id': 'user-3',
+      'email': 'assets@example.com',
+      'displayName': 'Asset manager',
+      'role': 'office_staff',
+      'organization': {'id': 'org-1', 'name': 'School'},
+      'campus': {'id': 'campus-1', 'name': 'Main'},
+      'campuses': [],
+      'permissions': ['assets:read'],
+    });
+    expect(canAccessPath('/back-office', assetReader), isTrue);
+  });
+}
