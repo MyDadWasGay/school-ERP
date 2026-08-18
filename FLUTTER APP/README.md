@@ -23,7 +23,7 @@ Use a 64-bit Java 17 JDK for Gradle. On this workstation the verified JDK is
 that directory before Android builds if the shell defaults to the 32-bit Java 8
 runtime.
 
-The emulator reaches the host API through `http://10.0.2.2:3001/api/v1`. For a physical device, set `ERP_API_BASE_URL` to an HTTPS staging URL or a reachable development host. Production configuration is rejected unless the API URL uses HTTPS.
+The emulator reaches the host API through `http://10.0.2.2:3001/api/v1`. For a physical device, set `ERP_API_BASE_URL` to the reachable Fastify API origin or its full `/api/v1` URL; do not use the Next.js web host. The app adds `/api/v1` when only an origin is supplied, but the recommended production value is the complete URL, for example `https://api.example.com/api/v1`. Production configuration is rejected unless the API URL uses HTTPS.
 
 ## Android package, signing, and installation
 
@@ -94,7 +94,7 @@ build:
 The release job also requires these `Production` environment Variables so the
 installed app has its production runtime configuration:
 
-- `ERP_API_BASE_URL` (must be an HTTPS URL).
+- `ERP_API_BASE_URL` (must point to the Fastify API; use an HTTPS URL ending in `/api/v1`, for example `https://api.example.com/api/v1`).
 - `ERP_FIREBASE_API_KEY`.
 - `ERP_FIREBASE_APP_ID`.
 - `ERP_FIREBASE_MESSAGING_SENDER_ID`.

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 enum ApiErrorKind {
+  configuration,
   unauthenticated,
   forbidden,
   validation,
@@ -41,10 +42,14 @@ class ApiError implements Exception {
     }
     final status = error.response?.statusCode;
     final body = error.response?.data;
+    final routeNotFound = status == 404 && _isRouteNotFoundBody(body);
     final envelope = body is Map ? body['error'] : null;
     final details = envelope is Map ? envelope : const <String, Object?>{};
-    final code = details['code']?.toString();
+    final code =
+        details['code']?.toString() ??
+        (routeNotFound ? 'API_ROUTE_NOT_FOUND' : null);
     final kind = switch (status) {
+      404 when routeNotFound => ApiErrorKind.configuration,
       401 => ApiErrorKind.unauthenticated,
       403 => ApiErrorKind.forbidden,
       404 => ApiErrorKind.notFound,
@@ -59,7 +64,9 @@ class ApiError implements Exception {
       code: code,
       requestId: details['requestId']?.toString(),
       fields: details['fields'],
-      message: _safeMessage(status, code),
+      message: routeNotFound
+          ? 'The app could not reach the ERP API route. Verify the production API URL includes /api/v1.'
+          : _safeMessage(status, code),
     );
   }
 
@@ -68,6 +75,13 @@ class ApiError implements Exception {
   final String? code;
   final String? requestId;
   final Object? fields;
+
+  static bool _isRouteNotFoundBody(Object? body) {
+    if (body is! Map) return false;
+    final message = body['message']?.toString().toLowerCase().trim();
+    if (message == null || message.isEmpty) return false;
+    return message.startsWith('route ') || message.startsWith('cannot ');
+  }
 
   static String _safeMessage(int? status, String? code) => switch (status) {
     401 => 'Your session has expired. Please sign in again.',

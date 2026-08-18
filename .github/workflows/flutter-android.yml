@@ -113,6 +113,19 @@ jobs:
             *) echo 'ERP_API_BASE_URL must use HTTPS for a production artifact.' >&2; exit 1 ;;
           esac
 
+      - name: Smoke-test production API
+        env:
+          ERP_API_BASE_URL: ${{ vars.ERP_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          api_base="${ERP_API_BASE_URL%/}"
+          case "$api_base" in
+            */api/v1) ;;
+            *) api_base="$api_base/api/v1" ;;
+          esac
+          curl --fail --silent --show-error --location --max-time 20 \
+            "$api_base/health/live" >/dev/null
+
       - name: Restore upload keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

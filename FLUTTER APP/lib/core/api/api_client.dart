@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../shared/models/academic_models.dart';
 import '../../shared/models/admission_models.dart';
@@ -26,6 +27,7 @@ class ApiClient {
     required String baseUrl,
     required TokenLoader tokenLoader,
     required String? Function() campusId,
+    bool enableLogging = false,
   }) : _campusId = campusId,
        _dio = Dio(
          BaseOptions(
@@ -36,6 +38,9 @@ class ApiClient {
            headers: {'Accept': 'application/json'},
          ),
        ) {
+    if (enableLogging) {
+      _dio.interceptors.add(_ApiLoggingInterceptor());
+    }
     _dio.interceptors.add(_AuthInterceptor(_dio, tokenLoader, campusId));
   }
 
@@ -119,9 +124,9 @@ class ApiClient {
   )).map(CommunicationMessageRow.fromJson).toList(growable: false);
 
   Future<List<CommunicationRecipient>> getMessageRecipients() async =>
-      (await _getList('/communication/recipients'))
-          .map(CommunicationRecipient.fromJson)
-          .toList(growable: false);
+      (await _getList(
+        '/communication/recipients',
+      )).map(CommunicationRecipient.fromJson).toList(growable: false);
 
   Future<void> createMessage({
     required String subject,
@@ -245,7 +250,9 @@ class ApiClient {
 
   Future<AssignmentDetail> getAssignmentDetail(String assignmentId) async =>
       AssignmentDetail.fromJson(
-        await _get('/academics/assignments/${Uri.encodeComponent(assignmentId)}'),
+        await _get(
+          '/academics/assignments/${Uri.encodeComponent(assignmentId)}',
+        ),
       );
 
   Future<void> submitAssignment({
@@ -2439,10 +2446,9 @@ class ApiClient {
 
   Future<List<StudentReportCardRow>> getStudentReportCards(
     String studentId,
-  ) async =>
-      (await _getList(
-        '/students/${Uri.encodeComponent(studentId)}/report-cards',
-      )).map(StudentReportCardRow.fromJson).toList(growable: false);
+  ) async => (await _getList(
+    '/students/${Uri.encodeComponent(studentId)}/report-cards',
+  )).map(StudentReportCardRow.fromJson).toList(growable: false);
 
   Future<List<DocumentRow>> getDocuments(String studentId) async {
     final data = await _get(
@@ -2515,6 +2521,43 @@ class ApiClient {
       '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
+}
+
+class _ApiLoggingInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    debugPrint('[ERP API] ${options.method} ${_safeUrl(options.uri)}');
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(
+    Response<Object?> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    debugPrint(
+      '[ERP API] ${response.requestOptions.method} '
+      '${_safeUrl(response.requestOptions.uri)} -> ${response.statusCode}',
+    );
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException error, ErrorInterceptorHandler handler) {
+    final status = error.response?.statusCode?.toString() ?? error.type.name;
+    debugPrint(
+      '[ERP API] ${error.requestOptions.method} '
+      '${_safeUrl(error.requestOptions.uri)} -> $status',
+    );
+    handler.next(error);
+  }
+
+  static String _safeUrl(Uri uri) {
+    final host = uri.host.isEmpty ? '<host>' : uri.host;
+    final port = uri.hasPort ? ':${uri.port}' : '';
+    final path = uri.path.isEmpty ? '/' : uri.path;
+    return '${uri.scheme}://$host$port$path';
+  }
 }
 
 class _AuthInterceptor extends Interceptor {

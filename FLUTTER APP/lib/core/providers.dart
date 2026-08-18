@@ -52,13 +52,16 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   final auth = ref.watch(authGatewayProvider);
   return ApiClient(
     baseUrl: config.apiBaseUrl,
+    enableLogging: config.environment != AppEnvironment.production,
     tokenLoader: ({forceRefresh = false}) =>
         auth.getIdToken(forceRefresh: forceRefresh),
     campusId: () => ref.read(currentCampusIdProvider),
   );
 });
 
-final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+final pushNotificationServiceProvider = Provider<PushNotificationService>((
+  ref,
+) {
   final service = PushNotificationService(ref.watch(apiClientProvider));
   ref.onDispose(service.dispose);
   return service;
@@ -83,7 +86,9 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       );
       ref.read(currentCampusIdProvider.notifier).state = me.campus?.id;
       if (me.campus != null) await store.write(me.campus!.id);
-      unawaited(ref.read(pushNotificationServiceProvider).registerCurrentDevice());
+      unawaited(
+        ref.read(pushNotificationServiceProvider).registerCurrentDevice(),
+      );
       return me;
     } on ApiError catch (error) {
       if (storedCampus == null || error.kind != ApiErrorKind.forbidden) rethrow;
@@ -92,7 +97,9 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       final me = await api.getMe(omitCampus: true);
       if (me.campus != null) await store.write(me.campus!.id);
       ref.read(currentCampusIdProvider.notifier).state = me.campus?.id;
-      unawaited(ref.read(pushNotificationServiceProvider).registerCurrentDevice());
+      unawaited(
+        ref.read(pushNotificationServiceProvider).registerCurrentDevice(),
+      );
       return me;
     }
   }
@@ -195,7 +202,9 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       for (final kind in _academicSetupKinds) {
         ref.invalidate(academicSetupProvider(kind));
       }
-      unawaited(ref.read(pushNotificationServiceProvider).registerCurrentDevice());
+      unawaited(
+        ref.read(pushNotificationServiceProvider).registerCurrentDevice(),
+      );
       return me;
     });
     if (state.hasError) {
@@ -261,12 +270,13 @@ final messagesProvider = FutureProvider<List<CommunicationMessageRow>>((
   return ref.watch(apiClientProvider).getMessages();
 });
 
-final messageRecipientsProvider =
-    FutureProvider<List<CommunicationRecipient>>((ref) async {
-      final me = await ref.watch(sessionProvider.future);
-      if (!me.can('communication:read')) return const [];
-      return ref.watch(apiClientProvider).getMessageRecipients();
-    });
+final messageRecipientsProvider = FutureProvider<List<CommunicationRecipient>>((
+  ref,
+) async {
+  final me = await ref.watch(sessionProvider.future);
+  if (!me.can('communication:read')) return const [];
+  return ref.watch(apiClientProvider).getMessageRecipients();
+});
 
 final academicRecordsProvider =
     FutureProvider.family<List<AcademicRecord>, String>((ref, kind) async {
