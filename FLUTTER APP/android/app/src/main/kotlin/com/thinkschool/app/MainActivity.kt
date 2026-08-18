@@ -1,4 +1,4 @@
-package com.schoolerp.school_erp_mobile
+package com.thinkschool.app
 
 import io.flutter.embedding.android.FlutterActivity
 

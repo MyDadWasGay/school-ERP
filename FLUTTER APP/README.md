@@ -25,6 +25,85 @@ runtime.
 
 The emulator reaches the host API through `http://10.0.2.2:3001/api/v1`. For a physical device, set `ERP_API_BASE_URL` to an HTTPS staging URL or a reachable development host. Production configuration is rejected unless the API URL uses HTTPS.
 
+## Android package, signing, and installation
+
+The Android application ID (package name) is `com.thinkschool.app`.
+Keep it unchanged when configuring Firebase or updating an installed build; it
+is the identity Android uses to install and update this app.
+
+Release builds use an upload keystore. The keystore and `android/key.properties`
+are intentionally ignored by Git.
+
+If the local upload keystore has not been created yet, use a Java 17 `keytool`
+and keep the resulting file in a private backup location:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\ojdkbuild\java-17-openjdk-17.0.3.0.6-1'
+& "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -v `
+  -keystore android/app/upload-keystore.jks `
+  -storetype JKS `
+  -keyalg RSA `
+  -keysize 2048 `
+  -validity 10000 `
+  -alias school-erp-upload
+```
+
+Copy `android/key.properties.example` to `android/key.properties` and fill in
+the keystore and key passwords. For the documented layout, keep
+`storeFile=upload-keystore.jks`; that path is relative to `android/app`.
+
+With `config/app_config.local.json` populated, build and install the signed
+APK on a connected device or emulator:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\ojdkbuild\java-17-openjdk-17.0.3.0.6-1'
+flutter clean
+flutter pub get
+flutter build apk --release --dart-define-from-file=config/app_config.local.json
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+If a debug-signed copy is already installed, uninstall that development copy
+once before installing the release-signed APK; do not uninstall a production
+install unless its local data can be discarded.
+
+The Play Store artifact is an app bundle:
+
+```powershell
+flutter build appbundle --release --dart-define-from-file=config/app_config.local.json
+```
+
+It is written to `build/app/outputs/bundle/release/app-release.aab`. Back up
+the upload keystore and both passwords; losing them prevents future updates
+signed with the same upload identity.
+
+## GitHub Actions Android artifacts
+
+`.github/workflows/flutter-android.yml` runs Flutter checks on pull requests
+and creates signed release artifacts on pushes to `main`, `v*` tags, or a
+manual dispatch. The signed release job uses the GitHub `Production`
+environment. Add these environment secrets under
+Repository Settings -> Environments -> Production before running a release
+build:
+
+- `ANDROID_KEYSTORE_BASE64`: base64 of `android/app/upload-keystore.jks`.
+- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
+- `ANDROID_KEY_ALIAS`: `school-erp-upload` (or the alias you chose).
+- `ANDROID_KEY_PASSWORD`: private-key password.
+
+The release job also requires these `Production` environment Variables so the
+installed app has its production runtime configuration:
+
+- `ERP_API_BASE_URL` (must be an HTTPS URL).
+- `ERP_FIREBASE_API_KEY`.
+- `ERP_FIREBASE_APP_ID`.
+- `ERP_FIREBASE_MESSAGING_SENDER_ID`.
+- `ERP_FIREBASE_PROJECT_ID`.
+
+The workflow exposes the APK and AAB under the same GitHub Actions artifact,
+along with SHA-256 checksums. Pull requests intentionally do not use signing
+secrets; they run an unsigned/debug Android build plus the Flutter checks.
+
 ## Verification
 
 ```powershell

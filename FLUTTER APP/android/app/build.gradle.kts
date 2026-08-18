@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,8 +8,29 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use(keystoreProperties::load)
+}
+
+val releaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("release", ignoreCase = true)
+}
+
+if (releaseBuildRequested && !keystorePropertiesFile.isFile) {
+    throw GradleException(
+        "Missing android/key.properties. Copy android/key.properties.example, " +
+            "create an upload keystore, and fill in the signing values before a release build.",
+    )
+}
+
+fun requiredKeystoreProperty(name: String): String =
+    keystoreProperties.getProperty(name)?.takeIf(String::isNotBlank)
+        ?: throw GradleException("Missing '$name' in android/key.properties.")
+
 android {
-    namespace = "com.schoolerp.school_erp_mobile"
+    namespace = "com.thinkschool.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +44,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.schoolerp.school_erp_mobile"
+        // Keep this application ID stable: it is the Android package identity used by
+        // Firebase and by Android when installing/updating the app.
+        applicationId = "com.thinkschool.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -30,11 +55,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.isFile) {
+            create("release") {
+                keyAlias = requiredKeystoreProperty("keyAlias")
+                keyPassword = requiredKeystoreProperty("keyPassword")
+                storeFile = file(requiredKeystoreProperty("storeFile"))
+                storePassword = requiredKeystoreProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (keystorePropertiesFile.isFile) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

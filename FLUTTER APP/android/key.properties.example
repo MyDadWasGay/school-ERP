@@ -1,0 +1,8 @@
+# Copy this file to android/key.properties and replace every placeholder.
+# Keep android/key.properties and the referenced keystore private.
+
+storePassword=replace-with-keystore-password
+keyPassword=replace-with-key-password
+keyAlias=school-erp-upload
+# Relative to android/app. Use upload-keystore.jks for the documented setup.
+storeFile=upload-keystore.jks
