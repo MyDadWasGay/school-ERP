@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CurrentUser } from "../../../lib/auth/types";
+import { readCorsOrigins } from "../config";
 
 const mocks = vi.hoisted(() => ({
   verifyIdToken: vi.fn(),
@@ -41,8 +42,7 @@ function mutationChain() {
 }
 
 function testOrigin() {
-  return process.env.API_CORS_ORIGINS?.split(",").map((origin) => origin.trim()).find(Boolean) ??
-    "http://localhost:3000";
+  return readCorsOrigins()[0] ?? "http://localhost:3000";
 }
 
 describe("API-owned browser session", () => {
