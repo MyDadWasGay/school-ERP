@@ -1,5 +1,9 @@
 import { Activity, BarChart3, BedDouble, BookOpen, Boxes, CalendarCheck, ClipboardList, CreditCard, FileText, Globe2, GraduationCap, HeartPulse, Home, LayoutDashboard, Library, Megaphone, Package, Plug, Route, ShieldCheck, ShoppingCart, UserRound, Users, Utensils, type LucideIcon } from "lucide-react";
-import { isReleasedRoute } from "./route-registry";
+import {
+  configuredRoutePaths,
+  isReleasedRoute,
+  routeDefinitionForPath,
+} from "./route-registry";
 
 export type NavItem = {
   label: string;
@@ -11,6 +15,79 @@ export type NavItem = {
   excludePrefixes?: string[];
 };
 export type NavGroup = { label: string; items: NavItem[] };
+
+function hasNavigationPermission(
+  permissions: string[],
+  requiredPermission?: string,
+) {
+  return (
+    !requiredPermission ||
+    permissions.includes("*") ||
+    permissions.includes(requiredPermission)
+  );
+}
+
+function isExcludedNavigationPath(path: string, item: NavItem) {
+  return item.excludePrefixes?.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+function navigationCandidates(item: NavItem) {
+  const prefixes = item.activePrefixes ?? [item.href];
+  const paths = [
+    item.href,
+    ...configuredRoutePaths.filter((path) =>
+      prefixes.some(
+        (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+      ),
+    ),
+  ];
+  return Array.from(new Set(paths))
+    .filter((path) => isReleasedRoute(path))
+    .filter((path) => !isExcludedNavigationPath(path, item))
+    .map((path) => ({
+      href: path,
+      permission:
+        path === item.href
+          ? item.permission
+          : routeDefinitionForPath(path)?.permission,
+    }));
+}
+
+/**
+ * Resolve a grouped navigation item to the first released route the user can
+ * actually open. This keeps labels such as Finance or Reports useful for
+ * roles that have only one side of the grouped module.
+ */
+export function resolveNavigationItem(
+  item: NavItem,
+  permissions: string[],
+): NavItem | null {
+  const destination = navigationCandidates(item).find((candidate) =>
+    hasNavigationPermission(permissions, candidate.permission),
+  );
+  if (!destination) return null;
+  return {
+    ...item,
+    href: destination.href,
+    permission: destination.permission,
+  };
+}
+
+export function navigationForPermissions(
+  role: string,
+  permissions: string[],
+): NavGroup[] {
+  return navigationForRole(role)
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .map((item) => resolveNavigationItem(item, permissions))
+        .filter((item): item is NavItem => item !== null),
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
 const frequentlyVisitedRoutes = new Set([
   "/dashboard",

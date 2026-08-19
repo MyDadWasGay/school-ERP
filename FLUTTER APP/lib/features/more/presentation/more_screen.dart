@@ -70,10 +70,10 @@ class MoreScreen extends ConsumerWidget {
               path: '/admissions',
               icon: Icons.how_to_reg_outlined,
             ),
-          if (user.can('fees:read'))
+          if (user.can('fees:read') || user.can('accounts:read'))
             const _MoreLink(
               title: 'Finance',
-              subtitle: 'Invoices, payments and collection records',
+              subtitle: 'Fees, payments and accounts in your scope',
               path: '/finance',
               icon: Icons.account_balance_wallet_outlined,
             ),

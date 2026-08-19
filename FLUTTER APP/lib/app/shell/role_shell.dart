@@ -15,10 +15,11 @@ class RoleShell extends ConsumerWidget {
     final destinations = <_Destination>[
       const _Destination('/home', 'Home', Icons.home_outlined, Icons.home),
       if (user == null ||
-          user.role == 'student' ||
-          user.role == 'parent' ||
-          user.role == 'teacher' ||
-          user.linkedStudentId != null)
+          (user.can('portals:read') &&
+              (user.role == 'student' ||
+                  user.role == 'parent' ||
+                  user.role == 'teacher' ||
+                  user.linkedStudentId != null)))
         const _Destination(
           '/student',
           'Students',

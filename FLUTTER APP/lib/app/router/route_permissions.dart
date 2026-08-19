@@ -24,13 +24,10 @@ bool canAccessPath(String path, CurrentUser user) {
     return user.can('students:read') || user.can('hr:read');
   }
   if (path.startsWith('/operations')) {
-    return user.can('safety:read') ||
-        user.can('health:read') ||
-        user.can('inventory:read') ||
-        user.can('procurement:read') ||
-        user.can('facilities:read') ||
-        user.can('hostel:read') ||
-        user.can('canteen:read');
+    return user.can('safety:read') || user.can('health:read');
+  }
+  if (path.startsWith('/finance')) {
+    return user.can('fees:read') || user.can('accounts:read');
   }
   if (path.startsWith('/back-office')) {
     return user.can('assets:read') ||

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, School, X } from "lucide-react";
-import { isNavigationItemActive, navigationForRole, shouldPrefetchNavigation } from "@/config/nav";
+import { isNavigationItemActive, navigationForPermissions, shouldPrefetchNavigation } from "@/config/nav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { CurrentUser } from "@/lib/auth/types";
@@ -14,12 +14,7 @@ export function MobileSidebar({ user }: { user: CurrentUser }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const pathname = usePathname();
-  const visibleGroups = navigationForRole(user.role)
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !item.permission || user.permissions.includes("*") || user.permissions.includes(item.permission)),
-    }))
-    .filter((group) => group.items.length > 0);
+  const visibleGroups = navigationForPermissions(user.role, user.permissions);
 
   useEffect(() => {
     if (!open) return;

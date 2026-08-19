@@ -2,6 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:school_erp_mobile/app/router/route_permissions.dart';
 import 'package:school_erp_mobile/shared/models/identity_models.dart';
 
+CurrentUser testUser(List<String> permissions) => CurrentUser.fromJson({
+  'id': 'user-test',
+  'email': 'test@example.com',
+  'displayName': 'Test user',
+  'role': 'office_staff',
+  'organization': {'id': 'org-1', 'name': 'School'},
+  'campus': {'id': 'campus-1', 'name': 'Main'},
+  'campuses': [],
+  'permissions': permissions,
+});
+
 void main() {
   test('maps protected routes to their server capabilities', () {
     expect(permissionForPath('/exams'), 'exams:read');
@@ -50,5 +61,18 @@ void main() {
       'permissions': ['assets:read'],
     });
     expect(canAccessPath('/back-office', assetReader), isTrue);
+  });
+
+  test('keeps grouped mobile workspaces aligned with their visible tabs', () {
+    final accountsReader = testUser(['accounts:read']);
+    expect(canAccessPath('/finance', accountsReader), isTrue);
+    expect(canAccessPath('/operations', accountsReader), isFalse);
+
+    final inventoryReader = testUser(['inventory:read']);
+    expect(canAccessPath('/back-office', inventoryReader), isTrue);
+    expect(canAccessPath('/operations', inventoryReader), isFalse);
+
+    final payrollReader = testUser(['payroll:read']);
+    expect(canAccessPath('/hr', payrollReader), isTrue);
   });
 }

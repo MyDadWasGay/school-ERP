@@ -2,18 +2,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { School } from "lucide-react";
-import { isNavigationItemActive, navigationForRole, shouldPrefetchNavigation } from "@/config/nav";
+import { isNavigationItemActive, navigationForPermissions, shouldPrefetchNavigation } from "@/config/nav";
 import type { CurrentUser } from "@/lib/auth/types";
 import { cn } from "@/lib/utils/cn";
 
 export function Sidebar({ user }: { user: CurrentUser }) {
   const pathname = usePathname();
-  const visibleGroups = navigationForRole(user.role)
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !item.permission || user.permissions.includes("*") || user.permissions.includes(item.permission)),
-    }))
-    .filter((group) => group.items.length > 0);
+  const visibleGroups = navigationForPermissions(user.role, user.permissions);
 
   return <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r bg-card lg:block">
     <div className="flex h-16 items-center gap-2 border-b px-5">

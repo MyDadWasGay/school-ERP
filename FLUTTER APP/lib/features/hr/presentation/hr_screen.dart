@@ -19,13 +19,20 @@ class HrScreen extends ConsumerStatefulWidget {
 
 class _HrScreenState extends ConsumerState<HrScreen> {
   Future<void> _refresh() async {
+    final user = ref.read(sessionProvider).valueOrNull;
+    final canReadEmployees = user?.can('hr:read') == true;
+    final canReadPayroll = user?.can('payroll:read') == true;
+    final canReadAttendance = user?.can('attendance:read') == true;
     ref.invalidate(employeesProvider);
     ref.invalidate(payrollRunsProvider);
     ref.invalidate(payslipsProvider);
+    ref.invalidate(staffAttendanceProvider);
+    ref.invalidate(employeeAttendanceOptionsProvider);
     await Future.wait([
-      ref.read(employeesProvider.future),
-      ref.read(payrollRunsProvider.future),
-      ref.read(payslipsProvider.future),
+      if (canReadEmployees) ref.read(employeesProvider.future),
+      if (canReadPayroll) ref.read(payrollRunsProvider.future),
+      if (canReadPayroll) ref.read(payslipsProvider.future),
+      if (canReadAttendance) ref.read(staffAttendanceProvider.future),
     ]);
   }
 

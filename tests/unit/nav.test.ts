@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isNavigationItemActive, navigationForRole } from "@/config/nav";
+import { isNavigationItemActive, navigationForPermissions, navigationForRole, resolveNavigationItem } from "@/config/nav";
+import { rolePermissionDefaults } from "@/config/permissions";
 import { breadcrumbsForPath, configuredRoutePaths, genericCatalogPaths, genericIntegrationPaths, isReleasedRoute, plannedPaths, reservedCatalogPaths, routeDefinitions, routeLabelForPath, routePresentationForPath, unreleasedPaths } from "@/config/route-registry";
 
 describe("role-aware navigation", () => {
@@ -27,6 +28,50 @@ describe("role-aware navigation", () => {
     const labels = navigationForRole("teacher").flatMap((group) => group.items).map((item) => item.label);
     expect(labels).toContain("My Dashboard");
     expect(labels).not.toContain("Fees & Finance");
+  });
+
+  it("resolves grouped navigation to a released route the role can open", () => {
+    const items = navigationForRole("admin").flatMap((group) => group.items);
+    const itemFor = (label: string) => {
+      const item = items.find((candidate) => candidate.label === label);
+      if (!item) throw new Error(`Missing navigation item: ${label}`);
+      return item;
+    };
+
+    expect(resolveNavigationItem(itemFor("Reports & Analytics"), ["reports:read"])).toMatchObject({
+      href: "/reports",
+      permission: "reports:read",
+    });
+    expect(resolveNavigationItem(itemFor("Reports & Analytics"), ["analytics:read"])).toMatchObject({
+      href: "/analytics",
+      permission: "analytics:read",
+    });
+    expect(resolveNavigationItem(itemFor("Fees & Finance"), ["accounts:read"])).toMatchObject({
+      href: "/accounts/chart-of-accounts",
+      permission: "accounts:read",
+    });
+    expect(resolveNavigationItem(itemFor("People & HR"), ["payroll:read"])).toMatchObject({
+      href: "/payroll/runs",
+      permission: "payroll:read",
+    });
+    expect(resolveNavigationItem(itemFor("Health & Safety"), ["safety:read"])).toMatchObject({
+      href: "/safety/visitors",
+      permission: "safety:read",
+    });
+  });
+
+  it("keeps default-role navigation aligned with its route permissions", () => {
+    for (const [role, permissions] of Object.entries(rolePermissionDefaults)) {
+      const items = navigationForPermissions(role, permissions).flatMap((group) => group.items);
+      expect(items.length, role).toBeGreaterThan(0);
+      expect(items.every((item) => isReleasedRoute(item.href)), role).toBe(true);
+      expect(items.every((item) => !item.permission || permissions.includes("*") || permissions.includes(item.permission)), role).toBe(true);
+    }
+
+    const officeItems = navigationForPermissions("office_staff", rolePermissionDefaults.office_staff)
+      .flatMap((group) => group.items);
+    expect(officeItems.find((item) => item.label === "Dashboard")?.href).toBe("/dashboard");
+    expect(officeItems.find((item) => item.label === "Reports & Analytics")?.href).toBe("/reports");
   });
 
   it("keeps deep route orientation human-readable and semantic", () => {

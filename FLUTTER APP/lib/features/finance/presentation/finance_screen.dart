@@ -19,6 +19,9 @@ class FinanceScreen extends ConsumerStatefulWidget {
 
 class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   Future<void> _refresh() async {
+    final user = ref.read(sessionProvider).valueOrNull;
+    final canReadFees = user?.can('fees:read') == true;
+    final canReadAccounts = user?.can('accounts:read') == true;
     ref.invalidate(financeInvoicesProvider);
     ref.invalidate(paymentOptionsProvider);
     ref.invalidate(paymentsProvider);
@@ -30,21 +33,16 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     ref.invalidate(feeConfigurationProvider);
     ref.invalidate(invoiceStudentOptionsProvider);
     await Future.wait([
-      ref.read(financeInvoicesProvider.future),
-      ref.read(paymentOptionsProvider.future),
-      ref.read(paymentsProvider.future),
-      if (ref.read(sessionProvider).valueOrNull?.can('fees:refund') == true)
+      if (canReadFees) ref.read(financeInvoicesProvider.future),
+      if (canReadFees) ref.read(paymentOptionsProvider.future),
+      if (canReadFees) ref.read(paymentsProvider.future),
+      if (canReadFees && user?.can('fees:refund') == true)
         ref.read(financeRefundOptionsProvider.future),
-      if (ref.read(sessionProvider).valueOrNull?.can('accounts:read') == true)
-        ref.read(financeAccountsProvider.future),
-      if (ref.read(sessionProvider).valueOrNull?.can('accounts:read') == true)
-        ref.read(financeExpensesProvider.future),
-      if (ref.read(sessionProvider).valueOrNull?.can('accounts:read') == true)
-        ref.read(financeLedgerProvider.future),
-      if (ref.read(sessionProvider).valueOrNull?.can('accounts:read') == true)
-        ref.read(financeDonationsProvider.future),
-      if (ref.read(sessionProvider).valueOrNull?.can('fees:read') == true)
-        ref.read(feeConfigurationProvider.future),
+      if (canReadAccounts) ref.read(financeAccountsProvider.future),
+      if (canReadAccounts) ref.read(financeExpensesProvider.future),
+      if (canReadAccounts) ref.read(financeLedgerProvider.future),
+      if (canReadAccounts) ref.read(financeDonationsProvider.future),
+      if (canReadFees) ref.read(feeConfigurationProvider.future),
     ]);
   }
 
@@ -115,28 +113,38 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final canCreateInvoice =
         ref.watch(sessionProvider).valueOrNull?.can('fees:create') == true;
     final user = ref.watch(sessionProvider).valueOrNull;
+    final canReadFees = user?.can('fees:read') == true;
+    final canReadAccounts = user?.can('accounts:read') == true;
     final tabs = <Tab>[
-      const Tab(text: 'Invoices'),
-      const Tab(text: 'Payments'),
-      if (user?.can('fees:refund') == true) const Tab(text: 'Refunds'),
-      if (user?.can('accounts:read') == true) const Tab(text: 'Accounts'),
-      if (user?.can('fees:read') == true) const Tab(text: 'Fee setup'),
+      if (canReadFees) const Tab(text: 'Invoices'),
+      if (canReadFees) const Tab(text: 'Payments'),
+      if (canReadFees && user?.can('fees:refund') == true)
+        const Tab(text: 'Refunds'),
+      if (canReadAccounts) const Tab(text: 'Accounts'),
+      if (canReadFees) const Tab(text: 'Fee setup'),
     ];
     final views = <Widget>[
-      _InvoiceWorkspace(
-        canCollect: canCollect,
-        canCreateInvoice: canCreateInvoice,
-        onCreateInvoice: _createInvoice,
-        onRecordPayment: _recordPayment,
-        onRefresh: _refresh,
-      ),
-      _PaymentHistory(onRefresh: _refresh),
-      if (user?.can('fees:refund') == true)
+      if (canReadFees)
+        _InvoiceWorkspace(
+          canCollect: canCollect,
+          canCreateInvoice: canCreateInvoice,
+          onCreateInvoice: _createInvoice,
+          onRecordPayment: _recordPayment,
+          onRefresh: _refresh,
+        ),
+      if (canReadFees) _PaymentHistory(onRefresh: _refresh),
+      if (canReadFees && user?.can('fees:refund') == true)
         FinanceRefundsTab(onRefresh: _refresh),
-      if (user?.can('accounts:read') == true)
-        FinanceAccountsTab(onRefresh: _refresh),
-      if (user?.can('fees:read') == true) FeeSetupTab(onRefresh: _refresh),
+      if (canReadAccounts) FinanceAccountsTab(onRefresh: _refresh),
+      if (canReadFees) FeeSetupTab(onRefresh: _refresh),
     ];
+    if (tabs.isEmpty) {
+      return const ErpEmptyState(
+        icon: Icons.lock_outline,
+        title: 'Finance is not available',
+        message: 'Your account does not have fee or accounts access.',
+      );
+    }
     return DefaultTabController(
       length: tabs.length,
       child: Column(
