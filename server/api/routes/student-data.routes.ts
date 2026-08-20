@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { listStudentAttendance } from "../../../features/attendance/services/attendance-workspace.service";
+import { listStudentDisciplineIncidents } from "../../../features/attendance/services/discipline.service";
 import { createLeaveRequest } from "../../../features/attendance/services/leave.service";
 import { leaveRequestSchema } from "../../../features/attendance/schemas/leave.schema";
 import { listNotificationsPage } from "../../../features/communication/services/communication.service";
 import { markNotificationRead } from "../../../features/communication/services/communication.service";
 import { listStudentPublishedResults } from "../../../features/exams/services/exam-workspace.service";
+import { listStudentAdmitCards } from "../../../features/exams/services/exam-workspace.service";
 import { listStudentReportCards } from "../../../features/exams/services/deep-feature.service";
 import { listStudentInvoices, listStudentPayments } from "../../../features/finance/services/finance-workspace.service";
 import { getStudentFormOptions, getStudentMedicalProfile, getStudentProfile, listStudents, listStudentsPage } from "../../../features/students/services/students.service";
@@ -90,6 +92,7 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
             photoUrl: profile.student.photoUrl,
             bloodGroup: profile.student.bloodGroup,
             campusId: profile.student.campusId,
+            campusName: profile.campusName ?? null,
             joinedOn: profile.student.joinedOn.toISOString(),
             status: profile.student.status,
           },
@@ -117,6 +120,8 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
             rollNumber: enrollment.rollNumber,
             startsOn: enrollment.startsOn.toISOString(),
             endsOn: enrollment.endsOn?.toISOString() ?? null,
+            className: enrollment.className ?? null,
+            sectionName: enrollment.sectionName ?? null,
             status: enrollment.status,
           })),
           timeline: profile.timeline.map((event) => ({
@@ -175,6 +180,23 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.get<{ Params: StudentParams }>(
+    "/students/:studentId/discipline",
+    { preHandler: authenticateApiRequest, schema: routeSchema("Read a scoped student discipline timeline") },
+    async (request) => {
+      const user = requireApiPermission(request, "attendance:read");
+      const incidents = await listStudentDisciplineIncidents(user, request.params.studentId);
+      await writeAuditLog(user, {
+        action: "view_sensitive",
+        module: "attendance",
+        entityType: "student_discipline_timeline",
+        entityId: request.params.studentId,
+        campusId: user.campusId,
+      });
+      return apiSuccess(request, incidents);
+    },
+  );
+
   app.get<{ Params: StudentParams; Querystring: PaginationQuery }>(
     "/students/:studentId/invoices",
     { preHandler: authenticateApiRequest, schema: studentInvoicesSchema },
@@ -223,6 +245,15 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
         data: { studentId: request.params.studentId, ...result },
         meta: { requestId: request.id },
       };
+    },
+  );
+
+  app.get<{ Params: StudentParams }>(
+    "/students/:studentId/admit-cards",
+    { preHandler: authenticateApiRequest, schema: routeSchema("Read authorized student exam admit cards") },
+    async (request) => {
+      const user = requireApiPermission(request, "exams:read");
+      return apiSuccess(request, await listStudentAdmitCards(user, request.params.studentId));
     },
   );
 

@@ -353,7 +353,7 @@ class _Payslips extends ConsumerWidget {
                             onPressed: () async {
                               try {
                                 await shareErpPdf(
-                                  bytes: ErpPdfBuilder.payslip(
+                                  bytes: await ErpPdfBuilder.payslip(
                                     schoolName: schoolName,
                                     payslip: row,
                                   ),

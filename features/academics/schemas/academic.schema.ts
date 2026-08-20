@@ -37,3 +37,6 @@ export const academicArchiveSchema = z.object({
 });
 
 export type AcademicRecordInput = z.infer<typeof academicRecordSchema>;
+export const lessonPlanStatusSchema = z.object({
+  status: z.enum(["draft", "in_progress", "completed"]),
+});

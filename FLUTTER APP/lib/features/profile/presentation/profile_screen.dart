@@ -3,12 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
+import '../../../core/auth/biometric_auth_service.dart';
+import '../../../shared/models/identity_models.dart';
 import '../../../shared/widgets/erp_states.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+  Future<void> _logout(
+    BuildContext context,
+    WidgetRef ref,
+    CurrentUser user,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -41,6 +47,9 @@ class ProfileScreen extends ConsumerWidget {
       // rejects expired/revoked ID tokens on every protected request.
     }
     await ref.read(campusStoreProvider).clear();
+    await ref
+      .read(biometricAuthServiceProvider)
+      .disable(biometricAccountKey(user.organization.id, user.id));
     ref.read(currentCampusIdProvider.notifier).state = null;
     ref.read(selectedStudentIdProvider.notifier).state = null;
     await ref.read(authGatewayProvider).signOut();
@@ -148,12 +157,14 @@ class ProfileScreen extends ConsumerWidget {
                     '${user.permissions.length} server-authorized capabilities',
                   ),
                 ),
+                const Divider(height: 1),
+                _BiometricSetting(user: user),
               ],
             ),
           ),
           const SizedBox(height: ErpSpacing.xl),
           OutlinedButton.icon(
-            onPressed: () => _logout(context, ref),
+            onPressed: () => _logout(context, ref, user),
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),
           ),
@@ -175,5 +186,61 @@ class ProfileScreen extends ConsumerWidget {
         .where((part) => part.isNotEmpty)
         .take(2);
     return parts.map((part) => part[0].toUpperCase()).join();
+  }
+}
+
+class _BiometricSetting extends ConsumerWidget {
+  const _BiometricSetting({required this.user});
+
+  final CurrentUser user;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountKey = biometricAccountKey(user.organization.id, user.id);
+    final enabled = ref.watch(biometricEnabledProvider(accountKey));
+    final availability = ref.watch(biometricAvailabilityProvider);
+    final canUse = availability.valueOrNull?.canUnlock == true;
+    return ListTile(
+      leading: const Icon(Icons.fingerprint),
+      title: const Text('Biometric unlock'),
+      subtitle: Text(
+        enabled.valueOrNull == true
+            ? 'Enabled for this account on this device.'
+            : canUse
+            ? 'Use fingerprint, face, or device credentials at launch.'
+            : 'Set up a device biometric or screen lock to enable it.',
+      ),
+      trailing: Switch(
+        value: enabled.valueOrNull == true,
+        onChanged: canUse && !enabled.isLoading
+            ? (value) async {
+                final service = ref.read(biometricAuthServiceProvider);
+                try {
+                  if (value) {
+                    final changed = await service.enable(accountKey);
+                    if (!changed && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Biometric verification was not completed.'),
+                        ),
+                      );
+                    }
+                  } else {
+                    await service.disable(accountKey);
+                  }
+                  ref.invalidate(biometricEnabledProvider(accountKey));
+                } on Object {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Biometric settings could not be updated.'),
+                      ),
+                    );
+                  }
+                }
+              }
+            : null,
+      ),
+    );
   }
 }

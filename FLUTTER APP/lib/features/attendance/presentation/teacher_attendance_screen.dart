@@ -7,7 +7,9 @@ import 'package:intl/intl.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
-import '../../../shared/models/attendance_models.dart';
+import '../../../core/sync/mutation_queue.dart';
+import '../../../core/sync/sync_engine.dart';
+import '../../../shared/models/identity_models.dart';
 import '../../../shared/models/teacher_models.dart';
 import '../../../shared/widgets/erp_states.dart';
 
@@ -34,9 +36,10 @@ class _TeacherAttendanceScreenState
   late DateTime _date;
   final _search = TextEditingController();
   final _states = <String, String?>{};
-  final _drafts = <String, AttendanceDraft>{};
+  final _drafts = <String, QueuedMutation>{};
   final _saving = <String>{};
   String _query = '';
+  bool _bulkSaving = false;
 
   @override
   void initState() {
@@ -91,9 +94,13 @@ class _TeacherAttendanceScreenState
     final user = ref.read(sessionProvider).valueOrNull;
     final campusId = user?.campus?.id;
     if (user == null || campusId == null) return;
-    final drafts = await ref
-        .read(attendanceDraftStoreProvider)
-        .read(userId: user.id, campusId: campusId);
+    await _migrateLegacyDrafts(user, campusId);
+    final scope = SyncScope(
+      tenantId: user.organization.id,
+      userId: user.id,
+      campusId: campusId,
+    );
+    final drafts = await ref.read(mutationQueueProvider).read(scope);
     if (!mounted) return;
     final currentDate = _dateKey;
     setState(() {
@@ -101,10 +108,59 @@ class _TeacherAttendanceScreenState
         ..clear()
         ..addEntries(
           drafts
-              .where((draft) => draft.attendanceDate == currentDate)
-              .map((draft) => MapEntry(draft.studentId, draft)),
+              .where(
+                (draft) =>
+                    draft.entityType == 'attendance' &&
+                    draft.status != MutationStatus.synced &&
+                    _mutationDate(draft) == currentDate,
+              )
+              .map((draft) => MapEntry(draft.entityId, draft)),
         );
     });
+  }
+
+  Future<void> _migrateLegacyDrafts(CurrentUser user, String campusId) async {
+    final legacy = await ref
+        .read(attendanceDraftStoreProvider)
+        .read(userId: user.id, campusId: campusId);
+    if (legacy.isEmpty) return;
+    final scope = SyncScope(
+      tenantId: user.organization.id,
+      userId: user.id,
+      campusId: campusId,
+    );
+    final queue = ref.read(mutationQueueProvider);
+    for (final draft in legacy) {
+      await queue.upsert(
+        scope,
+        QueuedMutation(
+          id: draft.id,
+          tenantId: user.organization.id,
+          campusId: campusId,
+          userId: user.id,
+          entityType: 'attendance',
+          entityId: draft.studentId,
+          operation: 'upsert',
+          payload: {
+            'studentId': draft.studentId,
+            'attendanceDate': draft.attendanceDate,
+            'periodKey': draft.periodKey,
+            'state': draft.state,
+            if (draft.note != null) 'note': draft.note,
+          },
+          createdAt: draft.savedAt,
+          attemptCount: 0,
+          status: MutationStatus.pending,
+          idempotencyKey: draft.id,
+        ),
+      );
+      await ref.read(attendanceDraftStoreProvider).remove(draft.id);
+    }
+  }
+
+  String? _mutationDate(QueuedMutation mutation) {
+    final value = mutation.payload['attendanceDate'];
+    return value is String ? value : null;
   }
 
   String _draftId(String studentId, String userId, String campusId) =>
@@ -117,25 +173,37 @@ class _TeacherAttendanceScreenState
     final user = ref.read(sessionProvider).valueOrNull;
     final campusId = user?.campus?.id;
     if (user == null || campusId == null) return;
-    final draft = AttendanceDraft(
-      id: _draftId(studentId, user.id, campusId),
+    final scope = SyncScope(
+      tenantId: user.organization.id,
       userId: user.id,
       campusId: campusId,
-      studentId: studentId,
-      attendanceDate: _dateKey,
-      periodKey: 'daily',
-      state: state,
-      savedAt: DateTime.now(),
     );
-    await ref.read(attendanceDraftStoreProvider).upsert(draft);
+    final draft = QueuedMutation(
+      id: _draftId(studentId, user.id, campusId),
+      tenantId: user.organization.id,
+      campusId: campusId,
+      userId: user.id,
+      entityType: 'attendance',
+      entityId: studentId,
+      operation: 'upsert',
+      payload: {
+        'studentId': studentId,
+        'attendanceDate': _dateKey,
+        'periodKey': 'daily',
+        'state': state,
+      },
+      createdAt: DateTime.now().toUtc(),
+      attemptCount: 0,
+      status: MutationStatus.pending,
+      idempotencyKey: _draftId(studentId, user.id, campusId),
+    );
+    await ref.read(mutationQueueProvider).upsert(scope, draft);
     if (!mounted) return;
     setState(() => _drafts[studentId] = draft);
   }
 
   bool _isRetryableNetworkError(Object error) =>
-      error is ApiError &&
-      (error.kind == ApiErrorKind.networkUnavailable ||
-          error.kind == ApiErrorKind.timeout);
+      const RetryPolicy().classify(error) == MutationFailureKind.retryable;
 
   Future<void> _save(String studentId, String state) async {
     if (_saving.contains(studentId)) return;
@@ -149,9 +217,22 @@ class _TeacherAttendanceScreenState
             periodKey: 'daily',
             state: state,
           );
+      final user = ref.read(sessionProvider).valueOrNull;
+      final campusId = user?.campus?.id;
       final draft = _drafts.remove(studentId);
       if (draft != null) {
-        await ref.read(attendanceDraftStoreProvider).remove(draft.id);
+        if (user != null && campusId != null) {
+          await ref
+              .read(mutationQueueProvider)
+              .remove(
+                SyncScope(
+                  tenantId: user.organization.id,
+                  userId: user.id,
+                  campusId: campusId,
+                ),
+                draft.id,
+              );
+        }
       }
       ref.invalidate(teacherAttendanceForDateProvider(_dateKey));
       if (mounted) {
@@ -191,52 +272,127 @@ class _TeacherAttendanceScreenState
 
   Future<void> _syncDrafts() async {
     if (_drafts.isEmpty) return;
-    final drafts = _drafts.values.toList(growable: false);
-    var synced = 0;
-    for (final draft in drafts) {
-      if (!mounted) return;
-      try {
-        await ref
-            .read(apiClientProvider)
-            .markAttendance(
-              studentId: draft.studentId,
-              attendanceDate: DateTime.parse(draft.attendanceDate),
-              periodKey: draft.periodKey,
-              state: draft.state,
-            );
-        await ref.read(attendanceDraftStoreProvider).remove(draft.id);
-        if (mounted) {
-          setState(() => _drafts.remove(draft.studentId));
-        }
-        synced++;
-      } on Object catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                synced == 0
-                    ? readableApiError(error)
-                    : '$synced draft(s) synced. ${readableApiError(error)}',
-              ),
-            ),
-          );
-        }
-        return;
+    final user = ref.read(sessionProvider).valueOrNull;
+    final campusId = user?.campus?.id;
+    if (user == null || campusId == null) return;
+    final scope = SyncScope(
+      tenantId: user.organization.id,
+      userId: user.id,
+      campusId: campusId,
+    );
+    final queue = ref.read(mutationQueueProvider);
+    final engine = SyncEngine(
+      queue: queue,
+      executor: (mutation) async {
+        final payload = mutation.payload;
+        await ref.read(apiClientProvider).markAttendance(
+          studentId: asString(payload['studentId'], 'attendance.studentId'),
+          attendanceDate: DateTime.parse(
+            asString(payload['attendanceDate'], 'attendance.attendanceDate'),
+          ),
+          periodKey: asString(payload['periodKey'], 'attendance.periodKey'),
+          state: asString(payload['state'], 'attendance.state'),
+          note: payload['note'] as String?,
+        );
+      },
+    );
+    for (final draft in _drafts.values) {
+      if (draft.status == MutationStatus.failed ||
+          draft.status == MutationStatus.conflict) {
+        await queue.upsert(
+          scope,
+          draft.copyWith(
+            status: MutationStatus.pending,
+            clearLastError: true,
+          ),
+        );
       }
     }
-    ref.invalidate(teacherAttendanceForDateProvider(_dateKey));
+    final report = await engine.sync(scope);
+    await queue.clearCompleted(scope);
+    await _loadDrafts();
+    if (report.synced > 0) ref.invalidate(teacherAttendanceForDateProvider(_dateKey));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$synced attendance draft(s) synced.')),
+        SnackBar(
+          content: Text(
+            '${report.synced} attendance draft(s) synced. '
+            '${report.failed + report.conflict + report.retryable} still need attention.',
+          ),
+        ),
       );
     }
   }
 
   Future<void> _markAllPresent(List<StudentOption> students) async {
-    for (final student in students) {
-      if (!mounted) return;
-      setState(() => _states[student.id] = 'present');
-      await _save(student.id, 'present');
+    if (_bulkSaving || students.isEmpty) return;
+    setState(() {
+      _bulkSaving = true;
+      for (final student in students) {
+        _states[student.id] = 'present';
+      }
+    });
+    try {
+      final results = await ref
+          .read(apiClientProvider)
+          .markAttendanceBulk(
+            attendanceDate: _date,
+            periodKey: 'daily',
+            records: [
+              for (final student in students)
+                (studentId: student.id, state: 'present', note: null),
+            ],
+          );
+      final user = ref.read(sessionProvider).valueOrNull;
+      final campusId = user?.campus?.id;
+      final queue = ref.read(mutationQueueProvider);
+      for (final student in students) {
+        final draft = _drafts.remove(student.id);
+        if (draft != null && user != null && campusId != null) {
+          await queue.remove(
+            SyncScope(
+              tenantId: user.organization.id,
+              userId: user.id,
+              campusId: campusId,
+            ),
+            draft.id,
+          );
+        }
+      }
+      ref.invalidate(teacherAttendanceForDateProvider(_dateKey));
+      if (mounted) {
+        final corrections = results.where((result) => result.correctionRequested).length;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              corrections == 0
+                  ? '${results.length} students marked present.'
+                  : '${results.length} attendance records submitted. $corrections correction request(s) created.',
+            ),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (_isRetryableNetworkError(error)) {
+        for (final student in students) {
+          await _saveDraft(studentId: student.id, state: 'present');
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Connection unavailable. The attendance batch was saved locally for sync.',
+              ),
+            ),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(readableApiError(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _bulkSaving = false);
     }
   }
 
@@ -277,10 +433,15 @@ class _TeacherAttendanceScreenState
                     ),
                     error: (error, stack) => const SizedBox.shrink(),
                     data: (students) => FilledButton.tonal(
-                      onPressed: students.isEmpty
+                      onPressed: students.isEmpty || _bulkSaving
                           ? null
                           : () => _markAllPresent(students),
-                      child: const Text('All present'),
+                      child: _bulkSaving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('All present'),
                     ),
                   ),
                 ],
@@ -361,7 +522,7 @@ class _TeacherAttendanceScreenState
                     final student = filtered[index];
                     final selected =
                         _states[student.id] ??
-                        _drafts[student.id]?.state ??
+                      _drafts[student.id]?.payload['state'] as String? ??
                         existing[student.id];
                     return _AttendanceStudentCard(
                       student: student,

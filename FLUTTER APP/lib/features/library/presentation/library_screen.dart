@@ -8,6 +8,7 @@ import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
 import '../../../shared/models/library_models.dart';
 import '../../../shared/models/workspace_models.dart';
+import '../../../shared/widgets/barcode_scanner_sheet.dart';
 import '../../../shared/widgets/erp_states.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -567,6 +568,17 @@ class _LibraryCopyFormState extends State<_LibraryCopyForm> {
     super.dispose();
   }
 
+  Future<void> _scanAccession() async {
+    final value = await showBarcodeScanner(
+      context,
+      title: 'Scan library barcode',
+      helpText: 'Scan the accession barcode printed on the copy.',
+    );
+    if (value != null && mounted) {
+      setState(() => _accession.text = value);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => _LibraryFormFrame(
     title: 'Add library copy',
@@ -590,10 +602,17 @@ class _LibraryCopyFormState extends State<_LibraryCopyForm> {
             controller: _accession,
             decoration: const InputDecoration(
               labelText: 'Accession / barcode number',
+              prefixIcon: Icon(Icons.qr_code_scanner_outlined),
             ),
             validator: (value) => value == null || value.trim().length < 2
                 ? 'Enter an accession number'
                 : null,
+          ),
+          const SizedBox(height: ErpSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: _scanAccession,
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: const Text('Scan barcode'),
           ),
           const SizedBox(height: ErpSpacing.lg),
           FilledButton(

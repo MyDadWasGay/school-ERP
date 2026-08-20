@@ -52,18 +52,24 @@ describe("Fastify shared web and Flutter API foundation", () => {
           "portal.summary",
           "students.profile",
           "attendance.student",
+          "attendance.bulk_mark",
           "attendance.leave_request",
           "finance.student_invoices",
           "finance.collect_payment",
+          "finance.fee_aging",
           "finance.razorpay_checkout",
           "finance.razorpay_refunds",
           "exams.student_results",
+          "exams.student_admit_cards",
           "communication.notifications",
           "communication.notification_read",
           "documents.student",
           "documents.upload_signature",
           "documents.save_metadata",
           "academics.records",
+          "academics.syllabus_progress",
+          "transport.boarding_checklist",
+          "transport.live_location",
         ]),
       },
     });
@@ -90,15 +96,22 @@ describe("Fastify shared web and Flutter API foundation", () => {
       "/api/v1/students/{studentId}/attendance",
     );
     expect(contract.paths).toHaveProperty(
+      "/api/v1/students/{studentId}/discipline",
+    );
+    expect(contract.paths).toHaveProperty(
       "/api/v1/students/{studentId}/invoices",
     );
     expect(contract.paths).toHaveProperty(
       "/api/v1/students/{studentId}/results",
     );
+    expect(contract.paths).toHaveProperty(
+      "/api/v1/students/{studentId}/admit-cards",
+    );
     expect(contract.paths).toHaveProperty("/api/v1/notifications");
     expect(contract.paths).toHaveProperty("/api/v1/communication/notifications");
     expect(contract.paths).toHaveProperty("/api/v1/communication/notification-delivery");
     expect(contract.paths).toHaveProperty("/api/v1/attendance/students");
+    expect(contract.paths).toHaveProperty("/api/v1/attendance/bulk");
     expect(contract.paths).toHaveProperty("/api/v1/attendance/students/options");
     expect(contract.paths).toHaveProperty("/api/v1/attendance/corrections");
     expect(contract.paths).toHaveProperty("/api/v1/admissions/seat-matrix");
@@ -117,6 +130,8 @@ describe("Fastify shared web and Flutter API foundation", () => {
       "/api/v1/students/{studentId}/documents",
     );
     expect(contract.paths).toHaveProperty("/api/v1/academics/{kind}");
+    expect(contract.paths).toHaveProperty("/api/v1/academics/syllabus/progress");
+    expect(contract.paths).toHaveProperty("/api/v1/academics/lesson-plans/{id}/status");
     expect(contract.paths).toHaveProperty("/api/v1/academics/{kind}/{id}/archive");
     expect(contract.paths).toHaveProperty("/health/ready");
     expect(contract.paths).toHaveProperty("/api/v1/health/live");
@@ -125,6 +140,11 @@ describe("Fastify shared web and Flutter API foundation", () => {
     expect(contract.paths).toHaveProperty("/api/v1/catalog/records");
     expect(contract.paths).toHaveProperty("/api/v1/integrations/providers/health");
     expect(contract.paths).toHaveProperty("/api/v1/attendance/webhooks/hardware");
+    expect(contract.paths).toHaveProperty("/api/v1/fees/aging");
+    expect(contract.paths).toHaveProperty("/api/v1/transport/routes/{routeId}/checklist");
+    expect(contract.paths).toHaveProperty("/api/v1/transport/boarding-events");
+    expect(contract.paths).toHaveProperty("/api/v1/transport/location");
+    expect(contract.paths).toHaveProperty("/api/v1/transport/routes/{routeId}/location");
     expect(contract.paths).toHaveProperty("/api/v1/platform/me");
     expect(contract.components.securitySchemes.firebaseBearer).toMatchObject({
       type: "http",

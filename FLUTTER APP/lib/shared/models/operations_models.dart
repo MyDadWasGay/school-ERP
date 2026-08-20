@@ -133,6 +133,10 @@ class HealthProfileRow {
     required this.updatedAt,
     this.allergies,
     this.conditions,
+    this.medications,
+    this.emergencyContact,
+    this.emergencyNotes,
+    this.immunizationStatus,
   });
 
   factory HealthProfileRow.fromJson(Json json) => HealthProfileRow(
@@ -144,6 +148,10 @@ class HealthProfileRow {
     ),
     allergies: json['allergies'] as String?,
     conditions: json['conditions'] as String?,
+    medications: json['medications'] as String?,
+    emergencyContact: json['emergencyContact'] as String?,
+    emergencyNotes: json['emergencyNotes'] as String?,
+    immunizationStatus: json['immunizationStatus'] as String?,
   );
 
   final String id;
@@ -152,6 +160,10 @@ class HealthProfileRow {
   final DateTime updatedAt;
   final String? allergies;
   final String? conditions;
+  final String? medications;
+  final String? emergencyContact;
+  final String? emergencyNotes;
+  final String? immunizationStatus;
 }
 
 class ClinicVisitRow {

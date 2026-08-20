@@ -74,6 +74,14 @@ class MoreScreen extends ConsumerWidget {
               path: '/exams',
               icon: Icons.school_outlined,
             ),
+          if ((user.role == 'student' || user.role == 'parent') &&
+              user.can('exams:read'))
+            const _MoreLink(
+              title: 'Exam admit cards',
+              subtitle: 'View, print and share upcoming examination hall tickets',
+              path: '/admit-cards',
+              icon: Icons.confirmation_number_outlined,
+            ),
           if (user.can('admissions:read'))
             const _MoreLink(
               title: 'Admissions',
@@ -102,6 +110,13 @@ class MoreScreen extends ConsumerWidget {
               path: '/attendance',
               icon: Icons.fact_check_outlined,
             ),
+          if (user.can('academics:read'))
+            const _MoreLink(
+              title: 'Syllabus progress',
+              subtitle: 'Track subject lessons and completion status',
+              path: '/syllabus',
+              icon: Icons.menu_book_outlined,
+            ),
           if (user.can('library:read'))
             const _MoreLink(
               title: 'Library',
@@ -115,6 +130,13 @@ class MoreScreen extends ConsumerWidget {
               subtitle: 'Assigned routes and pickup information',
               path: '/transport',
               icon: Icons.directions_bus_outlined,
+            ),
+          if (user.can('transport:update'))
+            const _MoreLink(
+              title: 'Driver stop checklist',
+              subtitle: 'Record boarded, absent and dropped students',
+              path: '/transport/checklist',
+              icon: Icons.fact_check_outlined,
             ),
           const _MoreLink(
             title: 'Profile & settings',

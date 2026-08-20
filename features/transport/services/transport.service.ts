@@ -1,11 +1,17 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   alerts,
+  messages,
+  notificationEvents,
   routeAllocations,
+  studentGuardianLinks,
+  transportBoardingEvents,
+  transportLocationUpdates,
   students,
   transportRoutes,
   transportStops,
+  users,
   vehicleDocuments,
   vehicles,
 } from "@/db/schema";
@@ -13,13 +19,19 @@ import { AppError } from "@/lib/errors/app-error";
 import { databaseErrorIncludes } from "@/lib/errors/database-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
+import { resolvePermittedStudentIds } from "@/features/students/services/students.service";
 import type {
   RouteAllocationInput,
   TransportRouteInput,
   TransportStopInput,
   VehicleDocumentInput,
   VehicleInput,
+  TransportBoardingEventInput,
+  TransportLocationInput,
 } from "../schemas/transport.schema";
+import { normalizeIndiaCalendarDate } from "@/lib/utils/india-time";
+import { formatIndiaDateTime } from "@/lib/utils/india-time";
+import { sendUserPush } from "@/features/communication/services/communication.service";
 
 function assertCampusScope(
   user: CurrentUser,
@@ -42,7 +54,61 @@ function assertCampusScope(
   );
 }
 
+type PermittedTransportScope = {
+  studentIds: string[];
+  routeIds: string[];
+  stopIds: string[];
+  vehicleIds: string[];
+};
+
+async function resolvePermittedTransportScope(
+  user: CurrentUser,
+): Promise<PermittedTransportScope | undefined> {
+  const studentIds = await resolvePermittedStudentIds(user);
+  if (studentIds === undefined) return undefined;
+  if (studentIds.length === 0) {
+    return { studentIds, routeIds: [], stopIds: [], vehicleIds: [] };
+  }
+
+  const allocations = await getDb()
+    .select({
+      routeId: routeAllocations.routeId,
+      stopId: routeAllocations.stopId,
+    })
+    .from(routeAllocations)
+    .where(
+      and(
+        eq(routeAllocations.organizationId, user.organizationId),
+        eq(routeAllocations.status, "active"),
+        inArray(routeAllocations.studentId, studentIds),
+      ),
+    );
+  const routeIds = [...new Set(allocations.map(({ routeId }) => routeId))];
+  const stopIds = [...new Set(allocations.map(({ stopId }) => stopId))];
+  if (routeIds.length === 0) {
+    return { studentIds, routeIds, stopIds, vehicleIds: [] };
+  }
+
+  const routeRows = await getDb()
+    .select({ vehicleId: transportRoutes.vehicleId })
+    .from(transportRoutes)
+    .where(
+      and(
+        eq(transportRoutes.organizationId, user.organizationId),
+        inArray(transportRoutes.id, routeIds),
+      ),
+    );
+  const vehicleIds = [
+    ...new Set(
+      routeRows.flatMap(({ vehicleId }) => (vehicleId ? [vehicleId] : [])),
+    ),
+  ];
+  return { studentIds, routeIds, stopIds, vehicleIds };
+}
+
 export async function listTransportRoutes(user: CurrentUser) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && permittedScope.routeIds.length === 0) return [];
   return getDb()
     .select()
     .from(transportRoutes)
@@ -51,6 +117,9 @@ export async function listTransportRoutes(user: CurrentUser) {
         eq(transportRoutes.organizationId, user.organizationId),
         user.campusId ? eq(transportRoutes.campusId, user.campusId) : undefined,
         eq(transportRoutes.status, "active"),
+        permittedScope
+          ? inArray(transportRoutes.id, permittedScope.routeIds)
+          : undefined,
       ),
     )
     .orderBy(asc(transportRoutes.name))
@@ -58,6 +127,8 @@ export async function listTransportRoutes(user: CurrentUser) {
 }
 
 export async function listTransportVehicles(user: CurrentUser) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && permittedScope.vehicleIds.length === 0) return [];
   return getDb()
     .select()
     .from(vehicles)
@@ -66,6 +137,9 @@ export async function listTransportVehicles(user: CurrentUser) {
         eq(vehicles.organizationId, user.organizationId),
         user.campusId ? eq(vehicles.campusId, user.campusId) : undefined,
         eq(vehicles.status, "active"),
+        permittedScope
+          ? inArray(vehicles.id, permittedScope.vehicleIds)
+          : undefined,
       ),
     )
     .orderBy(asc(vehicles.registrationNumber))
@@ -112,6 +186,8 @@ export async function createTransportVehicle(
 }
 
 export async function listVehicleDocuments(user: CurrentUser) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && permittedScope.vehicleIds.length === 0) return [];
   return getDb()
     .select({
       id: vehicleDocuments.id,
@@ -136,6 +212,9 @@ export async function listVehicleDocuments(user: CurrentUser) {
           ? eq(vehicleDocuments.campusId, user.campusId)
           : undefined,
         eq(vehicleDocuments.status, "active"),
+        permittedScope
+          ? inArray(vehicleDocuments.referenceId, permittedScope.vehicleIds)
+          : undefined,
       ),
     )
     .orderBy(asc(vehicleDocuments.name))
@@ -244,6 +323,8 @@ export async function createTransportRoute(
 }
 
 export async function listTransportStops(user: CurrentUser) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && permittedScope.stopIds.length === 0) return [];
   return getDb()
     .select()
     .from(transportStops)
@@ -252,6 +333,9 @@ export async function listTransportStops(user: CurrentUser) {
         eq(transportStops.organizationId, user.organizationId),
         user.campusId ? eq(transportStops.campusId, user.campusId) : undefined,
         eq(transportStops.status, "active"),
+        permittedScope
+          ? inArray(transportStops.id, permittedScope.stopIds)
+          : undefined,
       ),
     )
     .orderBy(asc(transportStops.name))
@@ -285,6 +369,8 @@ export async function createTransportStop(
 }
 
 export async function listTransportStudents(user: CurrentUser) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && permittedScope.studentIds.length === 0) return [];
   return getDb()
     .select({
       id: students.id,
@@ -296,6 +382,9 @@ export async function listTransportStudents(user: CurrentUser) {
         eq(students.organizationId, user.organizationId),
         user.campusId ? eq(students.campusId, user.campusId) : undefined,
         eq(students.status, "active"),
+        permittedScope
+          ? inArray(students.id, permittedScope.studentIds)
+          : undefined,
       ),
     )
     .orderBy(asc(students.firstName))
@@ -418,6 +507,9 @@ export async function allocateStudentToRoute(
 }
 
 export async function listRouteAllocations(user: CurrentUser) {
+  const permittedStudentIds = await resolvePermittedStudentIds(user);
+  if (permittedStudentIds !== undefined && permittedStudentIds.length === 0)
+    return [];
   const rows = await getDb()
     .select({
       id: routeAllocations.id,
@@ -457,6 +549,9 @@ export async function listRouteAllocations(user: CurrentUser) {
           ? eq(routeAllocations.campusId, user.campusId)
           : undefined,
         eq(routeAllocations.status, "active"),
+        permittedStudentIds
+          ? inArray(routeAllocations.studentId, permittedStudentIds)
+          : undefined,
       ),
     )
     .orderBy(desc(routeAllocations.createdAt))
@@ -465,6 +560,282 @@ export async function listRouteAllocations(user: CurrentUser) {
     ...row,
     createdAt: row.createdAt.toISOString(),
   }));
+}
+
+export async function getTransportChecklist(
+  user: CurrentUser,
+  routeId: string,
+  eventDateValue: Date,
+  tripType: "morning" | "afternoon",
+) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && !permittedScope.routeIds.includes(routeId)) {
+    throw new AppError("FORBIDDEN", "This route is outside your transport scope.", 403);
+  }
+  const route = await getDb().query.transportRoutes.findFirst({ where: and(
+    eq(transportRoutes.id, routeId),
+    eq(transportRoutes.organizationId, user.organizationId),
+    user.campusId ? eq(transportRoutes.campusId, user.campusId) : undefined,
+    eq(transportRoutes.status, "active"),
+  ) });
+  if (!route) throw new AppError("NOT_FOUND", "Transport route not found.", 404);
+  const eventDate = normalizeIndiaCalendarDate(eventDateValue);
+  const [allocations, events] = await Promise.all([
+    getDb().select({
+      allocationId: routeAllocations.id,
+      studentId: routeAllocations.studentId,
+      studentName: sql<string>`${students.firstName} || ' ' || ${students.lastName}`,
+      stopId: routeAllocations.stopId,
+      stopName: transportStops.name,
+    }).from(routeAllocations)
+      .innerJoin(students, and(
+        eq(students.id, routeAllocations.studentId),
+        eq(students.organizationId, user.organizationId),
+      ))
+      .innerJoin(transportStops, and(
+        eq(transportStops.id, routeAllocations.stopId),
+        eq(transportStops.organizationId, user.organizationId),
+      ))
+      .where(and(
+        eq(routeAllocations.organizationId, user.organizationId),
+        eq(routeAllocations.routeId, routeId),
+        eq(routeAllocations.status, "active"),
+      )).orderBy(asc(transportStops.name), asc(students.lastName)),
+    getDb().select({
+      id: transportBoardingEvents.id,
+      studentId: transportBoardingEvents.studentId,
+      stopId: transportBoardingEvents.stopId,
+      eventType: transportBoardingEvents.eventType,
+      note: transportBoardingEvents.note,
+    }).from(transportBoardingEvents).where(and(
+      eq(transportBoardingEvents.organizationId, user.organizationId),
+      eq(transportBoardingEvents.routeId, routeId),
+      eq(transportBoardingEvents.eventDate, eventDate),
+      eq(transportBoardingEvents.tripType, tripType),
+      eq(transportBoardingEvents.status, "active"),
+    )),
+  ]);
+  const eventByStudent = new Map(events.map((event) => [event.studentId, event]));
+  return {
+    route: { id: route.id, name: route.name, vehicleId: route.vehicleId },
+    eventDate: eventDate.toISOString(),
+    tripType,
+    students: allocations.map((allocation) => {
+      const event = eventByStudent.get(allocation.studentId);
+      return {
+        ...allocation,
+        eventId: event?.id ?? null,
+        eventType: event?.eventType ?? null,
+        note: event?.note ?? null,
+      };
+    }),
+  };
+}
+
+export async function recordTransportLocation(
+  user: CurrentUser,
+  input: TransportLocationInput,
+) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && !permittedScope.routeIds.includes(input.routeId)) {
+    throw new AppError("FORBIDDEN", "This route is outside your transport scope.", 403);
+  }
+  const route = await getDb().query.transportRoutes.findFirst({ where: and(
+    eq(transportRoutes.id, input.routeId),
+    eq(transportRoutes.organizationId, user.organizationId),
+    user.campusId ? eq(transportRoutes.campusId, user.campusId) : undefined,
+    eq(transportRoutes.status, "active"),
+  ) });
+  if (!route) throw new AppError("NOT_FOUND", "Transport route not found.", 404);
+  const recordedAt = input.recordedAt ?? new Date();
+  if (recordedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+    throw new AppError("VALIDATION_ERROR", "Location timestamp cannot be in the future.", 422);
+  }
+  const [row] = await getDb().insert(transportLocationUpdates).values({
+    id: createId("transport_location"),
+    organizationId: user.organizationId,
+    campusId: route.campusId,
+    routeId: route.id,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    accuracyMeters: input.accuracyMeters ?? null,
+    recordedAt,
+    createdBy: user.id,
+    updatedBy: user.id,
+    status: "active",
+  }).returning();
+  return row;
+}
+
+export async function getLatestTransportLocation(
+  user: CurrentUser,
+  routeId: string,
+) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && !permittedScope.routeIds.includes(routeId)) {
+    throw new AppError("FORBIDDEN", "This route is outside your transport scope.", 403);
+  }
+  const row = await getDb().query.transportLocationUpdates.findFirst({ where: and(
+    eq(transportLocationUpdates.organizationId, user.organizationId),
+    eq(transportLocationUpdates.routeId, routeId),
+    eq(transportLocationUpdates.status, "active"),
+    user.campusId ? eq(transportLocationUpdates.campusId, user.campusId) : undefined,
+  ), orderBy: (updates, { desc }) => [desc(updates.recordedAt)] });
+  if (!row) return null;
+  return {
+    routeId: row.routeId,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    accuracyMeters: row.accuracyMeters,
+    recordedAt: row.recordedAt.toISOString(),
+    stale: Date.now() - row.recordedAt.getTime() > 2 * 60 * 1000,
+  };
+}
+
+export async function recordTransportBoardingEvent(
+  user: CurrentUser,
+  input: TransportBoardingEventInput,
+) {
+  const permittedScope = await resolvePermittedTransportScope(user);
+  if (permittedScope && !permittedScope.routeIds.includes(input.routeId)) {
+    throw new AppError("FORBIDDEN", "This route is outside your transport scope.", 403);
+  }
+  const allocation = await getDb().query.routeAllocations.findFirst({ where: and(
+    eq(routeAllocations.organizationId, user.organizationId),
+    eq(routeAllocations.routeId, input.routeId),
+    eq(routeAllocations.studentId, input.studentId),
+    eq(routeAllocations.stopId, input.stopId),
+    eq(routeAllocations.status, "active"),
+    user.campusId ? eq(routeAllocations.campusId, user.campusId) : undefined,
+  ) });
+  if (!allocation) throw new AppError("NOT_FOUND", "Active route allocation not found.", 404);
+  const eventDate = normalizeIndiaCalendarDate(input.eventDate);
+  const existing = await getDb().query.transportBoardingEvents.findFirst({ where: and(
+    eq(transportBoardingEvents.organizationId, user.organizationId),
+    eq(transportBoardingEvents.routeId, input.routeId),
+    eq(transportBoardingEvents.studentId, input.studentId),
+    eq(transportBoardingEvents.eventDate, eventDate),
+    eq(transportBoardingEvents.tripType, input.tripType),
+  ) });
+  if (existing) {
+    const [updated] = await getDb().update(transportBoardingEvents).set({
+      stopId: input.stopId,
+      eventType: input.eventType,
+      note: input.note || null,
+      updatedAt: new Date(),
+      updatedBy: user.id,
+      status: "active",
+    }).where(and(
+      eq(transportBoardingEvents.id, existing.id),
+      eq(transportBoardingEvents.organizationId, user.organizationId),
+    )).returning();
+    if (updated && existing.eventType !== input.eventType) {
+      await notifyTransportEvent(user, updated);
+    }
+    return updated;
+  }
+  const [created] = await getDb().insert(transportBoardingEvents).values({
+    id: createId("transport_event"),
+    organizationId: user.organizationId,
+    campusId: allocation.campusId,
+    routeId: input.routeId,
+    studentId: input.studentId,
+    stopId: input.stopId,
+    eventDate,
+    tripType: input.tripType,
+    eventType: input.eventType,
+    note: input.note || null,
+    createdBy: user.id,
+    updatedBy: user.id,
+    status: "active",
+  }).returning();
+  if (created) await notifyTransportEvent(user, created);
+  return created;
+}
+
+async function notifyTransportEvent(
+  user: CurrentUser,
+  event: typeof transportBoardingEvents.$inferSelect,
+) {
+  try {
+    const [student, recipients] = await Promise.all([
+      getDb().query.students.findFirst({ where: and(
+        eq(students.id, event.studentId),
+        eq(students.organizationId, user.organizationId),
+      ) }),
+      getDb().select({ userId: users.id }).from(studentGuardianLinks).innerJoin(users, and(
+        eq(users.organizationId, user.organizationId),
+        eq(users.linkedGuardianId, studentGuardianLinks.guardianId),
+        eq(users.role, "parent"),
+        eq(users.status, "active"),
+      )).where(and(
+        eq(studentGuardianLinks.organizationId, user.organizationId),
+        eq(studentGuardianLinks.studentId, event.studentId),
+      )),
+    ]);
+    const recipientUserIds = [...new Set(recipients.map((recipient) => recipient.userId))];
+    if (!student || recipientUserIds.length === 0) return;
+    const eventLabel = event.eventType === "boarded"
+      ? "boarded"
+      : event.eventType === "dropped"
+        ? "was dropped off"
+        : event.eventType === "absent"
+          ? "was marked absent"
+          : "could not board";
+    const subject = "Transport update";
+    const body = `${student.firstName} ${student.lastName} ${eventLabel} at ${formatIndiaDateTime(event.updatedAt)}.`;
+    const now = new Date();
+    const [message] = await getDb().insert(messages).values({
+      id: createId("message"),
+      organizationId: user.organizationId,
+      campusId: event.campusId,
+      subject,
+      body,
+      audienceJson: JSON.stringify({ type: "users", role: null, userIds: recipientUserIds }),
+      publishedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: user.id,
+      updatedBy: user.id,
+      status: "published",
+    }).returning();
+    if (!message) return;
+    await getDb().insert(notificationEvents).values(recipientUserIds.map((recipientUserId) => ({
+      id: createId("notification"),
+      organizationId: user.organizationId,
+      campusId: event.campusId,
+      messageId: message.id,
+      recipientUserId,
+      channel: "in_app",
+      payloadJson: JSON.stringify({
+        type: "transport",
+        route: "/transport",
+        entity_id: event.routeId,
+        tenant_id: user.organizationId,
+        campus_id: event.campusId,
+      }),
+      sentAt: now,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: user.id,
+      updatedBy: user.id,
+      status: "sent",
+    })));
+    await sendUserPush(
+      recipientUserIds,
+      subject,
+      body,
+      {
+        type: "transport",
+        route: "/transport",
+        entity_id: event.routeId,
+        tenant_id: user.organizationId,
+        ...(event.campusId != null ? { campus_id: event.campusId } : {}),
+      },
+    );
+  } catch {
+    // Operational notifications must not roll back a persisted boarding event.
+  }
 }
 
 export async function getTransportManifest(user: CurrentUser, routeId: string) {

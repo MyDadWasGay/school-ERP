@@ -112,7 +112,12 @@ export async function publishMessage(user: CurrentUser, messageId: string) {
       recipientUserIds: recipientRows.map((recipient) => recipient.id),
     };
   });
-  const push = await sendMessagePush(result.recipientUserIds, result.message.subject, result.message.body, result.message.id);
+  const push = await sendUserPush(
+    result.recipientUserIds,
+    result.message.subject,
+    result.message.body,
+    { messageId: result.message.id, kind: "communication" },
+  );
   return { ...result, push };
 }
 
@@ -180,7 +185,12 @@ export async function unregisterMobileDevice(user: CurrentUser, token: string) {
   return updated ?? null;
 }
 
-async function sendMessagePush(recipientUserIds: string[], subject: string, body: string, messageId: string) {
+export async function sendUserPush(
+  recipientUserIds: string[],
+  subject: string,
+  body: string,
+  data: Record<string, string> = {},
+) {
   if (!recipientUserIds.length) return { accepted: false, reason: "no_recipients" as const };
   const rows = await getDb().select({ token: mobileDeviceRegistrations.token }).from(mobileDeviceRegistrations).where(and(
     inArray(mobileDeviceRegistrations.userId, recipientUserIds),
@@ -193,7 +203,7 @@ async function sendMessagePush(recipientUserIds: string[], subject: string, body
       tokens,
       title: subject,
       body,
-      data: { messageId, kind: "communication" },
+      data,
     });
     return { accepted: result.accepted, successCount: result.successCount, failureCount: result.failureCount };
   } catch {

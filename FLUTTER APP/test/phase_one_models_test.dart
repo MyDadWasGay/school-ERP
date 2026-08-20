@@ -8,6 +8,8 @@ import 'package:school_erp_mobile/shared/models/student_models.dart';
 import 'package:school_erp_mobile/shared/models/workspace_models.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('parses assignment attachment metadata and payslip snapshots', () {
     final submission = AssignmentSubmission.fromJson({
       'id': 'submission-1',
@@ -73,8 +75,8 @@ void main() {
     expect(inbox.isEmpty, isFalse);
   });
 
-  test('builds a shareable fee receipt PDF without platform IO', () {
-    final bytes = ErpPdfBuilder.feeReceipt(
+  test('builds a shareable fee receipt PDF without platform IO', () async {
+    final bytes = await ErpPdfBuilder.feeReceipt(
       schoolName: 'School One',
       studentName: 'Asha Rao',
       payment: StudentPaymentRow(
@@ -89,10 +91,7 @@ void main() {
         status: 'posted',
       ),
     );
-    final pdf = latin1.decode(bytes);
-
-    expect(pdf.startsWith('%PDF-1.4'), isTrue);
-    expect(pdf, contains('FEE PAYMENT RECEIPT'));
-    expect(pdf, contains('%%EOF'));
+    expect(String.fromCharCodes(bytes.take(8)), startsWith('%PDF-'));
+    expect(bytes.length, greaterThan(500));
   });
 }

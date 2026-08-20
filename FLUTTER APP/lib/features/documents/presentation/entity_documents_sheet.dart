@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -33,6 +34,7 @@ class _EntityDocumentsSheetState extends ConsumerState<EntityDocumentsSheet> {
   late Future<List<DocumentRow>> _future;
   double? _progress;
   bool _uploading = false;
+  CancelToken? _uploadCancelToken;
 
   @override
   void initState() {
@@ -57,7 +59,7 @@ class _EntityDocumentsSheetState extends ConsumerState<EntityDocumentsSheet> {
     if (!_canUpload(user) || _uploading) return;
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
-      withData: true,
+      withData: false,
       type: FileType.custom,
       allowedExtensions: const [
         'pdf',
@@ -91,9 +93,19 @@ class _EntityDocumentsSheetState extends ConsumerState<EntityDocumentsSheet> {
       }
       return;
     }
+    if (file.path == null || file.path!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This file could not be accessed.')),
+        );
+      }
+      return;
+    }
+    final cancelToken = CancelToken();
     setState(() {
       _uploading = true;
       _progress = null;
+      _uploadCancelToken = cancelToken;
     });
     try {
       await ref
@@ -112,6 +124,7 @@ class _EntityDocumentsSheetState extends ConsumerState<EntityDocumentsSheet> {
               path: file.path,
               bytes: file.bytes,
             ),
+            cancelToken: cancelToken,
             onSendProgress: (sent, total) {
               if (!mounted) return;
               setState(() => _progress = total > 0 ? sent / total : null);
@@ -127,13 +140,22 @@ class _EntityDocumentsSheetState extends ConsumerState<EntityDocumentsSheet> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(readableApiError(error))));
+        ).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is DioException && CancelToken.isCancel(error)
+                  ? 'Upload cancelled.'
+                  : readableApiError(error),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
         setState(() {
           _uploading = false;
           _progress = null;
+          _uploadCancelToken = null;
         });
       }
     }
@@ -199,6 +221,11 @@ class _EntityDocumentsSheetState extends ConsumerState<EntityDocumentsSheet> {
                     ? 'Uploading document…'
                     : 'Uploading ${(_progress! * 100).round()}%',
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+              IconButton(
+                tooltip: 'Cancel upload',
+                onPressed: () => _uploadCancelToken?.cancel(),
+                icon: const Icon(Icons.close),
               ),
             ],
             const SizedBox(height: ErpSpacing.sm),

@@ -7,20 +7,25 @@ import { mobileDeviceSchema } from "../../../features/communication/schemas/devi
 import { createNotice, listNotices, transitionNotice } from "../../../features/communication/services/notice.service";
 import { issueLibraryCopySchema, libraryCopySchema, libraryItemSchema, renewLibraryCopySchema, returnLibraryCopySchema, digitalResourceSchema, libraryReservationSchema } from "../../../features/library/schemas/library.schema";
 import { addLibraryCopy, createDigitalResource, createLibraryItem, issueLibraryCopy, listActiveLibraryIssues, listDigitalResources, listLibraryBorrowers, listLibraryCopies, listLibraryItems, listLibraryReservations, reserveLibraryItem, renewLibraryCopy, returnLibraryCopy } from "../../../features/library/services/library.service";
-import { routeAllocationSchema, transportRouteSchema, transportStopSchema, vehicleDocumentSchema, vehicleSchema } from "../../../features/transport/schemas/transport.schema";
-import { allocateStudentToRoute, createTransportRoute, createTransportStop, createTransportVehicle, createVehicleDocument, listRouteAllocations, listTransportRoutes, listTransportStops, listTransportStudents, listTransportVehicles, listVehicleDocuments } from "../../../features/transport/services/transport.service";
+import { routeAllocationSchema, transportBoardingEventSchema, transportLocationSchema, transportRouteSchema, transportStopSchema, vehicleDocumentSchema, vehicleSchema } from "../../../features/transport/schemas/transport.schema";
+import { allocateStudentToRoute, createTransportRoute, createTransportStop, createTransportVehicle, createVehicleDocument, getLatestTransportLocation, getTransportChecklist, listRouteAllocations, listTransportRoutes, listTransportStops, listTransportStudents, listTransportVehicles, listVehicleDocuments, recordTransportBoardingEvent, recordTransportLocation } from "../../../features/transport/services/transport.service";
 import { hostelAllotmentSchema, hostelBedSchema, hostelRoomSchema } from "../../../features/hostel/schemas/hostel.schema";
 import { allocateHostelBed, checkoutHostelAllotment, createHostelBed, createHostelRoom, listHostelAllotments, listHostelBeds, listHostelRooms, listHostelStudents } from "../../../features/hostel/services/hostel.service";
 import { canteenTransactionSchema, menuSchema } from "../../../features/canteen/schemas/canteen.schema";
 import { createCanteenTransaction, createMenu, listCanteenStudents, listCanteenTransactions, listMenus } from "../../../features/canteen/services/canteen.service";
 import { authenticateApiRequest, requireApiCsrf, requireApiPermission } from "../auth/bearer-auth";
 import { apiCreated, apiSuccess, auditCommand, parseApiBody, queryString, routeSchema } from "./route-utils";
+import { parseIndiaDateValue } from "../../../lib/utils/india-time";
 
 type IdParams = { id: string };
 const authenticated = { preHandler: authenticateApiRequest };
 const mutation = { preHandler: [authenticateApiRequest, requireApiCsrf] };
 const messagePublishSchema = z.object({ messageId: z.string().min(1) });
 const checkoutSchema = z.object({ allotmentId: z.string().min(1) });
+const transportChecklistQuery = z.object({
+  date: z.preprocess(parseIndiaDateValue, z.coerce.date()).optional(),
+  tripType: z.enum(["morning", "afternoon"]).default("morning"),
+});
 
 export const supportRoutes: FastifyPluginAsync = async (app) => {
   app.get("/communication/messages", authenticated, async (request) => {
@@ -186,6 +191,27 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
   app.get("/transport/stops", authenticated, async (request) => apiSuccess(request, await listTransportStops(requireApiPermission(request, "transport:read"))));
   app.get("/transport/students", authenticated, async (request) => apiSuccess(request, await listTransportStudents(requireApiPermission(request, "transport:read"))));
   app.get("/transport/allocations", authenticated, async (request) => apiSuccess(request, await listRouteAllocations(requireApiPermission(request, "transport:read"))));
+  app.get<{ Params: { routeId: string }; Querystring: { date?: string; tripType?: "morning" | "afternoon" } }>("/transport/routes/:routeId/checklist", authenticated, async (request) => {
+    const user = requireApiPermission(request, "transport:read");
+    const input = transportChecklistQuery.parse(request.query);
+    return apiSuccess(request, await getTransportChecklist(user, request.params.routeId, input.date ?? new Date(), input.tripType));
+  });
+  app.post<{ Body: unknown }>("/transport/boarding-events", { ...mutation, schema: routeSchema("Record a transport boarding event") }, async (request) => {
+    const user = requireApiPermission(request, "transport:update");
+    const row = await recordTransportBoardingEvent(user, parseApiBody(transportBoardingEventSchema, request.body));
+    await auditCommand(user, { action: "update", module: "transport", entityType: "boarding_event", entityId: row.id, campusId: row.campusId, after: { eventType: row.eventType, studentId: row.studentId, routeId: row.routeId, tripType: row.tripType } });
+    return apiSuccess(request, { id: row.id, eventType: row.eventType, studentId: row.studentId });
+  });
+  app.post<{ Body: unknown }>("/transport/location", { ...mutation, schema: routeSchema("Record an authorized transport location") }, async (request) => {
+    const user = requireApiPermission(request, "transport:update");
+    const row = await recordTransportLocation(user, parseApiBody(transportLocationSchema, request.body));
+    await auditCommand(user, { action: "update", module: "transport", entityType: "location_update", entityId: row.id, campusId: row.campusId, after: { routeId: row.routeId, recordedAt: row.recordedAt.toISOString() } });
+    return apiSuccess(request, { id: row.id, recordedAt: row.recordedAt.toISOString() });
+  });
+  app.get<{ Params: { routeId: string } }>("/transport/routes/:routeId/location", authenticated, async (request) => {
+    const user = requireApiPermission(request, "transport:read");
+    return apiSuccess(request, { location: await getLatestTransportLocation(user, request.params.routeId) });
+  });
 
   app.post<{ Body: unknown }>("/transport/vehicles", { ...mutation, schema: routeSchema("Create a transport vehicle") }, async (request, reply) => { const user = requireApiPermission(request, "transport:create"); const input = parseApiBody(vehicleSchema, request.body); const row = await createTransportVehicle(user, input); await auditCommand(user, { action: "create", module: "transport", entityType: "vehicle", entityId: row.id, campusId: row.campusId, after: { registrationNumber: row.registrationNumber, capacity: row.capacity } }); return apiCreated(reply, request, { id: row.id }); });
   app.post<{ Body: unknown }>("/transport/vehicle-documents", { ...mutation, schema: routeSchema("Record a vehicle document") }, async (request, reply) => { const user = requireApiPermission(request, "transport:update"); const input = parseApiBody(vehicleDocumentSchema, request.body); const row = await createVehicleDocument(user, input); await auditCommand(user, { action: "create", module: "transport", entityType: "vehicle_document", entityId: row.id, campusId: row.campusId, after: { documentType: row.name, vehicleId: row.referenceId } }); return apiCreated(reply, request, { id: row.id }); });

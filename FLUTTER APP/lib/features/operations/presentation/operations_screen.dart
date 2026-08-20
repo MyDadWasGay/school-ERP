@@ -6,6 +6,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
 import '../../../shared/models/operations_models.dart';
+import '../../../shared/widgets/barcode_scanner_sheet.dart';
 import '../../../shared/widgets/erp_states.dart';
 
 class OperationsScreen extends ConsumerWidget {
@@ -234,6 +235,65 @@ class _GatePassesTab extends ConsumerWidget {
   final VoidCallback onCreate;
   final Future<void> Function() onRefresh;
 
+  Future<void> _scanPass(
+    BuildContext context,
+    WidgetRef ref,
+    List<SafetyGatePassRow> rows,
+  ) async {
+    final code = await showBarcodeScanner(
+      context,
+      title: 'Scan gate pass',
+      helpText: 'Scan the authorized gate-pass QR code.',
+    );
+    if (code == null || !context.mounted) return;
+    final match = rows.where((row) => row.id == code).firstOrNull;
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This gate pass is not in your authorized scope.')),
+      );
+      return;
+    }
+    final action = match.status == 'approved' ? 'Mark used' : 'Close';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(match.name),
+        content: Text(
+          '${match.reason ?? 'Gate pass'}\nValid until ${DateFormat('d MMM yyyy, h:mm a').format(match.validUntil.toLocal())}\nStatus: ${match.status}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          if (match.status == 'approved')
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(action),
+            ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted || match.status != 'approved') {
+      return;
+    }
+    try {
+      await ref.read(apiClientProvider).transitionGatePass(match.id, 'used');
+      await onRefresh();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gate pass marked used.')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(readableApiError(error))));
+      }
+    }
+  }
+
   Future<void> _transition(
     BuildContext context,
     WidgetRef ref,
@@ -292,17 +352,30 @@ class _GatePassesTab extends ConsumerWidget {
           child: ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(ErpSpacing.lg),
-            itemCount: rows.length + (canCreate ? 1 : 0),
+            itemCount: rows.length + (canCreate || canApprove ? 1 : 0),
             separatorBuilder: (_, _) => const SizedBox(height: ErpSpacing.sm),
             itemBuilder: (context, index) {
-              if (canCreate && index == 0) {
-                return FilledButton.icon(
-                  onPressed: onCreate,
-                  icon: const Icon(Icons.add_moderator_outlined),
-                  label: const Text('Create gate pass'),
+              if ((canCreate || canApprove) && index == 0) {
+                return Wrap(
+                  spacing: ErpSpacing.sm,
+                  runSpacing: ErpSpacing.sm,
+                  children: [
+                    if (canCreate)
+                      FilledButton.icon(
+                        onPressed: onCreate,
+                        icon: const Icon(Icons.add_moderator_outlined),
+                        label: const Text('Create gate pass'),
+                      ),
+                    if (canApprove)
+                      OutlinedButton.icon(
+                        onPressed: () => _scanPass(context, ref, rows),
+                        icon: const Icon(Icons.qr_code_scanner_outlined),
+                        label: const Text('Scan pass'),
+                      ),
+                  ],
                 );
               }
-              final row = rows[canCreate ? index - 1 : index];
+              final row = rows[(canCreate || canApprove) ? index - 1 : index];
               final actions = <Widget>[];
               if (canApprove && row.status == 'requested') {
                 actions.add(
@@ -627,6 +700,12 @@ class _HealthProfilesTab extends ConsumerWidget {
                         'Allergies: ${row.allergies}',
                       if (row.conditions?.isNotEmpty == true)
                         'Conditions: ${row.conditions}',
+                      if (row.medications?.isNotEmpty == true)
+                        'Medication: ${row.medications}',
+                      if (row.immunizationStatus?.isNotEmpty == true)
+                        'Immunization: ${row.immunizationStatus}',
+                      if (row.emergencyContact?.isNotEmpty == true)
+                        'Emergency: ${row.emergencyContact}',
                       'Updated ${DateFormat('d MMM yyyy').format(row.updatedAt.toLocal())}',
                     ].join('\n'),
                   ),
@@ -1050,6 +1129,10 @@ class _HealthProfileFormState extends ConsumerState<_HealthProfileForm> {
   final _formKey = GlobalKey<FormState>();
   final _allergies = TextEditingController();
   final _conditions = TextEditingController();
+  final _medications = TextEditingController();
+  final _emergencyContact = TextEditingController();
+  final _emergencyNotes = TextEditingController();
+  final _immunizationStatus = TextEditingController();
   String? _studentId;
   bool _saving = false;
 
@@ -1063,6 +1146,10 @@ class _HealthProfileFormState extends ConsumerState<_HealthProfileForm> {
   void dispose() {
     _allergies.dispose();
     _conditions.dispose();
+    _medications.dispose();
+    _emergencyContact.dispose();
+    _emergencyNotes.dispose();
+    _immunizationStatus.dispose();
     super.dispose();
   }
 
@@ -1076,6 +1163,10 @@ class _HealthProfileFormState extends ConsumerState<_HealthProfileForm> {
             studentId: _studentId!,
             allergies: _allergies.text,
             conditions: _conditions.text,
+            medications: _medications.text,
+            emergencyContact: _emergencyContact.text,
+            emergencyNotes: _emergencyNotes.text,
+            immunizationStatus: _immunizationStatus.text,
           );
       if (mounted) Navigator.pop(context, true);
     } on Object catch (error) {
@@ -1120,6 +1211,33 @@ class _HealthProfileFormState extends ConsumerState<_HealthProfileForm> {
         enabled: !_saving,
         decoration: const InputDecoration(labelText: 'Medical conditions'),
         maxLines: 3,
+      ),
+      const SizedBox(height: ErpSpacing.md),
+      TextFormField(
+        controller: _medications,
+        enabled: !_saving,
+        decoration: const InputDecoration(labelText: 'Current medications'),
+        maxLines: 3,
+      ),
+      const SizedBox(height: ErpSpacing.md),
+      TextFormField(
+        controller: _emergencyContact,
+        enabled: !_saving,
+        decoration: const InputDecoration(labelText: 'Emergency contact'),
+      ),
+      const SizedBox(height: ErpSpacing.md),
+      TextFormField(
+        controller: _emergencyNotes,
+        enabled: !_saving,
+        decoration: const InputDecoration(labelText: 'Emergency notes'),
+        maxLines: 3,
+      ),
+      const SizedBox(height: ErpSpacing.md),
+      TextFormField(
+        controller: _immunizationStatus,
+        enabled: !_saving,
+        decoration: const InputDecoration(labelText: 'Immunization status'),
+        maxLines: 2,
       ),
     ],
   );

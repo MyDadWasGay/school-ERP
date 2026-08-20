@@ -166,3 +166,103 @@ class TransportDocumentRow {
   final String status;
   final DateTime? expiresOn;
 }
+
+class TransportChecklistStudent {
+  const TransportChecklistStudent({
+    required this.allocationId,
+    required this.studentId,
+    required this.studentName,
+    required this.stopId,
+    required this.stopName,
+    this.eventId,
+    this.eventType,
+    this.note,
+  });
+
+  factory TransportChecklistStudent.fromJson(Json json) =>
+      TransportChecklistStudent(
+        allocationId: asString(json['allocationId'], 'transportChecklist.allocationId'),
+        studentId: asString(json['studentId'], 'transportChecklist.studentId'),
+        studentName: asString(json['studentName'], 'transportChecklist.studentName'),
+        stopId: asString(json['stopId'], 'transportChecklist.stopId'),
+        stopName: asString(json['stopName'], 'transportChecklist.stopName'),
+        eventId: json['eventId'] as String?,
+        eventType: json['eventType'] as String?,
+        note: json['note'] as String?,
+      );
+
+  final String allocationId;
+  final String studentId;
+  final String studentName;
+  final String stopId;
+  final String stopName;
+  final String? eventId;
+  final String? eventType;
+  final String? note;
+}
+
+class TransportChecklist {
+  const TransportChecklist({
+    required this.routeId,
+    required this.routeName,
+    required this.eventDate,
+    required this.tripType,
+    required this.students,
+    this.vehicleId,
+  });
+
+  factory TransportChecklist.fromJson(Json json) {
+    final route = asJson(json['route'], 'transportChecklist.route');
+    return TransportChecklist(
+      routeId: asString(route['id'], 'transportChecklist.route.id'),
+      routeName: asString(route['name'], 'transportChecklist.route.name'),
+      vehicleId: route['vehicleId'] as String?,
+      eventDate: DateTime.parse(
+        asString(json['eventDate'], 'transportChecklist.eventDate'),
+      ),
+      tripType: asString(json['tripType'], 'transportChecklist.tripType'),
+      students: asJsonList(
+        json['students'],
+        'transportChecklist.students',
+      ).map(TransportChecklistStudent.fromJson).toList(growable: false),
+    );
+  }
+
+  final String routeId;
+  final String routeName;
+  final String? vehicleId;
+  final DateTime eventDate;
+  final String tripType;
+  final List<TransportChecklistStudent> students;
+}
+
+class TransportLocation {
+  const TransportLocation({
+    required this.routeId,
+    required this.latitude,
+    required this.longitude,
+    required this.recordedAt,
+    required this.stale,
+    this.accuracyMeters,
+  });
+
+  factory TransportLocation.fromJson(Json json) => TransportLocation(
+    routeId: asString(json['routeId'], 'transportLocation.routeId'),
+    latitude: asDouble(json['latitude'], 'transportLocation.latitude'),
+    longitude: asDouble(json['longitude'], 'transportLocation.longitude'),
+    accuracyMeters: json['accuracyMeters'] == null
+        ? null
+        : asDouble(json['accuracyMeters'], 'transportLocation.accuracyMeters'),
+    recordedAt: DateTime.parse(
+      asString(json['recordedAt'], 'transportLocation.recordedAt'),
+    ),
+    stale: json['stale'] == true,
+  );
+
+  final String routeId;
+  final double latitude;
+  final double longitude;
+  final double? accuracyMeters;
+  final DateTime recordedAt;
+  final bool stale;
+}

@@ -199,14 +199,16 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
     final canReject = user?.can('admissions:reject') == true;
     final canCreate = user?.can('admissions:create') == true;
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Column(
         children: [
           const TabBar(
             tabs: [
               Tab(text: 'Approvals'),
               Tab(text: 'Applications'),
+              Tab(text: 'Pipeline'),
               Tab(text: 'Enquiries'),
+              Tab(text: 'Operations'),
             ],
           ),
           Expanded(
@@ -226,6 +228,11 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
                   canManage: canUpdate,
                   onManage: _manageApplication,
                 ),
+                _AdmissionsPipeline(
+                  onRefresh: _refresh,
+                  canManage: canUpdate,
+                  onManage: _manageApplication,
+                ),
                 _EnquiriesList(
                   canCreate: canCreate,
                   canManage: canUpdate,
@@ -240,6 +247,100 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
         ],
       ),
     );
+  }
+}
+
+class _AdmissionsPipeline extends ConsumerWidget {
+  const _AdmissionsPipeline({
+    required this.onRefresh,
+    required this.canManage,
+    required this.onManage,
+  });
+
+  final Future<void> Function() onRefresh;
+  final bool canManage;
+  final Future<void> Function(AdmissionApplication row) onManage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(admissionApplicationsProvider);
+    return value.when(
+      loading: () => const ErpLoadingList(),
+      error: (error, stack) => ErpErrorState(
+        error: error,
+        onRetry: () => ref.invalidate(admissionApplicationsProvider),
+      ),
+      data: (page) {
+        if (page.rows.isEmpty) {
+          return const ErpEmptyState(
+            icon: Icons.view_kanban_outlined,
+            title: 'No pipeline applications',
+            message: 'Applications will be grouped here as they move through review.',
+          );
+        }
+        final stages = <String, List<AdmissionApplication>>{};
+        for (final row in page.rows) {
+          stages.putIfAbsent(_stageFor(row), () => []).add(row);
+        }
+        const order = [
+          'Applied',
+          'Under review',
+          'Interview',
+          'Selected',
+          'Waitlisted',
+          'Admitted',
+          'Rejected',
+        ];
+        final visibleStages = order.where(stages.containsKey).toList();
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(ErpSpacing.lg),
+            itemCount: visibleStages.length,
+            separatorBuilder: (_, _) => const SizedBox(height: ErpSpacing.md),
+            itemBuilder: (context, index) {
+              final stage = visibleStages[index];
+              final applications = stages[stage]!;
+              return Card(
+                child: ExpansionTile(
+                  initiallyExpanded: index < 2,
+                  leading: CircleAvatar(child: Text('${applications.length}')),
+                  title: Text(stage),
+                  subtitle: Text(
+                    '${applications.length} applicant${applications.length == 1 ? '' : 's'}',
+                  ),
+                  children: [
+                    for (final row in applications)
+                      ListTile(
+                        title: Text(row.name),
+                        subtitle: Text(row.applicationNumber),
+                        trailing: canManage
+                            ? IconButton(
+                                tooltip: 'Manage application',
+                                onPressed: () => onManage(row),
+                                icon: const Icon(Icons.open_in_new_outlined),
+                              )
+                            : ErpStatusChip(row.status),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  static String _stageFor(AdmissionApplication row) {
+    if (row.status == 'rejected') return 'Rejected';
+    if (row.status == 'approved') return 'Admitted';
+    if (row.status == 'selected') return 'Selected';
+    if (row.status == 'waitlisted') return 'Waitlisted';
+    if (row.openAssessment != null) return 'Interview';
+    if (row.status == 'verified') return 'Under review';
+    return 'Applied';
   }
 }
 

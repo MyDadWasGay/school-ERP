@@ -22,6 +22,71 @@ class AcademicRecord {
   final String status;
 }
 
+class SyllabusLessonRow {
+  const SyllabusLessonRow({
+    required this.id,
+    required this.title,
+    required this.status,
+  });
+
+  factory SyllabusLessonRow.fromJson(Json json) => SyllabusLessonRow(
+    id: asString(json['id'], 'syllabusLesson.id'),
+    title: asString(json['title'], 'syllabusLesson.title'),
+    status: asString(json['status'], 'syllabusLesson.status'),
+  );
+
+  final String id;
+  final String title;
+  final String status;
+}
+
+class SyllabusProgressRow {
+  const SyllabusProgressRow({
+    required this.subjectId,
+    required this.subjectName,
+    required this.teacherName,
+    required this.totalLessons,
+    required this.completedLessons,
+    required this.pendingLessons,
+    required this.completionPercentage,
+    required this.lastUpdated,
+    required this.lessons,
+  });
+
+  factory SyllabusProgressRow.fromJson(Json json) => SyllabusProgressRow(
+    subjectId: asString(json['subjectId'], 'syllabus.subjectId'),
+    subjectName: asString(json['subjectName'], 'syllabus.subjectName'),
+    teacherName: asString(json['teacherName'], 'syllabus.teacherName'),
+    totalLessons: asInt(json['totalLessons'], 'syllabus.totalLessons'),
+    completedLessons: asInt(
+      json['completedLessons'],
+      'syllabus.completedLessons',
+    ),
+    pendingLessons: asInt(json['pendingLessons'], 'syllabus.pendingLessons'),
+    completionPercentage: asDouble(
+      json['completionPercentage'],
+      'syllabus.completionPercentage',
+    ),
+    lastUpdated: DateTime.parse(
+      asString(json['lastUpdated'], 'syllabus.lastUpdated'),
+    ),
+    lessons: asJsonList(
+      json['lessons'],
+      'syllabus.lessons',
+    ).map(SyllabusLessonRow.fromJson).toList(growable: false),
+  );
+
+  final String subjectId;
+  final String subjectName;
+  final String teacherName;
+  final int totalLessons;
+  final int completedLessons;
+  final int pendingLessons;
+  final double completionPercentage;
+  final DateTime lastUpdated;
+  final List<SyllabusLessonRow> lessons;
+}
+
 class AcademicOption {
   const AcademicOption({
     required this.id,

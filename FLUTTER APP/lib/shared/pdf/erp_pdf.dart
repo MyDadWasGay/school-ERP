@@ -1,138 +1,294 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../models/exam_models.dart';
 import '../models/student_models.dart';
 import '../models/workspace_models.dart';
 
-class ErpPdfBuilder {
-  static Uint8List feeReceipt({
+typedef PdfFontLoader = Future<PdfFontSet> Function(List<String> content);
+
+class PdfFontSet {
+  const PdfFontSet({
+    required this.base,
+    required this.bold,
+    this.fallbacks = const [],
+  });
+
+  final pw.Font base;
+  final pw.Font bold;
+  final List<pw.Font> fallbacks;
+}
+
+class ErpPdfService {
+  ErpPdfService({PdfFontLoader? fontLoader})
+    : _fontLoader = fontLoader ?? _loadFonts;
+
+  final PdfFontLoader _fontLoader;
+
+  Future<Uint8List> feeReceipt({
     required String schoolName,
     required String studentName,
     required StudentPaymentRow payment,
-  }) {
-    final amount =
-        '${payment.currency} ${(payment.amountMinor / 100).toStringAsFixed(2)}';
-    return _document([
-      schoolName,
-      'FEE PAYMENT RECEIPT',
-      '',
-      'Student: $studentName',
-      'Receipt: ${payment.receiptNumber}',
-      'Invoice: ${payment.invoiceNumber}',
-      'Amount: $amount',
-      'Method: ${payment.method.replaceAll('_', ' ')}',
-      'Paid: ${payment.paidAt.toLocal()}',
-      'Status: ${payment.status.replaceAll('_', ' ')}',
+  }) => _build(
+    title: 'FEE PAYMENT RECEIPT',
+    content: [
+      ['Student', studentName],
+      ['Receipt', payment.receiptNumber],
+      ['Invoice', payment.invoiceNumber],
+      ['Amount', _money(payment.currency, payment.amountMinor)],
+      ['Method', payment.method.replaceAll('_', ' ')],
+      ['Paid', payment.paidAt.toLocal().toString()],
+      ['Status', payment.status.replaceAll('_', ' ')],
       if (payment.providerReference?.isNotEmpty == true)
-        'Reference: ${payment.providerReference}',
-    ]);
-  }
+        ['Reference', payment.providerReference!],
+    ],
+    schoolName: schoolName,
+  );
 
-  static Uint8List payslip({
+  Future<Uint8List> payslip({
     required String schoolName,
     required PayslipRow payslip,
   }) {
     final snapshot = payslip.snapshot ?? const <String, Object?>{};
     String value(String key) => snapshot[key]?.toString() ?? 'Not available';
-    return _document([
-      schoolName,
-      'PAYSLIP',
-      '',
-      'Employee: ${payslip.employeeName}',
-      'Employee number: ${payslip.employeeNumber}',
-      'Period: ${payslip.period}',
-      'Issued: ${payslip.issuedAt}',
-      '',
-      'Basic salary: INR ${(snapshot['salaryMinor'] is num ? (snapshot['salaryMinor']! as num) / 100 : 0).toStringAsFixed(2)}',
-      'Allowances: INR ${(snapshot['allowanceMinor'] is num ? (snapshot['allowanceMinor']! as num) / 100 : 0).toStringAsFixed(2)}',
-      'Percentage deductions: INR ${(snapshot['percentageDeductionMinor'] is num ? (snapshot['percentageDeductionMinor']! as num) / 100 : 0).toStringAsFixed(2)}',
-      'Fixed deductions: INR ${(snapshot['fixedDeductionMinor'] is num ? (snapshot['fixedDeductionMinor']! as num) / 100 : 0).toStringAsFixed(2)}',
-      'Gross: ${payslip.gross}',
-      'Deductions: ${payslip.deductions}',
-      'Net pay: ${payslip.net}',
-      if (snapshot['jobTitle'] is String && value('jobTitle').isNotEmpty)
-        'Role: ${value('jobTitle')}',
-      'Status: ${payslip.status.replaceAll('_', ' ')}',
-    ]);
+    String minorValue(String key) {
+      final value = snapshot[key];
+      final minor = value is num ? value : 0;
+      return _money('INR', minor.toInt());
+    }
+
+    return _build(
+      title: 'PAYSLIP',
+      content: [
+        ['Employee', payslip.employeeName],
+        ['Employee number', payslip.employeeNumber],
+        ['Period', payslip.period],
+        ['Issued', payslip.issuedAt],
+        ['Basic salary', minorValue('salaryMinor')],
+        ['Allowances', minorValue('allowanceMinor')],
+        ['Percentage deductions', minorValue('percentageDeductionMinor')],
+        ['Fixed deductions', minorValue('fixedDeductionMinor')],
+        ['Gross', payslip.gross],
+        ['Deductions', payslip.deductions],
+        ['Net pay', payslip.net],
+        if (snapshot['jobTitle'] is String && value('jobTitle').isNotEmpty)
+          ['Role', value('jobTitle')],
+        ['Status', payslip.status.replaceAll('_', ' ')],
+      ],
+      schoolName: schoolName,
+    );
   }
 
-  static Uint8List paymentReceipt({
+  Future<Uint8List> paymentReceipt({
     required String schoolName,
     required PaymentRow payment,
-  }) => _document([
-    schoolName,
-    'FEE PAYMENT RECEIPT',
-    '',
-    'Receipt: ${payment.receiptNumber}',
-    'Amount: ${payment.amount}',
-    'Method: ${payment.method.replaceAll('_', ' ')}',
-    'Paid: ${payment.paidAt}',
-    'Status: ${payment.status.replaceAll('_', ' ')}',
-  ]);
+  }) => _build(
+    title: 'FEE PAYMENT RECEIPT',
+    content: [
+      ['Receipt', payment.receiptNumber],
+      ['Amount', payment.amount],
+      ['Method', payment.method.replaceAll('_', ' ')],
+      ['Paid', payment.paidAt],
+      ['Status', payment.status.replaceAll('_', ' ')],
+    ],
+    schoolName: schoolName,
+  );
 
-  static Uint8List _document(List<String> lines) {
-    final content = StringBuffer()
-      ..writeln('BT')
-      ..writeln('/F1 16 Tf')
-      ..writeln('50 790 Td');
-    for (var index = 0; index < lines.length; index++) {
-      final size = index == 0
-          ? 16
-          : index == 1
-          ? 13
-          : 10;
-      content
-        ..writeln('/F1 $size Tf')
-        ..writeln('(${_escape(lines[index])}) Tj')
-        ..writeln('0 -22 Td');
-    }
-    content.writeln('ET');
-    final contentBytes = latin1.encode(content.toString());
-    final objects = <String>[
-      '<< /Type /Catalog /Pages 2 0 R >>',
-      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-      '<< /Length ${contentBytes.length} >>\nstream\n${content.toString()}endstream',
+  Future<Uint8List> admitCard({
+    required String schoolName,
+    required AdmitCard card,
+  }) => _build(
+    title: 'EXAM ADMIT CARD',
+    content: [
+      ['Examination', card.examName],
+      if (card.startsOn != null)
+        ['Exam dates', _dateRange(card.startsOn!, card.endsOn)],
+      ['Student', card.student.name],
+      ['Admission number', card.student.admissionNumber],
+      [
+        'Class / section',
+        '${card.student.className} / ${card.student.sectionName}',
+      ],
+      if (card.student.rollNumber?.isNotEmpty == true)
+        ['Roll number', card.student.rollNumber!],
+      ['Subjects and venues', card.subjects.map(_subjectLine).join('\n')],
+      [
+        'Instructions',
+        'Carry this admit card and arrive at the examination room before the scheduled start time.',
+      ],
+    ],
+    schoolName: schoolName,
+  );
+
+  Future<Uint8List> _build({
+    required String schoolName,
+    required String title,
+    required List<List<String>> content,
+  }) async {
+    final lines = [
+      schoolName,
+      title,
+      for (final row in content) ...row,
     ];
-    final bytes = BytesBuilder();
-    bytes.add(latin1.encode('%PDF-1.4\n'));
-    final offsets = <int>[];
-    for (var index = 0; index < objects.length; index++) {
-      offsets.add(bytes.length);
-      bytes.add(
-        latin1.encode('${index + 1} 0 obj\n${objects[index]}\nendobj\n'),
-      );
-    }
-    final xrefOffset = bytes.length;
-    bytes.add(latin1.encode('xref\n0 ${objects.length + 1}\n'));
-    bytes.add(latin1.encode('0000000000 65535 f \n'));
-    for (final offset in offsets) {
-      bytes.add(
-        latin1.encode('${offset.toString().padLeft(10, '0')} 00000 n \n'),
-      );
-    }
-    bytes.add(
-      latin1.encode(
-        'trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n$xrefOffset\n%%EOF\n',
+    final fonts = await _fontLoader(lines);
+    final document = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: fonts.base,
+        bold: fonts.bold,
+        fontFallback: fonts.fallbacks,
       ),
     );
-    return bytes.toBytes();
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(42, 48, 42, 48),
+        header: (context) => _header(schoolName, title),
+        footer: (context) => pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8),
+          ),
+        ),
+        build: (context) => [
+          pw.SizedBox(height: 18),
+          pw.TableHelper.fromTextArray(
+            headers: const ['Field', 'Details'],
+            data: content,
+            headerStyle: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+            ),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColors.blueGrey800,
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 10),
+            cellPadding: const pw.EdgeInsets.all(8),
+            border: pw.TableBorder.all(
+              color: PdfColors.blueGrey200,
+              width: 0.5,
+            ),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(1.1),
+              1: pw.FlexColumnWidth(2.9),
+            },
+          ),
+        ],
+      ),
+    );
+    return document.save();
   }
 
-  static String _escape(String value) {
-    final ascii = value.runes
-        .map(
-          (rune) => rune >= 32 && rune <= 126 ? String.fromCharCode(rune) : '?',
-        )
-        .join();
-    return ascii
-        .replaceAll(r'\', r'\\')
-        .replaceAll('(', r'\(')
-        .replaceAll(')', r'\)');
+  pw.Widget _header(String schoolName, String title) => pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Text(
+        schoolName,
+        style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold),
+      ),
+      pw.SizedBox(height: 4),
+      pw.Text(title, style: const pw.TextStyle(fontSize: 12)),
+      pw.Divider(color: PdfColors.blueGrey300),
+    ],
+  );
+
+  static String _money(String currency, int amountMinor) {
+    final amount = (amountMinor / 100).toStringAsFixed(2);
+    return currency.toUpperCase() == 'INR'
+        ? '₹ $amount'
+        : '$currency $amount';
   }
+
+  static String _dateRange(DateTime startsOn, DateTime? endsOn) {
+    final start = startsOn.toLocal().toString().split(' ').first;
+    final end = endsOn?.toLocal().toString().split(' ').first;
+    return end == null || end == start ? start : '$start - $end';
+  }
+
+  static String _subjectLine(AdmitCardSubject subject) {
+    final localStart = subject.startsAt.toLocal();
+    final localEnd = subject.endsAt.toLocal();
+    final date = localStart.toString().split(' ').first;
+    final start = localStart.toString().substring(11, 16);
+    final end = localEnd.toString().substring(11, 16);
+    return '${subject.subjectName} | $date $start-$end | Room ${subject.roomId ?? 'To be assigned'}';
+  }
+
+  static Future<PdfFontSet> _loadFonts(List<String> content) async {
+    final base = await PdfGoogleFonts.notoSansRegular();
+    final bold = await PdfGoogleFonts.notoSansBold();
+    final fallbackLoaders = <Future<pw.Font> Function()>[];
+    if (_containsRange(content, 0x0900, 0x097f)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansDevanagariRegular);
+    }
+    if (_containsRange(content, 0x0980, 0x09ff)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansBengaliRegular);
+    }
+    if (_containsRange(content, 0x0a80, 0x0aff)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansGujaratiRegular);
+    }
+    if (_containsRange(content, 0x0a00, 0x0a7f)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansGurmukhiRegular);
+    }
+    if (_containsRange(content, 0x0c80, 0x0cff)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansKannadaRegular);
+    }
+    if (_containsRange(content, 0x0d00, 0x0d7f)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansMalayalamRegular);
+    }
+    if (_containsRange(content, 0x0b80, 0x0bff)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansTamilRegular);
+    }
+    if (_containsRange(content, 0x0c00, 0x0c7f)) {
+      fallbackLoaders.add(PdfGoogleFonts.notoSansTeluguRegular);
+    }
+    return PdfFontSet(
+      base: base,
+      bold: bold,
+      fallbacks: await Future.wait(fallbackLoaders.map((load) => load())),
+    );
+  }
+
+  static bool _containsRange(
+    Iterable<String> content,
+    int start,
+    int end,
+  ) => content.any(
+    (value) => value.runes.any((rune) => rune >= start && rune <= end),
+  );
+}
+
+class ErpPdfBuilder {
+  static final _service = ErpPdfService();
+
+  static Future<Uint8List> feeReceipt({
+    required String schoolName,
+    required String studentName,
+    required StudentPaymentRow payment,
+  }) => _service.feeReceipt(
+    schoolName: schoolName,
+    studentName: studentName,
+    payment: payment,
+  );
+
+  static Future<Uint8List> payslip({
+    required String schoolName,
+    required PayslipRow payslip,
+  }) => _service.payslip(schoolName: schoolName, payslip: payslip);
+
+  static Future<Uint8List> paymentReceipt({
+    required String schoolName,
+    required PaymentRow payment,
+  }) => _service.paymentReceipt(schoolName: schoolName, payment: payment);
+
+  static Future<Uint8List> admitCard({
+    required String schoolName,
+    required AdmitCard card,
+  }) => _service.admitCard(schoolName: schoolName, card: card);
 }
 
 Future<void> shareErpPdf({
@@ -149,3 +305,8 @@ Future<void> shareErpPdf({
     ),
   );
 }
+
+Future<bool> printErpPdf({
+  required Uint8List bytes,
+  required String filename,
+}) => Printing.layoutPdf(name: filename, onLayout: (_) => bytes);

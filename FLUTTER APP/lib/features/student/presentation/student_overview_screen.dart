@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/api/api_error.dart';
+import '../../../shared/models/attendance_models.dart';
+import '../../../shared/models/finance_models.dart';
 import '../../../shared/models/identity_models.dart';
 import '../../../shared/pdf/erp_pdf.dart';
 import '../../../shared/models/student_models.dart';
@@ -71,6 +73,7 @@ class StudentOverviewScreen extends ConsumerWidget {
               Tab(text: 'Results'),
               Tab(text: 'Fees'),
               Tab(text: 'Documents'),
+              Tab(text: 'Discipline'),
             ],
           ),
           Expanded(
@@ -101,12 +104,65 @@ class StudentOverviewScreen extends ConsumerWidget {
                         true,
                   ),
                   _DocumentsList(data.documents),
+                  _DisciplineTimeline(data.discipline),
                 ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DisciplineTimeline extends StatelessWidget {
+  const _DisciplineTimeline(this.rows);
+
+  final List<DisciplineIncidentRow>? rows;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows == null) {
+      return const ErpEmptyState(
+        icon: Icons.lock_outline,
+        title: 'Discipline timeline is not available',
+        message: 'Your account does not have access to this student timeline.',
+      );
+    }
+    if (rows!.isEmpty) {
+      return const ErpEmptyState(
+        icon: Icons.auto_awesome_outlined,
+        title: 'No behavior records',
+        message: 'Positive notes and school behavior records will appear here.',
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(ErpSpacing.lg),
+      itemCount: rows!.length,
+      separatorBuilder: (_, _) => const SizedBox(height: ErpSpacing.sm),
+      itemBuilder: (context, index) {
+        final row = rows![index];
+        return Card(
+          child: ListTile(
+            leading: CircleAvatar(
+              child: Icon(
+                row.severity.toLowerCase() == 'positive'
+                    ? Icons.thumb_up_alt_outlined
+                    : Icons.flag_outlined,
+              ),
+            ),
+            title: Text(row.title),
+            subtitle: Text(
+              [
+                row.occurredAt,
+                if (row.details?.isNotEmpty == true) row.details!,
+              ].join(' · '),
+            ),
+            isThreeLine: row.details?.isNotEmpty == true,
+            trailing: ErpStatusChip(row.status),
+          ),
+        );
+      },
     );
   }
 }
@@ -330,7 +386,12 @@ class _InvoiceList extends ConsumerStatefulWidget {
 class _InvoiceListState extends ConsumerState<_InvoiceList> {
   late final Razorpay _razorpay;
   String? _activeOrderId;
-  bool _paying = false;
+  var _paymentStatus = RazorpayPaymentStatus.idle;
+  bool _verificationInFlight = false;
+
+  bool get _paying =>
+      _paymentStatus == RazorpayPaymentStatus.starting ||
+      _paymentStatus == RazorpayPaymentStatus.processing;
 
   @override
   void initState() {
@@ -350,7 +411,7 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
   Future<void> _pay(InvoiceRow invoice) async {
     final studentId = widget.studentId;
     if (_paying || studentId == null || invoice.balanceMinor <= 0) return;
-    setState(() => _paying = true);
+    setState(() => _paymentStatus = RazorpayPaymentStatus.starting);
     try {
       final order = await ref
           .read(apiClientProvider)
@@ -363,6 +424,7 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
           );
       if (!mounted) return;
       _activeOrderId = order.orderId;
+      setState(() => _paymentStatus = RazorpayPaymentStatus.processing);
       _razorpay.open({
         'key': order.keyId,
         'amount': order.amountMinor,
@@ -383,15 +445,27 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
   }
 
   Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    if (!_paying || _verificationInFlight) return;
     final orderId = response.orderId ?? _activeOrderId;
     final paymentId = response.paymentId;
     final signature = response.signature;
     if (orderId == null || paymentId == null || signature == null) {
       _finishWithMessage(
         'Razorpay returned an incomplete payment response. Refresh the fee page to check the status.',
+        status: RazorpayPaymentStatus.unknown,
       );
       return;
     }
+    if (_activeOrderId != null &&
+        response.orderId != null &&
+        response.orderId != _activeOrderId) {
+      _finishWithMessage(
+        'Razorpay returned a response for a different order. Refresh the fee page to check the status.',
+        status: RazorpayPaymentStatus.unknown,
+      );
+      return;
+    }
+    _verificationInFlight = true;
     try {
       final result = await ref
           .read(apiClientProvider)
@@ -401,6 +475,7 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
             signature: signature,
           );
       if (!mounted) return;
+      setState(() => _paymentStatus = RazorpayPaymentStatus.success);
       ref.invalidate(studentOverviewProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -412,11 +487,12 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
     } on Object catch (error) {
       _finishWithMessage(
         '${readableApiError(error)} The provider webhook will reconcile captured funds; refresh before trying again.',
+        status: RazorpayPaymentStatus.unknown,
       );
     } finally {
+      _verificationInFlight = false;
       if (mounted) {
         setState(() {
-          _paying = false;
           _activeOrderId = null;
         });
       }
@@ -424,23 +500,32 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    if (!_paying) return;
     _finishWithMessage(
       response.message ?? 'Razorpay payment was not completed.',
+      status: response.code == Razorpay.PAYMENT_CANCELLED
+          ? RazorpayPaymentStatus.cancelled
+          : RazorpayPaymentStatus.failed,
     );
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
+    if (!_paying) return;
     _finishWithMessage(
       response.walletName == null
           ? 'External wallet selected. Complete the payment in Razorpay.'
           : 'External wallet selected: ${response.walletName}.',
+      status: RazorpayPaymentStatus.unknown,
     );
   }
 
-  void _finishWithMessage(String message) {
+  void _finishWithMessage(
+    String message, {
+    RazorpayPaymentStatus status = RazorpayPaymentStatus.failed,
+  }) {
     if (!mounted) return;
     setState(() {
-      _paying = false;
+      _paymentStatus = status;
       _activeOrderId = null;
     });
     ScaffoldMessenger.of(
@@ -542,7 +627,7 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
             if (action != 'share') return;
             try {
               await shareErpPdf(
-                bytes: ErpPdfBuilder.feeReceipt(
+                bytes: await ErpPdfBuilder.feeReceipt(
                   schoolName: widget.schoolName,
                   studentName: widget.studentName,
                   payment: payment,

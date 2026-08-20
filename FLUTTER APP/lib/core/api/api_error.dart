@@ -18,6 +18,7 @@ class ApiError implements Exception {
   const ApiError({
     required this.kind,
     required this.message,
+    this.statusCode,
     this.code,
     this.requestId,
     this.fields,
@@ -61,6 +62,7 @@ class ApiError implements Exception {
     };
     return ApiError(
       kind: kind,
+      statusCode: status,
       code: code,
       requestId: details['requestId']?.toString(),
       fields: details['fields'],
@@ -72,6 +74,7 @@ class ApiError implements Exception {
 
   final ApiErrorKind kind;
   final String message;
+  final int? statusCode;
   final String? code;
   final String? requestId;
   final Object? fields;

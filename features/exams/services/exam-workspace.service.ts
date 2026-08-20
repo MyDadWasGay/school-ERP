@@ -3,11 +3,14 @@ import { getDb } from "@/db/client";
 import {
   academicYears,
   classes,
+  enrollments,
   exams,
   examSchedules,
   marksEntries,
   resultPublications,
   subjects,
+  sections,
+  students,
 } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
 import { normalizePagination } from "@/lib/utils/pagination";
@@ -166,6 +169,121 @@ export async function listStudentPublishedResults(
       pageCount: Math.ceil(total / pagination.pageSize),
     },
   };
+}
+
+export async function listStudentAdmitCards(
+  user: CurrentUser,
+  studentId: string,
+) {
+  const student = await getReadableStudent(user, studentId);
+  const rows = await getDb().select({
+    examId: exams.id,
+    examName: exams.name,
+    examStatus: exams.status,
+    examStartsOn: exams.startsOn,
+    examEndsOn: exams.endsOn,
+    academicYearId: exams.academicYearId,
+    admissionNumber: students.admissionNumber,
+    firstName: students.firstName,
+    lastName: students.lastName,
+    photoUrl: students.photoUrl,
+    className: classes.name,
+    sectionName: sections.name,
+    rollNumber: enrollments.rollNumber,
+    subjectId: subjects.id,
+    subjectName: subjects.name,
+    startsAt: examSchedules.startsAt,
+    endsAt: examSchedules.endsAt,
+    roomId: examSchedules.roomId,
+  }).from(examSchedules)
+    .innerJoin(exams, and(
+      eq(exams.id, examSchedules.examId),
+      eq(exams.organizationId, user.organizationId),
+      inArray(exams.status, ["approved", "published"]),
+    ))
+    .innerJoin(subjects, and(
+      eq(subjects.id, examSchedules.subjectId),
+      eq(subjects.organizationId, user.organizationId),
+    ))
+    .innerJoin(enrollments, and(
+      eq(enrollments.studentId, student.id),
+      eq(enrollments.organizationId, user.organizationId),
+      eq(enrollments.classId, examSchedules.classId),
+      eq(enrollments.academicYearId, exams.academicYearId),
+      eq(enrollments.status, "active"),
+    ))
+    .innerJoin(classes, and(
+      eq(classes.id, enrollments.classId),
+      eq(classes.organizationId, user.organizationId),
+    ))
+    .innerJoin(sections, and(
+      eq(sections.id, enrollments.sectionId),
+      eq(sections.organizationId, user.organizationId),
+    ))
+    .where(and(
+      eq(examSchedules.organizationId, user.organizationId),
+      eq(examSchedules.status, "active"),
+      student.campusId ? eq(examSchedules.campusId, student.campusId) : undefined,
+      student.campusId ? eq(exams.campusId, student.campusId) : undefined,
+    ))
+    .orderBy(examSchedules.startsAt)
+    .limit(500);
+
+  const cards = new Map<string, {
+    examId: string;
+    examName: string;
+    examStatus: string;
+    startsOn: string | null;
+    endsOn: string | null;
+    student: {
+      id: string;
+      name: string;
+      admissionNumber: string;
+      photoUrl: string | null;
+      className: string;
+      sectionName: string;
+      rollNumber: string | null;
+    };
+    subjects: Array<{
+      subjectId: string;
+      subjectName: string;
+      startsAt: string;
+      endsAt: string;
+      roomId: string | null;
+    }>;
+  }>();
+  for (const row of rows) {
+    const subject = {
+      subjectId: row.subjectId,
+      subjectName: row.subjectName,
+      startsAt: row.startsAt.toISOString(),
+      endsAt: row.endsAt.toISOString(),
+      roomId: row.roomId,
+    };
+    const existing = cards.get(row.examId);
+    if (existing) {
+      existing.subjects.push(subject);
+      continue;
+    }
+    cards.set(row.examId, {
+      examId: row.examId,
+      examName: row.examName,
+      examStatus: row.examStatus,
+      startsOn: row.examStartsOn?.toISOString() ?? null,
+      endsOn: row.examEndsOn?.toISOString() ?? null,
+      student: {
+        id: student.id,
+        name: `${row.firstName} ${row.lastName}`.trim(),
+        admissionNumber: row.admissionNumber,
+        photoUrl: row.photoUrl,
+        className: row.className,
+        sectionName: row.sectionName,
+        rollNumber: row.rollNumber,
+      },
+      subjects: [subject],
+    });
+  }
+  return [...cards.values()];
 }
 
 export async function getExamPlanningOptions(user: CurrentUser) {

@@ -24,11 +24,15 @@ import '../shared/models/transport_models.dart';
 import '../shared/models/workspace_models.dart';
 import 'api/api_client.dart';
 import 'api/api_error.dart';
+import 'auth/biometric_auth_service.dart';
 import 'auth/auth_gateway.dart';
 import 'config/app_config.dart';
 import 'storage/campus_store.dart';
 import 'storage/attendance_draft_store.dart';
+import 'notifications/notification_intent.dart';
 import 'notifications/push_notification_service.dart';
+import 'sync/mutation_queue.dart';
+import 'transport/transport_location_broadcaster.dart';
 
 final firebaseAuthProvider = Provider<FirebaseAuth>(
   (ref) => FirebaseAuth.instance,
@@ -47,6 +51,25 @@ final campusStoreProvider = Provider<CampusStore>(
 final attendanceDraftStoreProvider = Provider<AttendanceDraftStore>(
   (ref) => AttendanceDraftStore(SharedPreferencesAsync()),
 );
+final mutationQueueProvider = Provider<MutationQueueStore>(
+  (ref) => MutationQueueStore(SharedPreferencesAsync()),
+);
+final transportLocationBroadcasterProvider =
+    Provider<TransportLocationBroadcaster>((ref) {
+      final broadcaster = TransportLocationBroadcaster(ref.watch(apiClientProvider));
+      ref.onDispose(broadcaster.stop);
+      return broadcaster;
+    });
+final biometricAuthServiceProvider = Provider<BiometricAuthService>(
+  (ref) => BiometricAuthService(),
+);
+final biometricAvailabilityProvider = FutureProvider<BiometricAvailability>(
+  (ref) => ref.read(biometricAuthServiceProvider).availability(),
+);
+final biometricEnabledProvider = FutureProvider.family<bool, String>(
+  (ref, accountKey) =>
+      ref.read(biometricAuthServiceProvider).isEnabled(accountKey),
+);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final config = ref.watch(appConfigProvider);
@@ -60,12 +83,39 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
+final transportChecklistProvider = FutureProvider.family<TransportChecklist,
+    ({String routeId, DateTime eventDate, String tripType})>((ref, input) async {
+  final me = await ref.watch(sessionProvider.future);
+  if (!me.can('transport:read')) {
+    throw const ApiError(
+      kind: ApiErrorKind.forbidden,
+      message: 'Transport access is not available.',
+    );
+  }
+  return ref.watch(apiClientProvider).getTransportChecklist(
+    routeId: input.routeId,
+    eventDate: input.eventDate,
+    tripType: input.tripType,
+  );
+});
+
+final transportLocationProvider = FutureProvider.family<TransportLocation?, String>(
+  (ref, routeId) async {
+    final me = await ref.watch(sessionProvider.future);
+    if (!me.can('transport:read')) return null;
+    return ref.watch(apiClientProvider).getLatestTransportLocation(routeId);
+  },
+);
+
 final pushNotificationServiceProvider = Provider<PushNotificationService>((
   ref,
 ) {
   final service = PushNotificationService(ref.watch(apiClientProvider));
   ref.onDispose(service.dispose);
   return service;
+});
+final notificationIntentProvider = StreamProvider<NotificationIntent>((ref) {
+  return ref.watch(pushNotificationServiceProvider).intents;
 });
 
 final sessionProvider = AsyncNotifierProvider<SessionController, CurrentUser>(
@@ -385,6 +435,14 @@ final academicOptionsProvider =
       return ref.watch(apiClientProvider).getAcademicOptions(kind);
     });
 
+final syllabusProgressProvider = FutureProvider<List<SyllabusProgressRow>>((
+  ref,
+) async {
+  final me = await ref.watch(sessionProvider.future);
+  if (!me.can('academics:read')) return const [];
+  return ref.watch(apiClientProvider).getSyllabusProgress();
+});
+
 final libraryProvider = FutureProvider<LibraryOverview?>((ref) async {
   final me = await ref.watch(sessionProvider.future);
   if (!me.can('library:read')) return null;
@@ -588,6 +646,14 @@ final financeInvoicesProvider = FutureProvider<PagedRows<FinanceInvoiceRow>>((
   final me = await ref.watch(sessionProvider.future);
   if (!me.can('fees:read')) return _emptyPage();
   return ref.watch(apiClientProvider).getFinanceInvoices();
+});
+
+final feeAgingProvider = FutureProvider<FeeAgingReport>((ref) async {
+  final me = await ref.watch(sessionProvider.future);
+  if (!me.can('fees:read')) {
+    return FeeAgingReport(asOf: DateTime.now(), buckets: const [], defaulters: const []);
+  }
+  return ref.watch(apiClientProvider).getFeeAging();
 });
 
 final paymentOptionsProvider = FutureProvider<List<PaymentOption>>((ref) async {
@@ -991,6 +1057,7 @@ class StudentOverview {
     this.results,
     this.reportCards,
     this.documents,
+    this.discipline,
   });
   final PagedRows<AttendanceRow>? attendance;
   final PagedRows<InvoiceRow>? invoices;
@@ -998,6 +1065,7 @@ class StudentOverview {
   final PagedRows<ResultRow>? results;
   final List<StudentReportCardRow>? reportCards;
   final List<DocumentRow>? documents;
+  final List<DisciplineIncidentRow>? discipline;
 }
 
 final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
@@ -1024,6 +1092,10 @@ final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
       api.getDocuments(studentId)
     else
       Future.value(null),
+    if (me.can('attendance:read'))
+      api.getStudentDiscipline(studentId)
+    else
+      Future.value(null),
   ]);
   return StudentOverview(
     attendance: values[0] as PagedRows<AttendanceRow>?,
@@ -1032,7 +1104,15 @@ final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
     payments: values[3] as PagedRows<StudentPaymentRow>?,
     reportCards: values[4] as List<StudentReportCardRow>?,
     documents: values[5] as List<DocumentRow>?,
+    discipline: values[6] as List<DisciplineIncidentRow>?,
   );
+});
+
+final admitCardsProvider = FutureProvider<List<AdmitCard>>((ref) async {
+  final me = await ref.watch(sessionProvider.future);
+  final studentId = ref.watch(selectedStudentIdProvider) ?? me.linkedStudentId;
+  if (studentId == null || !me.can('exams:read')) return const [];
+  return ref.watch(apiClientProvider).getStudentAdmitCards(studentId);
 });
 
 String _todayKey() {

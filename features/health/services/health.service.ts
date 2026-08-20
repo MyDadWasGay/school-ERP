@@ -38,6 +38,10 @@ export async function listHealthProfiles(user: CurrentUser) {
     studentName: sql<string>`${students.firstName} || ' ' || ${students.lastName}`,
     allergies: healthProfiles.allergies,
     conditions: healthProfiles.conditions,
+    medications: healthProfiles.medications,
+    emergencyContact: healthProfiles.emergencyContact,
+    emergencyNotes: healthProfiles.emergencyNotes,
+    immunizationStatus: healthProfiles.immunizationStatus,
     updatedAt: healthProfiles.updatedAt,
   }).from(healthProfiles).innerJoin(students, and(
     eq(students.id, healthProfiles.studentId),
@@ -57,7 +61,7 @@ export async function upsertHealthProfile(user: CurrentUser, input: HealthProfil
     eq(healthProfiles.status, "active"),
   ) });
   if (existing) {
-    const [updated] = await getDb().update(healthProfiles).set({ allergies: input.allergies || null, conditions: input.conditions || null, updatedAt: new Date(), updatedBy: user.id }).where(eq(healthProfiles.id, existing.id)).returning();
+    const [updated] = await getDb().update(healthProfiles).set({ allergies: input.allergies || null, conditions: input.conditions || null, medications: input.medications || null, emergencyContact: input.emergencyContact || null, emergencyNotes: input.emergencyNotes || null, immunizationStatus: input.immunizationStatus || null, updatedAt: new Date(), updatedBy: user.id }).where(eq(healthProfiles.id, existing.id)).returning();
     if (!updated) throw new AppError("DATABASE_ERROR", "Unable to update health profile.", 500);
     return updated;
   }
@@ -68,6 +72,10 @@ export async function upsertHealthProfile(user: CurrentUser, input: HealthProfil
     studentId: student.id,
     allergies: input.allergies || null,
     conditions: input.conditions || null,
+    medications: input.medications || null,
+    emergencyContact: input.emergencyContact || null,
+    emergencyNotes: input.emergencyNotes || null,
+    immunizationStatus: input.immunizationStatus || null,
     status: "active",
     createdBy: user.id,
     updatedBy: user.id,

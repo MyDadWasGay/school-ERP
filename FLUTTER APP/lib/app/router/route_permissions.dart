@@ -8,7 +8,9 @@ String? permissionForPath(String path) {
   if (path.startsWith('/timetable') || path.startsWith('/assignments')) {
     return 'academics:read';
   }
+  if (path.startsWith('/syllabus')) return 'academics:read';
   if (path.startsWith('/exams')) return 'exams:read';
+  if (path.startsWith('/admit-cards')) return 'exams:read';
   if (path.startsWith('/admissions')) return 'admissions:read';
   if (path.startsWith('/finance')) return 'fees:read';
   if (path.startsWith('/hr')) return 'hr:read';

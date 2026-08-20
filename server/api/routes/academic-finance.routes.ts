@@ -11,7 +11,7 @@ import { getExamPlanningOptions, getExamWorkspaceOptions, listExamPlanning, list
 import { invoiceSchema } from "../../../features/finance/schemas/invoice.schema";
 import { feeHeadSchema, feeInstallmentSchema, feeStructureSchema } from "../../../features/finance/schemas/fee-configuration.schema";
 import { accountSchema, donationSchema, expenseSchema } from "../../../features/finance/schemas/accounting.schema";
-import { createInvoice, getInvoiceStudentOptions, getPaymentOptions, getRefundOptions, listInvoicesPage, listPayments } from "../../../features/finance/services/finance-workspace.service";
+import { createInvoice, getFeeAging, getInvoiceStudentOptions, getPaymentOptions, getRefundOptions, listInvoicesPage, listPayments } from "../../../features/finance/services/finance-workspace.service";
 import { createFeeHead, createFeeInstallment, createFeeStructure, listFeeConfiguration } from "../../../features/finance/services/fee-configuration.service";
 import { createChartAccount, createDonation, createExpense, listChartOfAccounts, listDonations, listExpenses, listLedgerEntries } from "../../../features/finance/services/accounting.service";
 import { authenticateApiRequest, requireApiCsrf, requireApiPermission } from "../auth/bearer-auth";
@@ -136,6 +136,11 @@ export const academicFinanceRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: PageQuery }>("/fees/invoices", authenticated, async (request) => {
     const user = requireApiPermission(request, "fees:read");
     return apiSuccess(request, await listInvoicesPage(user, pageQuery(request.query)));
+  });
+
+  app.get<{ Querystring: { classId?: string } }>("/fees/aging", authenticated, async (request) => {
+    const user = requireApiPermission(request, "fees:read");
+    return apiSuccess(request, await getFeeAging(user, { classId: request.query.classId }));
   });
 
   app.get("/fees/invoices/options", authenticated, async (request) => {

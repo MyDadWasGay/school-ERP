@@ -11,3 +11,17 @@ export const attendanceSchema = z.object({
   { message: "Attendance cannot be marked for a future date.", path: ["attendanceDate"] },
 );
 export type AttendanceInput = z.infer<typeof attendanceSchema>;
+
+export const attendanceBulkSchema = z.object({
+  attendanceDate: z.preprocess(parseIndiaDateValue, z.coerce.date()),
+  periodKey: z.string().trim().min(1).max(40).default("daily"),
+  records: z.array(z.object({
+    studentId: z.string().min(1),
+    state: z.enum(["present", "absent", "late", "leave", "half_day", "medical"]),
+    note: z.string().trim().max(300).optional(),
+  })).min(1).max(200),
+}).refine(
+  (input) => indiaDateKey(input.attendanceDate) <= indiaTodayKey(),
+  { message: "Attendance cannot be marked for a future date.", path: ["attendanceDate"] },
+);
+export type AttendanceBulkInput = z.infer<typeof attendanceBulkSchema>;

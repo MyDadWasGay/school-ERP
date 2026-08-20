@@ -47,10 +47,10 @@ import {
   updateEnquiry,
 } from "../../../features/admissions/services/admissions.service";
 import { approveAdmission } from "../../../features/admissions/services/approval.service";
-import { attendanceSchema } from "../../../features/attendance/schemas/attendance.schema";
+import { attendanceBulkSchema, attendanceSchema } from "../../../features/attendance/schemas/attendance.schema";
 import { staffAttendanceSchema } from "../../../features/attendance/schemas/attendance-extension.schema";
 import { disciplineDecisionSchema, disciplineIncidentSchema } from "../../../features/attendance/schemas/discipline.schema";
-import { markAttendanceRecord, reviewAttendanceCorrection } from "../../../features/attendance/services/attendance.service";
+import { markAttendanceRecord, markAttendanceRecords, reviewAttendanceCorrection } from "../../../features/attendance/services/attendance.service";
 import { getAttendanceOverview, getAttendanceStudentOptions, listAttendanceCorrections, listAttendancePage } from "../../../features/attendance/services/attendance-workspace.service";
 import { listEmployeeOptions, listLowAttendance, listStaffAttendance, recordStaffAttendance } from "../../../features/attendance/services/attendance-extension.service";
 import { createDisciplineIncident, listDisciplineIncidents, updateDisciplineStatus } from "../../../features/attendance/services/discipline.service";
@@ -238,6 +238,30 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     const result = await markAttendanceRecord(user, input);
     await auditCommand(user, { action: result.kind === "correction" ? "create" : "update", module: "attendance", entityType: result.kind === "correction" ? "attendance_correction" : "student_attendance", entityId: result.row.id, after: result.row });
     return apiSuccess(request, { id: result.row.id, correctionRequested: result.kind === "correction" });
+  });
+
+  app.post<{ Body: unknown }>("/attendance/bulk", { ...mutation, schema: routeSchema("Mark student attendance in a batch") }, async (request) => {
+    const user = requireApiPermission(request, "attendance:mark");
+    const input = parseApiBody(attendanceBulkSchema, request.body);
+    const results = await markAttendanceRecords(user, input);
+    for (const result of results) {
+      await auditCommand(user, {
+        action: result.kind === "correction" ? "create" : "update",
+        module: "attendance",
+        entityType: result.kind === "correction" ? "attendance_correction" : "student_attendance",
+        entityId: result.row.id,
+        campusId: result.row.campusId,
+        after: result.row,
+        metadata: { batch: true, studentId: result.studentId },
+      });
+    }
+    return apiSuccess(request, {
+      records: results.map((result) => ({
+        studentId: result.studentId,
+        id: result.row.id,
+        correctionRequested: result.kind === "correction",
+      })),
+    });
   });
 
   app.post<{ Params: IdParams; Body: unknown }>("/attendance/corrections/:id/review", { ...mutation, schema: routeSchema("Review an attendance correction") }, async (request) => {

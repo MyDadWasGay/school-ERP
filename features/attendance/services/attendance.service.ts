@@ -15,7 +15,16 @@ import { indiaDayRange, normalizeIndiaCalendarDate } from "@/lib/utils/india-tim
 import { resolvePermittedStudentIds } from "@/features/students/services/students.service";
 import type { CurrentUser } from "@/lib/auth/types";
 import { hasPermission } from "@/lib/rbac/permissions";
-import type { AttendanceInput } from "../schemas/attendance.schema";
+import type {
+  AttendanceBulkInput,
+  AttendanceInput,
+} from "../schemas/attendance.schema";
+
+type DbTransaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+type AttendanceTarget = {
+  student: typeof students.$inferSelect;
+  enrollment: typeof enrollments.$inferSelect;
+};
 
 function campusScope(user: CurrentUser, column: AnyColumn) {
   if (user.campusIds?.length) return inArray(column, user.campusIds);
@@ -24,25 +33,64 @@ function campusScope(user: CurrentUser, column: AnyColumn) {
 }
 
 export async function markAttendanceRecord(user: CurrentUser, input: AttendanceInput) {
+  return getDb().transaction(async (tx) => {
+    const target = await resolveAttendanceTarget(tx, user, input.studentId, input.attendanceDate);
+    return applyAttendanceRecord(tx, user, input, target);
+  });
+}
+
+export async function markAttendanceRecords(user: CurrentUser, input: AttendanceBulkInput) {
+  const studentIds = input.records.map((record) => record.studentId);
+  if (new Set(studentIds).size !== studentIds.length) {
+    throw new AppError("VALIDATION_ERROR", "Each student may appear only once in a batch.", 422);
+  }
   const attendanceDate = normalizeIndiaCalendarDate(input.attendanceDate);
+  const records: AttendanceInput[] = input.records.map((record) => ({
+    ...record,
+    attendanceDate,
+    periodKey: input.periodKey,
+  }));
+  return getDb().transaction(async (tx) => {
+    const targets = new Map<string, AttendanceTarget>();
+    for (const record of records) {
+      targets.set(
+        record.studentId,
+        await resolveAttendanceTarget(tx, user, record.studentId, attendanceDate),
+      );
+    }
+    const results = [];
+    for (const record of records) {
+      results.push(await applyAttendanceRecord(tx, user, record, targets.get(record.studentId)!));
+    }
+    return results;
+  });
+}
+
+async function resolveAttendanceTarget(
+  tx: DbTransaction,
+  user: CurrentUser,
+  studentId: string,
+  attendanceDateValue: Date,
+): Promise<AttendanceTarget> {
+  const attendanceDate = normalizeIndiaCalendarDate(attendanceDateValue);
   const day = indiaDayRange(attendanceDate);
-  const student = await getDb().query.students.findFirst({ where: and(
-    eq(students.id, input.studentId),
+  const student = await tx.query.students.findFirst({ where: and(
+    eq(students.id, studentId),
     eq(students.organizationId, user.organizationId),
     campusScope(user, students.campusId),
     eq(students.status, "active"),
   ) });
   if (!student) throw new AppError("NOT_FOUND", "Student not found in your campus scope.", 404);
-  const enrollment = await getDb().query.enrollments.findFirst({ where: and(
+  const enrollment = await tx.query.enrollments.findFirst({ where: and(
     eq(enrollments.organizationId, user.organizationId),
-    eq(enrollments.studentId, student.id),
+    eq(enrollments.studentId, studentId),
     student.campusId ? eq(enrollments.campusId, student.campusId) : undefined,
     lt(enrollments.startsOn, day.end),
     or(isNull(enrollments.endsOn), gte(enrollments.endsOn, day.start)),
     eq(enrollments.status, "active"),
   ) });
   if (!enrollment) throw new AppError("CONFLICT", "The student has no active enrollment for this date.", 409);
-  const academicYear = await getDb().query.academicYears.findFirst({ where: and(
+  const academicYear = await tx.query.academicYears.findFirst({ where: and(
     eq(academicYears.id, enrollment.academicYearId),
     eq(academicYears.organizationId, user.organizationId),
     eq(academicYears.isActive, true),
@@ -57,18 +105,29 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
     );
     if (!assigned) throw new AppError("FORBIDDEN", "You are not assigned to this class and section.", 403);
   }
-  return getDb().transaction(async (tx) => {
-    const existing = await tx.query.studentAttendanceRecords.findFirst({ where: and(
+  return { student, enrollment };
+}
+
+async function applyAttendanceRecord(
+  tx: DbTransaction,
+  user: CurrentUser,
+  input: AttendanceInput,
+  target: AttendanceTarget,
+) {
+  const attendanceDate = normalizeIndiaCalendarDate(input.attendanceDate);
+  const day = indiaDayRange(attendanceDate);
+  const { student, enrollment } = target;
+  const existing = await tx.query.studentAttendanceRecords.findFirst({ where: and(
       eq(studentAttendanceRecords.organizationId, user.organizationId),
       eq(studentAttendanceRecords.studentId, student.id),
       gte(studentAttendanceRecords.attendanceDate, day.start),
       lt(studentAttendanceRecords.attendanceDate, day.end),
       eq(studentAttendanceRecords.periodKey, input.periodKey),
     ) });
-    const correctionCutoff = Date.now() - ATTENDANCE_DIRECT_EDIT_HOURS * 60 * 60 * 1000;
-    const canDirectlyCorrect = user.permissions.includes("*")
-      || user.permissions.includes("attendance:approve_correction");
-    if (existing && existing.updatedAt.getTime() < correctionCutoff && !canDirectlyCorrect) {
+  const correctionCutoff = Date.now() - ATTENDANCE_DIRECT_EDIT_HOURS * 60 * 60 * 1000;
+  const canDirectlyCorrect = user.permissions.includes("*")
+    || user.permissions.includes("attendance:approve_correction");
+  if (existing && existing.updatedAt.getTime() < correctionCutoff && !canDirectlyCorrect) {
       const pending = await tx.query.attendanceCorrectionRequests.findFirst({ where: and(
         eq(attendanceCorrectionRequests.organizationId, user.organizationId),
         eq(attendanceCorrectionRequests.attendanceId, existing.id),
@@ -92,15 +151,15 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
           createdBy: user.id,
           updatedBy: user.id,
         }).returning();
-      return { kind: "correction" as const, row: correction };
-    }
-    let session = existing?.sessionId
+    return { kind: "correction" as const, row: correction, studentId: student.id };
+  }
+  let session = existing?.sessionId
       ? await tx.query.studentAttendanceSessions.findFirst({ where: and(
         eq(studentAttendanceSessions.id, existing.sessionId),
         eq(studentAttendanceSessions.organizationId, user.organizationId),
       ) })
       : undefined;
-    if (!session) {
+  if (!session) {
       session = await tx.query.studentAttendanceSessions.findFirst({ where: and(
         eq(studentAttendanceSessions.organizationId, user.organizationId),
         eq(studentAttendanceSessions.classId, enrollment.classId),
@@ -124,8 +183,8 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
         updatedBy: user.id,
       }).returning();
     }
-    let row;
-    if (existing) {
+  let row;
+  if (existing) {
       [row] = await tx.update(studentAttendanceRecords).set({
         state: input.state,
         note: input.note,
@@ -137,7 +196,7 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
         eq(studentAttendanceRecords.id, existing.id),
         eq(studentAttendanceRecords.organizationId, user.organizationId),
       )).returning();
-    } else {
+  } else {
       [row] = await tx.insert(studentAttendanceRecords).values({
         ...input,
         attendanceDate,
@@ -152,7 +211,7 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
         updatedBy: user.id,
       }).returning();
     }
-    if (input.state === "absent" && existing?.state !== "absent") {
+  if (input.state === "absent" && existing?.state !== "absent") {
       await tx.insert(notificationEvents).values({
         organizationId: user.organizationId,
         campusId: enrollment.campusId,
@@ -162,8 +221,7 @@ export async function markAttendanceRecord(user: CurrentUser, input: AttendanceI
         updatedBy: user.id,
       });
     }
-    return { kind: "record" as const, row };
-  });
+  return { kind: "record" as const, row, studentId: student.id };
 }
 
 export async function reviewAttendanceCorrection(

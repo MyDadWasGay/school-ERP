@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { academicArchiveSchema, academicCreateSchema, academicListSchema } from "../schemas/academic.schemas";
 import { authenticateApiRequest, requireApiCsrf, requireApiPermission } from "../auth/bearer-auth";
-import { academicKinds, academicRecordSchema } from "../../../features/academics/schemas/academic.schema";
-import { academicEntityKinds, archiveAcademicRecord, createAcademicRecord, listAcademicEntityOptions, listAcademicRecords } from "../../../features/academics/services/academic.service";
+import { academicKinds, academicRecordSchema, lessonPlanStatusSchema } from "../../../features/academics/schemas/academic.schema";
+import { academicEntityKinds, archiveAcademicRecord, createAcademicRecord, listAcademicEntityOptions, listAcademicRecords, listSyllabusProgress, updateLessonPlanStatus } from "../../../features/academics/services/academic.service";
 import { writeAuditLog } from "../../../lib/audit/audit-log";
 import { AppError } from "../../../lib/errors/app-error";
 import { assignmentFeedbackSchema, assignmentSubmissionSchema } from "../../../features/academics/schemas/assignment.schema";
@@ -10,12 +10,24 @@ import { getAssignmentDetail, gradeAssignment, submitAssignment } from "../../..
 
 type Params = { kind: (typeof academicKinds)[number]; id?: string };
 type AssignmentParams = { id: string; submissionId?: string };
+const authenticated = { preHandler: authenticateApiRequest };
 
 /** CLIENT_API_CONTRACT: Academic records are shared by the web client and Flutter; preserve scope, validation and archive semantics. */
 export const academicRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: AssignmentParams }>("/academics/assignments/:id", { preHandler: authenticateApiRequest }, async (request) => {
     const user = requireApiPermission(request, "academics:read");
     return { data: await getAssignmentDetail(user, request.params.id), meta: { requestId: request.id } };
+  });
+  app.get("/academics/syllabus/progress", authenticated, async (request) => {
+    const user = requireApiPermission(request, "academics:read");
+    return { data: await listSyllabusProgress(user), meta: { requestId: request.id } };
+  });
+  app.patch<{ Params: { id: string }; Body: unknown }>("/academics/lesson-plans/:id/status", { preHandler: [authenticateApiRequest, requireApiCsrf] }, async (request) => {
+    const user = requireApiPermission(request, "academics:update");
+    const input = lessonPlanStatusSchema.parse(request.body);
+    const row = await updateLessonPlanStatus(user, request.params.id, input.status);
+    await writeAuditLog(user, { action: "update", module: "academics", entityType: "lesson_plan", entityId: row.id, campusId: row.campusId, after: { status: row.status } });
+    return { data: { id: row.id, status: row.status }, meta: { requestId: request.id } };
   });
 
   app.post<{ Params: AssignmentParams; Body: unknown }>("/academics/assignments/:id/submissions", { preHandler: [authenticateApiRequest, requireApiCsrf] }, async (request, reply) => {

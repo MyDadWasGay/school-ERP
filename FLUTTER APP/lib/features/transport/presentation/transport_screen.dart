@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
@@ -45,27 +46,71 @@ class TransportScreen extends ConsumerWidget {
             separatorBuilder: (_, _) => const SizedBox(height: ErpSpacing.sm),
             itemBuilder: (context, index) {
               final allocation = allocations[index];
-              return Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: ErpSpacing.lg,
-                    vertical: ErpSpacing.sm,
-                  ),
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.directions_bus_outlined),
-                  ),
-                  title: Text(allocation.routeName),
-                  subtitle: Text(
-                    '${allocation.studentName} · Pickup ${allocation.stopName}\nAssigned ${DateFormat('d MMM yyyy').format(allocation.createdAt.toLocal())}',
-                  ),
-                  isThreeLine: true,
-                  trailing: const Icon(Icons.check_circle_outline),
-                ),
-              );
+              return _TransportAllocationCard(allocation: allocation);
             },
           ),
         );
       },
+    );
+  }
+}
+
+class _TransportAllocationCard extends ConsumerWidget {
+  const _TransportAllocationCard({required this.allocation});
+
+  final TransportAllocation allocation;
+
+  Future<void> _openMap(
+    BuildContext context,
+    TransportLocation location,
+  ) async {
+    final opened = await launchUrl(
+      Uri.parse(
+        'https://maps.google.com/?q=${location.latitude},${location.longitude}',
+      ),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The map could not be opened.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final latest = allocation.routeId == null
+        ? const AsyncValue<TransportLocation?>.data(null)
+        : ref.watch(transportLocationProvider(allocation.routeId!));
+    final location = latest.valueOrNull;
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: ErpSpacing.lg,
+          vertical: ErpSpacing.sm,
+        ),
+        leading: const CircleAvatar(
+          child: Icon(Icons.directions_bus_outlined),
+        ),
+        title: Text(allocation.routeName),
+        subtitle: Text(
+          '${allocation.studentName} · Pickup ${allocation.stopName}\n'
+          'Assigned ${DateFormat('d MMM yyyy').format(allocation.createdAt.toLocal())}\n'
+          '${location == null ? 'Bus location unavailable' : location.stale ? 'Last bus location is stale' : 'Bus updated ${DateFormat('h:mm a').format(location.recordedAt.toLocal())}'}',
+        ),
+        isThreeLine: true,
+        trailing: location == null
+            ? const Icon(Icons.location_disabled_outlined)
+            : IconButton(
+                tooltip: 'Open bus location',
+                onPressed: () => _openMap(context, location),
+                icon: Icon(
+                  location.stale
+                      ? Icons.location_searching_outlined
+                      : Icons.location_on_outlined,
+                ),
+              ),
+      ),
     );
   }
 }

@@ -1,7 +1,8 @@
-import { and, count, desc, eq, inArray, or, sum } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or, sql, sum } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   enrollments,
+  classes,
   feeInvoiceItems,
   feeInvoices,
   feePayments,
@@ -12,7 +13,7 @@ import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { createId } from "@/lib/utils/ids";
 import { normalizePagination } from "@/lib/utils/pagination";
-import { formatIndiaDateTime } from "@/lib/utils/india-time";
+import { formatIndiaDate, formatIndiaDateTime, normalizeIndiaCalendarDate } from "@/lib/utils/india-time";
 import {
   getReadableStudent,
   resolvePermittedStudentIds,
@@ -89,6 +90,109 @@ export async function listInvoicesPage(
       total,
       pageCount: Math.ceil(total / pagination.pageSize),
     },
+  };
+}
+
+export async function getFeeAging(
+  user: CurrentUser,
+  input?: { classId?: string },
+) {
+  const permittedIds = await resolvePermittedStudentIds(user);
+  if (permittedIds && permittedIds.length === 0) {
+    return { asOf: normalizeIndiaCalendarDate(new Date()).toISOString(), buckets: [], defaulters: [] };
+  }
+  const rows = await getDb().select({
+    invoiceId: feeInvoices.id,
+    invoiceNumber: feeInvoices.invoiceNumber,
+    studentId: feeInvoices.studentId,
+    studentName: sql<string>`${students.firstName} || ' ' || ${students.lastName}`,
+    dueOn: feeInvoices.dueOn,
+    balanceMinor: feeInvoices.balanceMinor,
+    currency: feeInvoices.currency,
+    classId: enrollments.classId,
+    className: classes.name,
+  }).from(feeInvoices)
+    .innerJoin(students, and(
+      eq(students.id, feeInvoices.studentId),
+      eq(students.organizationId, user.organizationId),
+    ))
+    .leftJoin(enrollments, and(
+      eq(enrollments.studentId, feeInvoices.studentId),
+      eq(enrollments.organizationId, user.organizationId),
+      eq(enrollments.status, "active"),
+    ))
+    .leftJoin(classes, and(
+      eq(classes.id, enrollments.classId),
+      eq(classes.organizationId, user.organizationId),
+    ))
+    .where(and(
+      eq(feeInvoices.organizationId, user.organizationId),
+      user.campusId ? eq(feeInvoices.campusId, user.campusId) : undefined,
+      permittedIds ? inArray(feeInvoices.studentId, permittedIds) : undefined,
+      input?.classId ? eq(enrollments.classId, input.classId) : undefined,
+      or(eq(feeInvoices.status, "open"), eq(feeInvoices.status, "partial"), eq(feeInvoices.status, "overdue")),
+    ))
+    .orderBy(feeInvoices.dueOn)
+    .limit(2_000);
+  const today = normalizeIndiaCalendarDate(new Date());
+  const buckets = [
+    { key: "current", label: "Current", minDays: -1, maxDays: -1 },
+    { key: "1_30", label: "1-30 days", minDays: 1, maxDays: 30 },
+    { key: "31_60", label: "31-60 days", minDays: 31, maxDays: 60 },
+    { key: "61_90", label: "61-90 days", minDays: 61, maxDays: 90 },
+    { key: "90_plus", label: "90+ days", minDays: 91, maxDays: Number.POSITIVE_INFINITY },
+  ];
+  const totals = new Map(buckets.map((bucket) => [bucket.key, { ...bucket, invoiceCount: 0, studentIds: new Set<string>(), outstandingMinor: 0 }]));
+  const defaulters = [] as Array<{
+    invoiceId: string;
+    invoiceNumber: string;
+    studentId: string;
+    studentName: string;
+    classId: string | null;
+    className: string | null;
+    dueOn: string;
+    daysOverdue: number;
+    bucket: string;
+    balanceMinor: number;
+    currency: string;
+  }>;
+  for (const row of rows) {
+    if (row.balanceMinor <= 0) continue;
+    const daysOverdue = Math.max(0, Math.floor((today.getTime() - row.dueOn.getTime()) / 86_400_000));
+    const bucket = daysOverdue === 0
+      ? buckets[0]
+      : buckets.find((candidate) => daysOverdue >= candidate.minDays && daysOverdue <= candidate.maxDays) ?? buckets.at(-1)!;
+    const total = totals.get(bucket.key)!;
+    total.invoiceCount += 1;
+    total.studentIds.add(row.studentId);
+    total.outstandingMinor += row.balanceMinor;
+    defaulters.push({
+      invoiceId: row.invoiceId,
+      invoiceNumber: row.invoiceNumber,
+      studentId: row.studentId,
+      studentName: row.studentName,
+      classId: row.classId ?? null,
+      className: row.className ?? null,
+      dueOn: formatIndiaDate(row.dueOn),
+      daysOverdue,
+      bucket: bucket.key,
+      balanceMinor: row.balanceMinor,
+      currency: row.currency,
+    });
+  }
+  return {
+    asOf: today.toISOString(),
+    buckets: buckets.map((bucket) => {
+      const total = totals.get(bucket.key)!;
+      return {
+        key: bucket.key,
+        label: bucket.label,
+        invoiceCount: total.invoiceCount,
+        studentCount: total.studentIds.size,
+        outstandingMinor: total.outstandingMinor,
+      };
+    }),
+    defaulters,
   };
 }
 

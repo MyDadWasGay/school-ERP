@@ -1,5 +1,111 @@
 import 'identity_models.dart';
 
+class AdmitCardSubject {
+  const AdmitCardSubject({
+    required this.subjectId,
+    required this.subjectName,
+    required this.startsAt,
+    required this.endsAt,
+    this.roomId,
+  });
+
+  factory AdmitCardSubject.fromJson(Json json) => AdmitCardSubject(
+    subjectId: asString(json['subjectId'], 'admitCardSubject.subjectId'),
+    subjectName: asString(
+      json['subjectName'],
+      'admitCardSubject.subjectName',
+    ),
+    startsAt: DateTime.parse(
+      asString(json['startsAt'], 'admitCardSubject.startsAt'),
+    ),
+    endsAt: DateTime.parse(
+      asString(json['endsAt'], 'admitCardSubject.endsAt'),
+    ),
+    roomId: json['roomId'] as String?,
+  );
+
+  final String subjectId;
+  final String subjectName;
+  final DateTime startsAt;
+  final DateTime endsAt;
+  final String? roomId;
+}
+
+class AdmitCardStudent {
+  const AdmitCardStudent({
+    required this.id,
+    required this.name,
+    required this.admissionNumber,
+    required this.className,
+    required this.sectionName,
+    this.rollNumber,
+    this.photoUrl,
+  });
+
+  factory AdmitCardStudent.fromJson(Json json) => AdmitCardStudent(
+    id: asString(json['id'], 'admitCardStudent.id'),
+    name: asString(json['name'], 'admitCardStudent.name'),
+    admissionNumber: asString(
+      json['admissionNumber'],
+      'admitCardStudent.admissionNumber',
+    ),
+    className: asString(json['className'], 'admitCardStudent.className'),
+    sectionName: asString(
+      json['sectionName'],
+      'admitCardStudent.sectionName',
+    ),
+    rollNumber: json['rollNumber'] as String?,
+    photoUrl: json['photoUrl'] as String?,
+  );
+
+  final String id;
+  final String name;
+  final String admissionNumber;
+  final String className;
+  final String sectionName;
+  final String? rollNumber;
+  final String? photoUrl;
+}
+
+class AdmitCard {
+  const AdmitCard({
+    required this.examId,
+    required this.examName,
+    required this.examStatus,
+    required this.student,
+    required this.subjects,
+    this.startsOn,
+    this.endsOn,
+  });
+
+  factory AdmitCard.fromJson(Json json) => AdmitCard(
+    examId: asString(json['examId'], 'admitCard.examId'),
+    examName: asString(json['examName'], 'admitCard.examName'),
+    examStatus: asString(json['examStatus'], 'admitCard.examStatus'),
+    startsOn: json['startsOn'] == null
+        ? null
+        : DateTime.parse(asString(json['startsOn'], 'admitCard.startsOn')),
+    endsOn: json['endsOn'] == null
+        ? null
+        : DateTime.parse(asString(json['endsOn'], 'admitCard.endsOn')),
+    student: AdmitCardStudent.fromJson(
+      asJson(json['student'], 'admitCard.student'),
+    ),
+    subjects: asJsonList(
+      json['subjects'],
+      'admitCard.subjects',
+    ).map(AdmitCardSubject.fromJson).toList(growable: false),
+  );
+
+  final String examId;
+  final String examName;
+  final String examStatus;
+  final DateTime? startsOn;
+  final DateTime? endsOn;
+  final AdmitCardStudent student;
+  final List<AdmitCardSubject> subjects;
+}
+
 class ExamPlanningOption {
   const ExamPlanningOption({required this.id, required this.name});
 

@@ -193,6 +193,23 @@ class ApiClient {
     )).map(AcademicRecord.fromJson).toList(growable: false);
   }
 
+  Future<List<SyllabusProgressRow>> getSyllabusProgress() async =>
+      (await _getList('/academics/syllabus/progress'))
+          .map(SyllabusProgressRow.fromJson)
+          .toList(growable: false);
+
+  Future<void> updateLessonPlanStatus({
+    required String lessonPlanId,
+    required String status,
+  }) async {
+    await _request(
+      () => _dio.patch<Object?>(
+        '/academics/lesson-plans/${Uri.encodeComponent(lessonPlanId)}/status',
+        data: {'status': status},
+      ),
+    );
+  }
+
   Future<List<AcademicOption>> getAcademicOptions(
     String kind, {
     String? search,
@@ -590,6 +607,76 @@ class ApiClient {
   Future<List<TransportStopRow>> getTransportStops() async => (await _getList(
     '/transport/stops',
   )).map(TransportStopRow.fromJson).toList(growable: false);
+
+  Future<TransportChecklist> getTransportChecklist({
+    required String routeId,
+    required DateTime eventDate,
+    required String tripType,
+  }) async => TransportChecklist.fromJson(
+    await _get(
+      '/transport/routes/${Uri.encodeComponent(routeId)}/checklist',
+      query: {'date': _dateKey(eventDate), 'tripType': tripType},
+    ),
+  );
+
+  Future<void> recordTransportBoardingEvent({
+    required String routeId,
+    required String studentId,
+    required String stopId,
+    required DateTime eventDate,
+    required String tripType,
+    required String eventType,
+    String? note,
+  }) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/transport/boarding-events',
+        data: {
+          'routeId': routeId,
+          'studentId': studentId,
+          'stopId': stopId,
+          'eventDate': _dateKey(eventDate),
+          'tripType': tripType,
+          'eventType': eventType,
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        },
+      ),
+    );
+  }
+
+  Future<void> recordTransportLocation({
+    required String routeId,
+    required double latitude,
+    required double longitude,
+    double? accuracyMeters,
+    DateTime? recordedAt,
+  }) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/transport/location',
+        data: {
+          'routeId': routeId,
+          'latitude': latitude,
+          'longitude': longitude,
+          'accuracyMeters': ?accuracyMeters,
+          'recordedAt': ?recordedAt?.toIso8601String(),
+        },
+      ),
+    );
+  }
+
+  Future<TransportLocation?> getLatestTransportLocation(
+    String routeId,
+  ) async {
+    final data = await _get(
+      '/transport/routes/${Uri.encodeComponent(routeId)}/location',
+    );
+    final location = data['location'];
+    if (location == null) return null;
+    return TransportLocation.fromJson(
+      asJson(location, 'transportLocation.location'),
+    );
+  }
 
   Future<ExamWorkspaceOptions> getExamWorkspaceOptions() async =>
       ExamWorkspaceOptions.fromJson(await _get('/exams/workspace/options'));
@@ -1252,6 +1339,16 @@ class ApiClient {
     return _paged(data, FinanceInvoiceRow.fromJson);
   }
 
+  Future<FeeAgingReport> getFeeAging({String? classId}) async =>
+      FeeAgingReport.fromJson(
+        await _get(
+          '/fees/aging',
+          query: {
+            if (classId != null && classId.trim().isNotEmpty) 'classId': classId,
+          },
+        ),
+      );
+
   Future<List<PaymentOption>> getPaymentOptions() async => (await _getList(
     '/fees/payments/options',
   )).map(PaymentOption.fromJson).toList(growable: false);
@@ -1750,6 +1847,10 @@ class ApiClient {
     required String studentId,
     String? allergies,
     String? conditions,
+    String? medications,
+    String? emergencyContact,
+    String? emergencyNotes,
+    String? immunizationStatus,
   }) async {
     await _request(
       () => _dio.put<Object?>(
@@ -1757,6 +1858,10 @@ class ApiClient {
         data: {
           'allergies': allergies?.trim() ?? '',
           'conditions': conditions?.trim() ?? '',
+          'medications': medications?.trim() ?? '',
+          'emergencyContact': emergencyContact?.trim() ?? '',
+          'emergencyNotes': emergencyNotes?.trim() ?? '',
+          'immunizationStatus': immunizationStatus?.trim() ?? '',
         },
       ),
     );
@@ -2440,6 +2545,37 @@ class ApiClient {
     );
   }
 
+  Future<List<AttendanceMutationResult>> markAttendanceBulk({
+    required DateTime attendanceDate,
+    required String periodKey,
+    required List<({String studentId, String state, String? note})> records,
+  }) async {
+    final response = await _request(
+      () => _dio.post<Object?>(
+        '/attendance/bulk',
+        data: {
+          'attendanceDate': _dateKey(attendanceDate),
+          'periodKey': periodKey,
+          'records': [
+            for (final record in records)
+              {
+                'studentId': record.studentId,
+                'state': record.state,
+                if (record.note != null && record.note!.trim().isNotEmpty)
+                  'note': record.note!.trim(),
+              },
+          ],
+        },
+      ),
+    );
+    final envelope = asJson(response.data, 'attendance.bulk.response');
+    final data = asJson(envelope['data'], 'attendance.bulk.data');
+    return asJsonList(
+      data['records'],
+      'attendance.bulk.records',
+    ).map(AttendanceMutationResult.fromJson).toList(growable: false);
+  }
+
   Future<PagedRows<AttendanceRow>> getAttendance(String studentId) =>
       _studentRows(studentId, 'attendance', AttendanceRow.fromJson);
   Future<PagedRows<InvoiceRow>> getInvoices(String studentId) =>
@@ -2454,6 +2590,17 @@ class ApiClient {
   ) async => (await _getList(
     '/students/${Uri.encodeComponent(studentId)}/report-cards',
   )).map(StudentReportCardRow.fromJson).toList(growable: false);
+
+  Future<List<DisciplineIncidentRow>> getStudentDiscipline(
+    String studentId,
+  ) async => (await _getList(
+    '/students/${Uri.encodeComponent(studentId)}/discipline',
+  )).map(DisciplineIncidentRow.fromJson).toList(growable: false);
+
+  Future<List<AdmitCard>> getStudentAdmitCards(String studentId) async =>
+      (await _getList(
+        '/students/${Uri.encodeComponent(studentId)}/admit-cards',
+      )).map(AdmitCard.fromJson).toList(growable: false);
 
   Future<List<DocumentRow>> getDocuments(String studentId) async {
     final data = await _get(
@@ -2483,8 +2630,15 @@ class ApiClient {
     required String entityId,
     required String category,
     required UploadableFile file,
+    CancelToken? cancelToken,
     void Function(int sent, int total)? onSendProgress,
   }) async {
+    if ((file.path == null || file.path!.isEmpty) && file.bytes == null) {
+      throw const ApiError(
+        kind: ApiErrorKind.validation,
+        message: 'The selected file could not be read from the device.',
+      );
+    }
     final signatureResponse = await _request(
       () => _dio.post<Object?>(
         '/uploads/signature',
@@ -2532,10 +2686,12 @@ class ApiClient {
           'allowed_formats': signature.allowedFormats,
           'signature': signature.signature,
         }),
+        cancelToken: cancelToken,
         onSendProgress: onSendProgress,
       );
       asset = asJson(response.data, 'cloudinary.asset');
     } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) rethrow;
       throw ApiError.fromDio(error);
     }
     final metadataResponse = await _request(

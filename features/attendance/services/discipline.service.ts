@@ -1,8 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { disciplineIncidents, students } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { resolvePermittedStudentIds } from "@/features/students/services/students.service";
 import type { CurrentUser } from "@/lib/auth/types";
 import type { DisciplineIncidentInput } from "../schemas/discipline.schema";
 import { formatIndiaDateTime } from "@/lib/utils/india-time";
@@ -56,6 +57,42 @@ export async function listDisciplineIncidents(user: CurrentUser) {
     user.campusId ? eq(disciplineIncidents.campusId, user.campusId) : undefined,
   )).orderBy(desc(disciplineIncidents.occurredAt)).limit(100);
   return rows.map((row) => ({ ...row, student: `${row.firstName} ${row.lastName}`, occurredAt: formatIndiaDateTime(row.occurredAt) }));
+}
+
+export async function listStudentDisciplineIncidents(
+  user: CurrentUser,
+  studentId: string,
+) {
+  const permittedIds = await resolvePermittedStudentIds(user);
+  if (permittedIds && !permittedIds.includes(studentId)) {
+    throw new AppError("FORBIDDEN", "This discipline timeline is outside your linked student scope.", 403);
+  }
+  const guardianView = user.role === "parent" || user.role === "student";
+  const rows = await getDb().select({
+    id: disciplineIncidents.id,
+    severity: disciplineIncidents.severity,
+    title: disciplineIncidents.title,
+    details: disciplineIncidents.details,
+    confidential: disciplineIncidents.confidential,
+    occurredAt: disciplineIncidents.occurredAt,
+    status: disciplineIncidents.status,
+  }).from(disciplineIncidents).where(and(
+    eq(disciplineIncidents.organizationId, user.organizationId),
+    eq(disciplineIncidents.studentId, studentId),
+    user.campusIds?.length
+      ? inArray(disciplineIncidents.campusId, user.campusIds)
+      : user.campusId
+        ? eq(disciplineIncidents.campusId, user.campusId)
+        : undefined,
+    guardianView ? eq(disciplineIncidents.confidential, false) : undefined,
+  )).orderBy(desc(disciplineIncidents.occurredAt)).limit(100);
+  return rows.map((row) => ({
+    ...row,
+    studentId,
+    student: "",
+    details: row.details ?? undefined,
+    occurredAt: formatIndiaDateTime(row.occurredAt),
+  }));
 }
 
 export async function updateDisciplineStatus(user: CurrentUser, incidentId: string, status: "open" | "resolved" | "dismissed") {

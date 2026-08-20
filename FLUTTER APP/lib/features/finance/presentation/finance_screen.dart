@@ -24,6 +24,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final canReadFees = user?.can('fees:read') == true;
     final canReadAccounts = user?.can('accounts:read') == true;
     ref.invalidate(financeInvoicesProvider);
+    ref.invalidate(feeAgingProvider);
     ref.invalidate(paymentOptionsProvider);
     ref.invalidate(paymentsProvider);
     ref.invalidate(financeRefundOptionsProvider);
@@ -118,6 +119,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final canReadAccounts = user?.can('accounts:read') == true;
     final tabs = <Tab>[
       if (canReadFees) const Tab(text: 'Invoices'),
+      if (canReadFees) const Tab(text: 'Fee aging'),
       if (canReadFees) const Tab(text: 'Payments'),
       if (canReadFees && user?.can('fees:refund') == true)
         const Tab(text: 'Refunds'),
@@ -133,6 +135,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           onRecordPayment: _recordPayment,
           onRefresh: _refresh,
         ),
+      if (canReadFees) _FeeAgingTab(onRefresh: _refresh),
       if (canReadFees) _PaymentHistory(onRefresh: _refresh),
       if (canReadFees && user?.can('fees:refund') == true)
         FinanceRefundsTab(onRefresh: _refresh),
@@ -154,6 +157,90 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           Expanded(child: TabBarView(children: views)),
         ],
       ),
+    );
+  }
+}
+
+class _FeeAgingTab extends ConsumerWidget {
+  const _FeeAgingTab({required this.onRefresh});
+
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(feeAgingProvider);
+    return value.when(
+      loading: () => const ErpLoadingList(),
+      error: (error, stack) => ErpErrorState(
+        error: error,
+        onRetry: () => ref.invalidate(feeAgingProvider),
+      ),
+      data: (report) {
+        final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(ErpSpacing.lg),
+            children: [
+              Text(
+                'Outstanding as of ${DateFormat('d MMM yyyy').format(report.asOf.toLocal())}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: ErpSpacing.sm),
+              if (report.buckets.every((bucket) => bucket.invoiceCount == 0))
+                const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.check_circle_outline),
+                    title: Text('No outstanding fee aging'),
+                    subtitle: Text('There are no open balances in this scope.'),
+                  ),
+                ),
+              for (final bucket in report.buckets)
+                Card(
+                  child: ListTile(
+                    leading: CircleAvatar(child: Text('${bucket.studentCount}')),
+                    title: Text(bucket.label),
+                    subtitle: Text(
+                      '${bucket.invoiceCount} invoice${bucket.invoiceCount == 1 ? '' : 's'} · ${bucket.studentCount} student${bucket.studentCount == 1 ? '' : 's'}',
+                    ),
+                    trailing: Text(
+                      currency.format(bucket.outstandingMinor / 100),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                ),
+              if (report.defaulters.isNotEmpty) ...[
+                const SizedBox(height: ErpSpacing.md),
+                Text(
+                  'Defaulters',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: ErpSpacing.sm),
+                for (final row in report.defaulters)
+                  Card(
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.warning_amber_outlined),
+                      ),
+                      title: Text(row.studentName),
+                      subtitle: Text(
+                        '${row.className ?? 'Class unavailable'} · ${row.invoiceNumber}\nDue ${row.dueOn} · ${row.daysOverdue} day${row.daysOverdue == 1 ? '' : 's'} overdue',
+                      ),
+                      isThreeLine: true,
+                      trailing: Text(
+                        currency.format(row.balanceMinor / 100),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -332,7 +419,7 @@ class _PaymentHistory extends ConsumerWidget {
                         onPressed: () async {
                           try {
                             await shareErpPdf(
-                              bytes: ErpPdfBuilder.paymentReceipt(
+                              bytes: await ErpPdfBuilder.paymentReceipt(
                                 schoolName: schoolName,
                                 payment: row,
                               ),

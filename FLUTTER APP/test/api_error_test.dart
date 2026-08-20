@@ -62,4 +62,20 @@ void main() {
 
     expect(ApiError.fromDio(error).kind, ApiErrorKind.notFound);
   });
+
+  test('preserves transient gateway status codes for retry policies', () {
+    final error = DioException(
+      requestOptions: RequestOptions(path: '/attendance/records'),
+      response: Response<Object?>(
+        requestOptions: RequestOptions(path: '/attendance/records'),
+        statusCode: 503,
+        data: <String, Object?>{},
+      ),
+    );
+
+    final mapped = ApiError.fromDio(error);
+
+    expect(mapped.kind, ApiErrorKind.serverFailure);
+    expect(mapped.statusCode, 503);
+  });
 }

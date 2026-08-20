@@ -1,5 +1,15 @@
 import 'identity_models.dart';
 
+enum RazorpayPaymentStatus {
+  idle,
+  starting,
+  processing,
+  success,
+  failed,
+  cancelled,
+  unknown,
+}
+
 class RazorpayCheckoutOrder {
   const RazorpayCheckoutOrder({
     required this.paymentRequestId,
@@ -110,6 +120,102 @@ class FinanceRefundOption {
   final String id;
   final String label;
   final int remainingMinor;
+}
+
+class FeeAgingBucket {
+  const FeeAgingBucket({
+    required this.key,
+    required this.label,
+    required this.invoiceCount,
+    required this.studentCount,
+    required this.outstandingMinor,
+  });
+
+  factory FeeAgingBucket.fromJson(Json json) => FeeAgingBucket(
+    key: asString(json['key'], 'feeAgingBucket.key'),
+    label: asString(json['label'], 'feeAgingBucket.label'),
+    invoiceCount: asInt(json['invoiceCount'], 'feeAgingBucket.invoiceCount'),
+    studentCount: asInt(json['studentCount'], 'feeAgingBucket.studentCount'),
+    outstandingMinor: asInt(
+      json['outstandingMinor'],
+      'feeAgingBucket.outstandingMinor',
+    ),
+  );
+
+  final String key;
+  final String label;
+  final int invoiceCount;
+  final int studentCount;
+  final int outstandingMinor;
+}
+
+class FeeDefaulterRow {
+  const FeeDefaulterRow({
+    required this.invoiceId,
+    required this.invoiceNumber,
+    required this.studentId,
+    required this.studentName,
+    required this.dueOn,
+    required this.daysOverdue,
+    required this.bucket,
+    required this.balanceMinor,
+    required this.currency,
+    this.className,
+  });
+
+  factory FeeDefaulterRow.fromJson(Json json) => FeeDefaulterRow(
+    invoiceId: asString(json['invoiceId'], 'feeDefaulter.invoiceId'),
+    invoiceNumber: asString(
+      json['invoiceNumber'],
+      'feeDefaulter.invoiceNumber',
+    ),
+    studentId: asString(json['studentId'], 'feeDefaulter.studentId'),
+    studentName: asString(json['studentName'], 'feeDefaulter.studentName'),
+    className: json['className'] as String?,
+    dueOn: asString(json['dueOn'], 'feeDefaulter.dueOn'),
+    daysOverdue: asInt(json['daysOverdue'], 'feeDefaulter.daysOverdue'),
+    bucket: asString(json['bucket'], 'feeDefaulter.bucket'),
+    balanceMinor: asInt(
+      json['balanceMinor'],
+      'feeDefaulter.balanceMinor',
+    ),
+    currency: asString(json['currency'], 'feeDefaulter.currency'),
+  );
+
+  final String invoiceId;
+  final String invoiceNumber;
+  final String studentId;
+  final String studentName;
+  final String? className;
+  final String dueOn;
+  final int daysOverdue;
+  final String bucket;
+  final int balanceMinor;
+  final String currency;
+}
+
+class FeeAgingReport {
+  const FeeAgingReport({
+    required this.asOf,
+    required this.buckets,
+    required this.defaulters,
+  });
+
+  factory FeeAgingReport.fromJson(Json json) => FeeAgingReport(
+    asOf: DateTime.parse(asString(json['asOf'], 'feeAging.asOf')),
+    buckets: asJsonList(
+      json['buckets'],
+      'feeAging.buckets',
+    ).map(FeeAgingBucket.fromJson).toList(growable: false),
+    defaulters: asJsonList(
+      json['defaulters'],
+      'feeAging.defaulters',
+    ).map(FeeDefaulterRow.fromJson).toList(growable: false),
+  );
+
+  final DateTime asOf;
+  final List<FeeAgingBucket> buckets;
+  final List<FeeDefaulterRow> defaulters;
 }
 
 class FinanceAccountRow {

@@ -5,6 +5,10 @@ export const healthProfileSchema = z.object({
   studentId: z.string().min(1),
   allergies: z.string().trim().max(2_000).optional(),
   conditions: z.string().trim().max(2_000).optional(),
+  medications: z.string().trim().max(2_000).optional(),
+  emergencyContact: z.string().trim().max(500).optional(),
+  emergencyNotes: z.string().trim().max(2_000).optional(),
+  immunizationStatus: z.string().trim().max(1_000).optional(),
 });
 
 export const clinicVisitSchema = z.object({

@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
@@ -13,13 +14,30 @@ import '../../../shared/widgets/erp_states.dart';
 import '../../documents/presentation/entity_documents_sheet.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
-  const AssignmentsScreen({super.key});
+  const AssignmentsScreen({super.key, this.initialAssignmentId});
+
+  final String? initialAssignmentId;
 
   @override
   ConsumerState<AssignmentsScreen> createState() => _AssignmentsScreenState();
 }
 
 class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialAssignmentId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openInitial());
+    }
+  }
+
+  Future<void> _openInitial() async {
+    final user = ref.read(sessionProvider).valueOrNull;
+    final id = widget.initialAssignmentId;
+    if (!mounted || user == null || id == null || id.isEmpty) return;
+    await _openAssignment(id, user);
+  }
+
   Future<void> _create(CurrentUser user) async {
     final created = await showModalBottomSheet<bool>(
       context: context,
@@ -147,6 +165,7 @@ class _AssignmentDetailSheetState
   bool _responseInitialised = false;
   final _attachments = <UploadableFile>[];
   double? _attachmentProgress;
+  final _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -166,7 +185,7 @@ class _AssignmentDetailSheetState
     if (_saving) return;
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      withData: true,
+      withData: false,
       type: FileType.custom,
       allowedExtensions: const [
         'pdf',
@@ -194,6 +213,12 @@ class _AssignmentDetailSheetState
         );
         continue;
       }
+      if (file.path == null || file.path!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${file.name} could not be accessed.')),
+        );
+        continue;
+      }
       selected.add(
         UploadableFile(
           name: file.name,
@@ -211,6 +236,75 @@ class _AssignmentDetailSheetState
           ..clear()
           ..addAll(selected);
       });
+    }
+  }
+
+  Future<void> _capturePhoto() async {
+    if (_saving) return;
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1800,
+        maxHeight: 1800,
+        imageQuality: 82,
+        requestFullMetadata: false,
+      );
+      if (image == null || !mounted) return;
+      final size = await image.length();
+      if (!mounted) return;
+      if (size <= 0 || size > 5_000_000) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The photo must be 5 MB or smaller.')),
+        );
+        return;
+      }
+      setState(() {
+        _attachments
+          ..clear()
+          ..add(
+            UploadableFile(
+              name: 'homework-${DateTime.now().millisecondsSinceEpoch}.jpg',
+              size: size,
+              format: 'jpg',
+              resourceType: 'image',
+              path: image.path,
+            ),
+          );
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Camera capture failed. ${readableApiError(error)}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _chooseAttachments() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_open_outlined),
+              title: const Text('Files'),
+              onTap: () => Navigator.pop(context, 'files'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'camera') {
+      await _capturePhoto();
+    } else if (choice == 'files') {
+      await _pickAttachments();
     }
   }
 
@@ -422,7 +516,7 @@ class _AssignmentDetailSheetState
                       ],
                       const SizedBox(height: ErpSpacing.sm),
                       OutlinedButton.icon(
-                        onPressed: _saving ? null : _pickAttachments,
+                        onPressed: _saving ? null : _chooseAttachments,
                         icon: const Icon(Icons.attach_file_outlined),
                         label: Text(
                           _attachments.isEmpty

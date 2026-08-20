@@ -171,6 +171,25 @@ class DisciplineIncidentRow {
   final String? details;
 }
 
+class AttendanceMutationResult {
+  const AttendanceMutationResult({
+    required this.studentId,
+    required this.id,
+    required this.correctionRequested,
+  });
+
+  factory AttendanceMutationResult.fromJson(Json json) =>
+      AttendanceMutationResult(
+        studentId: asString(json['studentId'], 'attendanceMutation.studentId'),
+        id: asString(json['id'], 'attendanceMutation.id'),
+        correctionRequested: json['correctionRequested'] == true,
+      );
+
+  final String studentId;
+  final String id;
+  final bool correctionRequested;
+}
+
 class AttendanceDraft {
   const AttendanceDraft({
     required this.id,
