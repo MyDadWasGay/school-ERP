@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../shared/models/academic_models.dart';
 import '../shared/models/admission_models.dart';
+import '../shared/models/approval_models.dart';
 import '../shared/models/asset_models.dart';
 import '../shared/models/attendance_models.dart';
 import '../shared/models/communication_models.dart';
@@ -146,6 +147,7 @@ class SessionController extends AsyncNotifier<CurrentUser> {
       ref.invalidate(deepExamOptionsProvider);
       ref.invalidate(reportCardsProvider);
       ref.invalidate(admissionApprovalsProvider);
+      ref.invalidate(unifiedApprovalsProvider);
       ref.invalidate(admissionOptionsProvider);
       ref.invalidate(admissionSeatMatrixProvider);
       ref.invalidate(admissionApplicationsProvider);
@@ -505,6 +507,49 @@ final admissionApprovalsProvider = FutureProvider<List<AdmissionApproval>>((
   final me = await ref.watch(sessionProvider.future);
   if (!me.can('admissions:read')) return const [];
   return ref.watch(apiClientProvider).getAdmissionApprovals();
+});
+
+final unifiedApprovalsProvider = FutureProvider<ApprovalInbox>((ref) async {
+  final me = await ref.watch(sessionProvider.future);
+  final api = ref.watch(apiClientProvider);
+  final values = await Future.wait<Object?>([
+    me.can('admissions:read')
+        ? api.getAdmissionApprovals()
+        : Future.value(null),
+    me.can('attendance:read') ? api.getLeaveRequests() : Future.value(null),
+    me.can('attendance:read')
+        ? api.getAttendanceCorrections()
+        : Future.value(null),
+    me.can('procurement:read')
+        ? api.getProcurementRequisitions()
+        : Future.value(null),
+    me.can('facilities:read') ? api.getFacilityBookings() : Future.value(null),
+  ]);
+  return ApprovalInbox(
+    admissions: (values[0] as List<AdmissionApproval>? ?? const [])
+        .where(
+          (row) => {
+            'submitted',
+            'verified',
+            'selected',
+            'waitlisted',
+          }.contains(row.status),
+        )
+        .toList(growable: false),
+    leaveRequests: (values[1] as List<LeaveRequest>? ?? const [])
+        .where((row) => row.canReview && row.status == 'pending')
+        .toList(growable: false),
+    attendanceCorrections:
+        (values[2] as List<AttendanceCorrectionRow>? ?? const [])
+            .where((row) => row.status == 'pending')
+            .toList(growable: false),
+    requisitions: (values[3] as List<ProcurementRequisitionRow>? ?? const [])
+        .where((row) => row.status == 'submitted')
+        .toList(growable: false),
+    facilityBookings: (values[4] as List<FacilityBookingRow>? ?? const [])
+        .where((row) => row.status == 'requested')
+        .toList(growable: false),
+  );
 });
 
 final admissionOptionsProvider = FutureProvider<AdmissionOptions?>((ref) async {

@@ -22,6 +22,7 @@ export const uploadEntityTypes = [
   "asset",
   "cms_media",
   "health_record",
+  "assignment_submission",
   "custom",
 ] as const;
 
@@ -161,6 +162,16 @@ export async function listStudentDocuments(
   studentId: string,
 ) {
   const student = await getReadableStudent(user, studentId);
+  return listEntityDocuments(user, "student", student.id, student.campusId ?? undefined);
+}
+
+export async function listEntityDocuments(
+  user: CurrentUser,
+  entityType: UploadRequestInput["entityType"],
+  entityId: string,
+  campusId = user.campusId,
+) {
+  await assertDocumentEntityScope(user, entityType, entityId);
   return getDb()
     .select({
       id: documentFiles.id,
@@ -178,11 +189,11 @@ export async function listStudentDocuments(
     .where(
       and(
         eq(documentFiles.organizationId, user.organizationId),
-        student.campusId
-          ? eq(documentFiles.campusId, student.campusId)
+        campusId
+          ? eq(documentFiles.campusId, campusId)
           : undefined,
-        eq(documentFiles.entityType, "student"),
-        eq(documentFiles.entityId, student.id),
+        eq(documentFiles.entityType, entityType),
+        eq(documentFiles.entityId, entityId),
         eq(documentFiles.status, "active"),
       ),
     )

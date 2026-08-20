@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
+import '../../../shared/pdf/erp_pdf.dart';
 import '../../../shared/models/workspace_models.dart';
 import '../../../shared/models/finance_models.dart';
 import '../../../shared/widgets/erp_states.dart';
@@ -289,6 +290,9 @@ class _PaymentHistory extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(paymentsProvider);
+    final schoolName =
+        ref.watch(sessionProvider).valueOrNull?.organization.name ??
+        'School ERP';
     return value.when(
       loading: () => const ErpLoadingList(),
       error: (error, stack) => ErpErrorState(
@@ -320,7 +324,36 @@ class _PaymentHistory extends ConsumerWidget {
                     '${row.receiptNumber} · ${row.method}\n${row.paidAt}',
                   ),
                   isThreeLine: true,
-                  trailing: ErpStatusChip(row.status),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Share receipt',
+                        onPressed: () async {
+                          try {
+                            await shareErpPdf(
+                              bytes: ErpPdfBuilder.paymentReceipt(
+                                schoolName: schoolName,
+                                payment: row,
+                              ),
+                              filename: 'fee-receipt-${row.receiptNumber}.pdf',
+                              title: 'Fee receipt ${row.receiptNumber}',
+                            );
+                          } on Object catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(readableApiError(error)),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.share_outlined),
+                      ),
+                      ErpStatusChip(row.status),
+                    ],
+                  ),
                 ),
               );
             },

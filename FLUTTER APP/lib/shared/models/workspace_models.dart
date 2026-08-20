@@ -1,4 +1,22 @@
+import 'dart:convert';
+
 import 'identity_models.dart';
+
+Map<String, Object?>? _payslipSnapshot(Object? value) {
+  if (value is Map) {
+    return value.map((key, item) => MapEntry(key.toString(), item));
+  }
+  if (value is! String || value.trim().isEmpty) return null;
+  try {
+    final decoded = jsonDecode(value);
+    if (decoded is Map) {
+      return decoded.map((key, item) => MapEntry(key.toString(), item));
+    }
+  } on FormatException {
+    // Older or incomplete payslips remain readable without detail fields.
+  }
+  return null;
+}
 
 class ExamOption {
   const ExamOption({
@@ -647,6 +665,7 @@ class PayslipRow {
     required this.net,
     required this.status,
     required this.issuedAt,
+    this.snapshot,
   });
 
   factory PayslipRow.fromJson(Json json) => PayslipRow(
@@ -659,6 +678,7 @@ class PayslipRow {
     net: asString(json['net'], 'payslip.net'),
     status: asString(json['status'], 'payslip.status'),
     issuedAt: asString(json['issuedAt'], 'payslip.issuedAt'),
+    snapshot: _payslipSnapshot(json['snapshotJson']),
   );
 
   final String id;
@@ -670,4 +690,5 @@ class PayslipRow {
   final String net;
   final String status;
   final String issuedAt;
+  final Map<String, Object?>? snapshot;
 }

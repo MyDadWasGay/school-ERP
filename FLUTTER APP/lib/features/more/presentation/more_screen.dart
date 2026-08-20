@@ -20,6 +20,17 @@ class MoreScreen extends ConsumerWidget {
       ),
       data: (user) {
         final links = <_MoreLink>[
+          if (user.can('admissions:approve') ||
+              user.can('attendance:approve_leave') ||
+              user.can('attendance:approve_correction') ||
+              user.can('procurement:approve') ||
+              user.can('facilities:approve'))
+            const _MoreLink(
+              title: 'Approvals inbox',
+              subtitle: 'Review admissions, leave, attendance and operations',
+              path: '/approvals',
+              icon: Icons.approval_outlined,
+            ),
           if (user.can('students:read') || user.can('hr:read'))
             const _MoreLink(
               title: 'People directory',

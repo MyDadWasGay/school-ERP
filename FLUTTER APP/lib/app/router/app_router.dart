@@ -7,6 +7,7 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/academics/presentation/assignments_screen.dart';
 import '../../features/academics/presentation/timetable_screen.dart';
 import '../../features/admissions/presentation/admissions_screen.dart';
+import '../../features/approvals/presentation/approvals_screen.dart';
 import '../../features/attendance/presentation/attendance_workspace_screen.dart';
 import '../../features/administration/presentation/administration_screen.dart';
 import '../../features/back_office/presentation/back_office_screen.dart';
@@ -106,6 +107,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admissions',
             builder: (context, state) => const AdmissionsScreen(),
+          ),
+          GoRoute(
+            path: '/approvals',
+            builder: (context, state) => const ApprovalsScreen(),
           ),
           GoRoute(
             path: '/finance',

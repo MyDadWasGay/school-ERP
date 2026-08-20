@@ -21,6 +21,11 @@ void main() {
     expect(permissionForPath('/hr'), 'hr:read');
     expect(permissionForPath('/profile'), isNull);
     expect(permissionForPath('/operations'), isNull);
+    expect(
+      canAccessPath('/approvals', testUser(['attendance:approve_leave'])),
+      isTrue,
+    );
+    expect(canAccessPath('/approvals', testUser(['attendance:read'])), isFalse);
   });
 
   test('allows people directory for either student or staff scope', () {

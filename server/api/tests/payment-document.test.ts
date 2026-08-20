@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   verifyRazorpayPayment: vi.fn(),
   createDocumentUploadSignature: vi.fn(),
   saveDocumentMetadata: vi.fn(),
+  listEntityDocuments: vi.fn(),
   listStudentDocuments: vi.fn(),
   writeAuditLog: vi.fn(),
 }));
@@ -48,6 +49,7 @@ vi.mock("../../../features/documents/services/document.service", async () => {
     ...actual,
     createDocumentUploadSignature: mocks.createDocumentUploadSignature,
     saveDocumentMetadata: mocks.saveDocumentMetadata,
+    listEntityDocuments: mocks.listEntityDocuments,
     listStudentDocuments: mocks.listStudentDocuments,
   };
 });
@@ -164,6 +166,20 @@ describe("shared payment and document API", () => {
         format: "pdf",
         bytes: 1000,
         originalFilename: "identity.pdf",
+        accessPolicy: "private",
+        createdAt: new Date("2026-08-09T10:00:00.000Z"),
+        status: "active",
+      },
+    ]);
+    mocks.listEntityDocuments.mockResolvedValue([
+      {
+        id: "document-1",
+        category: "assignment_attachment",
+        secureUrl: "https://res.cloudinary.com/demo/raw/upload/work.pdf",
+        resourceType: "raw",
+        format: "pdf",
+        bytes: 1000,
+        originalFilename: "work.pdf",
         accessPolicy: "private",
         createdAt: new Date("2026-08-09T10:00:00.000Z"),
         status: "active",
@@ -337,14 +353,31 @@ describe("shared payment and document API", () => {
       url: "/api/v1/students/student-1/documents",
       headers: { authorization: "Bearer token" },
     });
+    const genericListed = await app.inject({
+      method: "GET",
+      url: "/api/v1/documents/assignment_submission/submission-1",
+      headers: { authorization: "Bearer token" },
+    });
 
-    expect([signature.statusCode, saved.statusCode, listed.statusCode]).toEqual(
-      [200, 201, 200],
+    expect([
+      signature.statusCode,
+      saved.statusCode,
+      listed.statusCode,
+      genericListed.statusCode,
+    ]).toEqual(
+      [200, 201, 200, 200],
     );
     expect(signature.json()).toMatchObject({ data: { type: "authenticated" } });
     expect(saved.json()).toMatchObject({ data: { id: "document-1" } });
     expect(listed.json()).toMatchObject({
       data: { studentId: "student-1", documents: [{ id: "document-1" }] },
+    });
+    expect(genericListed.json()).toMatchObject({
+      data: {
+        entityType: "assignment_submission",
+        entityId: "submission-1",
+        documents: [{ originalFilename: "work.pdf" }],
+      },
     });
     expect(mocks.saveDocumentMetadata).toHaveBeenCalledOnce();
     expect(mocks.writeAuditLog).toHaveBeenCalledOnce();

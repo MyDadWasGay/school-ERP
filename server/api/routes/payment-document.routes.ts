@@ -17,6 +17,7 @@ import {
 import {
   createDocumentUploadSignature,
   documentMetadataSchema,
+  listEntityDocuments,
   listStudentDocuments,
   saveDocumentMetadata,
   uploadRequestSchema,
@@ -34,12 +35,17 @@ import {
   createRefundApiSchema,
   createRazorpayOrderApiSchema,
   saveDocumentSchema,
+  entityDocumentsSchema,
   studentDocumentsSchema,
   uploadSignatureSchema,
   verifyRazorpayPaymentApiSchema,
 } from "../schemas/payment-document.schemas";
+import { requireApiUser } from "../auth/bearer-auth";
+import { hasPermission } from "../../../lib/rbac/permissions";
+import { AppError } from "../../../lib/errors/app-error";
 
 type StudentParams = { studentId: string };
+type EntityDocumentParams = { entityType: UploadRequestInput["entityType"]; entityId: string };
 type PaymentBody = {
   invoiceId: string;
   studentId: string;
@@ -194,8 +200,16 @@ export const paymentDocumentRoutes: FastifyPluginAsync = async (app) => {
     "/uploads/signature",
     { preHandler: [authenticateApiRequest, requireApiCsrf], schema: uploadSignatureSchema },
     async (request) => {
-      const user = requireApiPermission(request, "documents:create");
       const input = uploadRequestSchema.parse(request.body);
+      const user = requireApiUser(request);
+      if (
+        !hasPermission(user, "documents:create") &&
+        !(input.entityType === "assignment_submission" &&
+          ["student", "parent"].includes(user.role) &&
+          hasPermission(user, "academics:read"))
+      ) {
+        throw new AppError("FORBIDDEN", "Document upload permission is required.", 403);
+      }
       const signature = await createDocumentUploadSignature(user, input);
       return { data: signature, meta: { requestId: request.id } };
     },
@@ -205,8 +219,16 @@ export const paymentDocumentRoutes: FastifyPluginAsync = async (app) => {
     "/documents",
     { preHandler: [authenticateApiRequest, requireApiCsrf], schema: saveDocumentSchema },
     async (request, reply) => {
-      const user = requireApiPermission(request, "documents:create");
       const input = documentMetadataSchema.parse(request.body);
+      const user = requireApiUser(request);
+      if (
+        !hasPermission(user, "documents:create") &&
+        !(input.entityType === "assignment_submission" &&
+          ["student", "parent"].includes(user.role) &&
+          hasPermission(user, "academics:read"))
+      ) {
+        throw new AppError("FORBIDDEN", "Document upload permission is required.", 403);
+      }
       const row = await saveDocumentMetadata(user, input);
       await writeAuditLog(user, {
         action: "upload",
@@ -238,6 +260,30 @@ export const paymentDocumentRoutes: FastifyPluginAsync = async (app) => {
       return {
         data: {
           studentId: request.params.studentId,
+          documents: rows.map((row) => ({
+            ...row,
+            createdAt: row.createdAt.toISOString(),
+          })),
+        },
+        meta: { requestId: request.id },
+      };
+    },
+  );
+
+  app.get<{ Params: EntityDocumentParams }>(
+    "/documents/:entityType/:entityId",
+    { preHandler: authenticateApiRequest, schema: entityDocumentsSchema },
+    async (request) => {
+      const user = requireApiPermission(request, "documents:read");
+      const rows = await listEntityDocuments(
+        user,
+        request.params.entityType,
+        request.params.entityId,
+      );
+      return {
+        data: {
+          entityType: request.params.entityType,
+          entityId: request.params.entityId,
           documents: rows.map((row) => ({
             ...row,
             createdAt: row.createdAt.toISOString(),

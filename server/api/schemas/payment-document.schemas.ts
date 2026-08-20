@@ -18,6 +18,7 @@ const uploadEntityTypes = [
   "asset",
   "cms_media",
   "health_record",
+  "assignment_submission",
   "custom",
 ] as const;
 
@@ -415,6 +416,74 @@ export const studentDocumentsSchema = {
           required: ["studentId", "documents"],
           properties: {
             studentId: { type: "string" },
+            documents: {
+              type: "array",
+              maxItems: 100,
+              items: {
+                type: "object",
+                required: [
+                  "id",
+                  "category",
+                  "secureUrl",
+                  "resourceType",
+                  "format",
+                  "bytes",
+                  "originalFilename",
+                  "accessPolicy",
+                  "createdAt",
+                  "status",
+                ],
+                properties: {
+                  id: { type: "string" },
+                  category: { type: "string" },
+                  secureUrl: { type: "string" },
+                  resourceType: { type: "string" },
+                  format: nullableString,
+                  bytes: { anyOf: [{ type: "integer" }, { type: "null" }] },
+                  originalFilename: nullableString,
+                  accessPolicy: { type: "string" },
+                  createdAt: { type: "string", format: "date-time" },
+                  status: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        meta,
+      },
+    },
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    404: errorEnvelopeSchema,
+    422: errorEnvelopeSchema,
+    503: errorEnvelopeSchema,
+  },
+} as const;
+
+export const entityDocumentsSchema = {
+  tags: ["documents"],
+  summary: "List document metadata for an authorized entity",
+  security: [{ firebaseBearer: [] }],
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["entityType", "entityId"],
+    properties: {
+      entityType: { type: "string", enum: uploadEntityTypes },
+      entityId: { type: "string", minLength: 1, maxLength: 160, pattern: "^[a-zA-Z0-9_-]+$" },
+    },
+  },
+  response: {
+    200: {
+      type: "object",
+      required: ["data", "meta"],
+      properties: {
+        data: {
+          type: "object",
+          required: ["entityType", "entityId", "documents"],
+          properties: {
+            entityType: { type: "string" },
+            entityId: { type: "string" },
             documents: {
               type: "array",
               maxItems: 100,

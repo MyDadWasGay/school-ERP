@@ -42,6 +42,13 @@ bool canAccessPath(String path, CurrentUser user) {
         user.can('settings:read') ||
         user.can('users:read');
   }
+  if (path.startsWith('/approvals')) {
+    return user.can('admissions:approve') ||
+        user.can('attendance:approve_leave') ||
+        user.can('attendance:approve_correction') ||
+        user.can('procurement:approve') ||
+        user.can('facilities:approve');
+  }
   if (path.startsWith('/hr')) {
     return user.can('hr:read') || user.can('payroll:read');
   }

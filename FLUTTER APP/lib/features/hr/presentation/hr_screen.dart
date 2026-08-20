@@ -5,9 +5,11 @@ import 'package:intl/intl.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
+import '../../../shared/pdf/erp_pdf.dart';
 import '../../../shared/models/workspace_models.dart';
 import '../../../shared/models/hr_models.dart';
 import '../../../shared/widgets/erp_states.dart';
+import '../../documents/presentation/entity_documents_sheet.dart';
 import '../../leave/presentation/leave_screen.dart';
 
 class HrScreen extends ConsumerStatefulWidget {
@@ -111,6 +113,8 @@ class _EmployeeDirectory extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(employeesProvider);
+    final canReadDocuments =
+        ref.watch(sessionProvider).valueOrNull?.can('documents:read') == true;
     return value.when(
       loading: () => const ErpLoadingList(),
       error: (error, stack) => ErpErrorState(
@@ -143,7 +147,27 @@ class _EmployeeDirectory extends ConsumerWidget {
                     '${row.email?.isNotEmpty == true ? '\n${row.email}' : ''}',
                   ),
                   isThreeLine: row.email?.isNotEmpty == true,
-                  trailing: ErpStatusChip(row.status),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ErpStatusChip(row.status),
+                      if (canReadDocuments)
+                        IconButton(
+                          tooltip: 'Staff documents',
+                          icon: const Icon(Icons.folder_shared_outlined),
+                          onPressed: () => showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            builder: (_) => EntityDocumentsSheet(
+                              entityType: 'employee',
+                              entityId: row.id,
+                              title: '${row.name} documents',
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -282,6 +306,9 @@ class _Payslips extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(payslipsProvider);
+    final schoolName =
+        ref.watch(sessionProvider).valueOrNull?.organization.name ??
+        'School ERP';
     return value.when(
       loading: () => const ErpLoadingList(),
       error: (error, stack) => ErpErrorState(
@@ -320,6 +347,31 @@ class _Payslips extends ConsumerWidget {
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
+                          ),
+                          IconButton(
+                            tooltip: 'Share payslip',
+                            onPressed: () async {
+                              try {
+                                await shareErpPdf(
+                                  bytes: ErpPdfBuilder.payslip(
+                                    schoolName: schoolName,
+                                    payslip: row,
+                                  ),
+                                  filename:
+                                      'payslip-${row.period}-${row.employeeNumber}.pdf',
+                                  title: 'Payslip ${row.period}',
+                                );
+                              } on Object catch (error) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(readableApiError(error)),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.share_outlined),
                           ),
                           ErpStatusChip(row.status),
                         ],

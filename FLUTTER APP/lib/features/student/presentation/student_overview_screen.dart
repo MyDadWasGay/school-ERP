@@ -3,12 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/providers.dart';
 import '../../../core/api/api_error.dart';
+import '../../../shared/models/identity_models.dart';
+import '../../../shared/pdf/erp_pdf.dart';
 import '../../../shared/models/student_models.dart';
 import '../../../shared/widgets/erp_states.dart';
 
@@ -20,6 +21,13 @@ class StudentOverviewScreen extends ConsumerWidget {
     final portal = ref.watch(portalProvider).valueOrNull;
     final selectedId = ref.watch(selectedStudentIdProvider);
     final overview = ref.watch(studentOverviewProvider);
+    final session = ref.watch(sessionProvider).valueOrNull;
+    String? selectedStudentName;
+    for (final student in portal?.students ?? const <PortalStudent>[]) {
+      if (student.id == selectedId) {
+        selectedStudentName = student.name;
+      }
+    }
     return DefaultTabController(
       length: 4,
       child: Column(
@@ -80,10 +88,16 @@ class StudentOverviewScreen extends ConsumerWidget {
                     data.invoices,
                     payments: data.payments,
                     studentId: selectedId,
+                    studentName:
+                        selectedStudentName ??
+                        session?.displayName ??
+                        'Student',
+                    schoolName: session?.organization.name ?? 'School ERP',
                     canPayOnline:
-                        ref.watch(sessionProvider).valueOrNull?.can(
-                          'fees:pay_online',
-                        ) ==
+                        ref
+                            .watch(sessionProvider)
+                            .valueOrNull
+                            ?.can('fees:pay_online') ==
                         true,
                   ),
                   _DocumentsList(data.documents),
@@ -140,7 +154,9 @@ class _DocumentsList extends StatelessWidget {
                   );
                   if (!launched && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Could not open the document.')),
+                      const SnackBar(
+                        content: Text('Could not open the document.'),
+                      ),
                     );
                   }
                 } else {
@@ -296,11 +312,15 @@ class _InvoiceList extends ConsumerStatefulWidget {
     this.data, {
     required this.payments,
     required this.studentId,
+    required this.studentName,
+    required this.schoolName,
     required this.canPayOnline,
   });
   final PagedRows<InvoiceRow>? data;
   final PagedRows<StudentPaymentRow>? payments;
   final String? studentId;
+  final String studentName;
+  final String schoolName;
   final bool canPayOnline;
 
   @override
@@ -332,13 +352,15 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
     if (_paying || studentId == null || invoice.balanceMinor <= 0) return;
     setState(() => _paying = true);
     try {
-      final order = await ref.read(apiClientProvider).createRazorpayOrder(
-        invoiceId: invoice.id,
-        studentId: studentId,
-        amountMinor: invoice.balanceMinor,
-        idempotencyKey:
-            'mobile-razorpay-${invoice.id}-${DateTime.now().microsecondsSinceEpoch}',
-      );
+      final order = await ref
+          .read(apiClientProvider)
+          .createRazorpayOrder(
+            invoiceId: invoice.id,
+            studentId: studentId,
+            amountMinor: invoice.balanceMinor,
+            idempotencyKey:
+                'mobile-razorpay-${invoice.id}-${DateTime.now().microsecondsSinceEpoch}',
+          );
       if (!mounted) return;
       _activeOrderId = order.orderId;
       _razorpay.open({
@@ -392,12 +414,19 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
         '${readableApiError(error)} The provider webhook will reconcile captured funds; refresh before trying again.',
       );
     } finally {
-      if (mounted) setState(() { _paying = false; _activeOrderId = null; });
+      if (mounted) {
+        setState(() {
+          _paying = false;
+          _activeOrderId = null;
+        });
+      }
     }
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
-    _finishWithMessage(response.message ?? 'Razorpay payment was not completed.');
+    _finishWithMessage(
+      response.message ?? 'Razorpay payment was not completed.',
+    );
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
@@ -410,9 +439,15 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
 
   void _finishWithMessage(String message) {
     if (!mounted) return;
-    setState(() { _paying = false; _activeOrderId = null; });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    setState(() {
+      _paying = false;
+      _activeOrderId = null;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
+
   @override
   Widget build(BuildContext context) {
     final rows = widget.data?.rows ?? const <InvoiceRow>[];
@@ -441,12 +476,15 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
         ],
         if (paymentRows.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.only(top: ErpSpacing.md, bottom: ErpSpacing.sm),
+            padding: const EdgeInsets.only(
+              top: ErpSpacing.md,
+              bottom: ErpSpacing.sm,
+            ),
             child: Text(
               'Payment history',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           for (final payment in paymentRows) ...[
@@ -491,9 +529,6 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
   }
 
   Widget _paymentCard(BuildContext context, StudentPaymentRow payment) {
-    final amount = NumberFormat.simpleCurrency(
-      name: payment.currency,
-    ).format(payment.amountMinor / 100);
     return Card(
       child: ListTile(
         leading: const CircleAvatar(child: Icon(Icons.verified_outlined)),
@@ -505,16 +540,23 @@ class _InvoiceListState extends ConsumerState<_InvoiceList> {
           tooltip: 'Receipt actions',
           onSelected: (action) async {
             if (action != 'share') return;
-            await SharePlus.instance.share(
-              ShareParams(
-                text: 'School fee receipt\n'
-                    'Receipt: ${payment.receiptNumber}\n'
-                    'Invoice: ${payment.invoiceNumber}\n'
-                    'Amount: $amount\n'
-                    'Paid: ${DateFormat('d MMM yyyy, h:mm a').format(payment.paidAt.toLocal())}\n'
-                    'Status: ${payment.status.replaceAll('_', ' ')}',
-              ),
-            );
+            try {
+              await shareErpPdf(
+                bytes: ErpPdfBuilder.feeReceipt(
+                  schoolName: widget.schoolName,
+                  studentName: widget.studentName,
+                  payment: payment,
+                ),
+                filename: 'fee-receipt-${payment.receiptNumber}.pdf',
+                title: 'Fee receipt ${payment.receiptNumber}',
+              );
+            } on Object catch (error) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(readableApiError(error))),
+                );
+              }
+            }
           },
           itemBuilder: (_) => const [
             PopupMenuItem(value: 'share', child: Text('Share receipt')),

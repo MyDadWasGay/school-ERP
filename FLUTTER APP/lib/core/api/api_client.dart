@@ -6,6 +6,7 @@ import '../../shared/models/admission_models.dart';
 import '../../shared/models/asset_models.dart';
 import '../../shared/models/attendance_models.dart';
 import '../../shared/models/communication_models.dart';
+import '../../shared/models/document_models.dart';
 import '../../shared/models/exam_models.dart';
 import '../../shared/models/identity_models.dart';
 import '../../shared/models/leave_models.dart';
@@ -255,12 +256,12 @@ class ApiClient {
         ),
       );
 
-  Future<void> submitAssignment({
+  Future<AssignmentSubmissionReceipt> submitAssignment({
     required String assignmentId,
     String? studentId,
     required String response,
   }) async {
-    await _request(
+    final apiResponse = await _request(
       () => _dio.post<Object?>(
         '/academics/assignments/${Uri.encodeComponent(assignmentId)}/submissions',
         data: {
@@ -269,6 +270,10 @@ class ApiClient {
           'response': response.trim(),
         },
       ),
+    );
+    final envelope = asJson(apiResponse.data, 'assignmentSubmission.response');
+    return AssignmentSubmissionReceipt.fromJson(
+      asJson(envelope['data'], 'assignmentSubmission.data'),
     );
   }
 
@@ -2458,6 +2463,125 @@ class ApiClient {
       data['documents'],
       'documents',
     ).map(DocumentRow.fromJson).toList(growable: false);
+  }
+
+  Future<List<DocumentRow>> getEntityDocuments({
+    required String entityType,
+    required String entityId,
+  }) async {
+    final data = await _get(
+      '/documents/${Uri.encodeComponent(entityType)}/${Uri.encodeComponent(entityId)}',
+    );
+    return asJsonList(
+      data['documents'],
+      'documents',
+    ).map(DocumentRow.fromJson).toList(growable: false);
+  }
+
+  Future<DocumentRow> uploadDocument({
+    required String entityType,
+    required String entityId,
+    required String category,
+    required UploadableFile file,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    final signatureResponse = await _request(
+      () => _dio.post<Object?>(
+        '/uploads/signature',
+        data: {
+          'entityType': entityType,
+          'entityId': entityId,
+          'resourceType': file.resourceType,
+          'format': file.format,
+          'bytes': file.size,
+        },
+      ),
+    );
+    final signatureEnvelope = asJson(
+      signatureResponse.data,
+      'upload.signature.response',
+    );
+    final signature = CloudinaryUploadSignature.fromJson(
+      asJson(signatureEnvelope['data'], 'upload.signature.data'),
+    );
+    final multipart = file.path != null && file.path!.isNotEmpty
+        ? await MultipartFile.fromFile(file.path!, filename: file.name)
+        : file.bytes == null
+        ? throw const ApiError(
+            kind: ApiErrorKind.validation,
+            message: 'The selected file could not be read.',
+          )
+        : MultipartFile.fromBytes(file.bytes!, filename: file.name);
+    final cloudinary = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 60),
+      ),
+    );
+    late final Json asset;
+    try {
+      final response = await cloudinary.post<Object?>(
+        'https://api.cloudinary.com/v1_1/${Uri.encodeComponent(signature.cloudName)}/${Uri.encodeComponent(file.resourceType)}/upload',
+        data: FormData.fromMap({
+          'file': multipart,
+          'api_key': signature.apiKey,
+          'timestamp': signature.timestamp,
+          'folder': signature.folder,
+          'type': signature.type,
+          'allowed_formats': signature.allowedFormats,
+          'signature': signature.signature,
+        }),
+        onSendProgress: onSendProgress,
+      );
+      asset = asJson(response.data, 'cloudinary.asset');
+    } on DioException catch (error) {
+      throw ApiError.fromDio(error);
+    }
+    final metadataResponse = await _request(
+      () => _dio.post<Object?>(
+        '/documents',
+        data: {
+          'entityType': entityType,
+          'entityId': entityId,
+          'category': category,
+          'publicId': asString(asset['public_id'], 'cloudinary.public_id'),
+          'secureUrl': asString(asset['secure_url'], 'cloudinary.secure_url'),
+          'resourceType': asString(
+            asset['resource_type'],
+            'cloudinary.resource_type',
+          ),
+          if (asset['format'] is String) 'format': asset['format'],
+          if (asset['bytes'] is num) 'bytes': (asset['bytes']! as num).toInt(),
+          if (asset['width'] is num) 'width': (asset['width']! as num).toInt(),
+          if (asset['height'] is num)
+            'height': (asset['height']! as num).toInt(),
+          if (asset['version'] is num)
+            'version': (asset['version']! as num).toInt(),
+          'originalFilename': asset['original_filename'] is String
+              ? asset['original_filename']
+              : file.name,
+        },
+      ),
+    );
+    final metadataEnvelope = asJson(metadataResponse.data, 'document.response');
+    final metadata = asJson(metadataEnvelope['data'], 'document.data');
+    return DocumentRow(
+      id: asString(metadata['id'], 'document.id'),
+      category: asString(metadata['category'], 'document.category'),
+      secureUrl: asString(asset['secure_url'], 'document.secureUrl'),
+      resourceType: asString(asset['resource_type'], 'document.resourceType'),
+      accessPolicy: metadata['accessPolicy'] as String? ?? 'private',
+      status: asString(metadata['status'], 'document.status'),
+      createdAt: metadata['createdAt'] is String
+          ? DateTime.parse(metadata['createdAt']! as String)
+          : DateTime.now().toUtc(),
+      format: asset['format'] as String?,
+      bytes: asset['bytes'] is num
+          ? (asset['bytes']! as num).toInt()
+          : file.size,
+      originalFilename: asset['original_filename'] as String? ?? file.name,
+    );
   }
 
   Future<PagedRows<T>> _studentRows<T>(

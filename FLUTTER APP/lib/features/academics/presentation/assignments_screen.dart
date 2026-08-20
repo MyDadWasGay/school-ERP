@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,8 +7,10 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
 import '../../../shared/models/academic_models.dart';
+import '../../../shared/models/document_models.dart';
 import '../../../shared/models/identity_models.dart';
 import '../../../shared/widgets/erp_states.dart';
+import '../../documents/presentation/entity_documents_sheet.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
   const AssignmentsScreen({super.key});
@@ -142,11 +145,15 @@ class _AssignmentDetailSheetState
   final _formKey = GlobalKey<FormState>();
   bool _saving = false;
   bool _responseInitialised = false;
+  final _attachments = <UploadableFile>[];
+  double? _attachmentProgress;
 
   @override
   void initState() {
     super.initState();
-    _future = ref.read(apiClientProvider).getAssignmentDetail(widget.assignmentId);
+    _future = ref
+        .read(apiClientProvider)
+        .getAssignmentDetail(widget.assignmentId);
   }
 
   @override
@@ -155,30 +162,132 @@ class _AssignmentDetailSheetState
     super.dispose();
   }
 
+  Future<void> _pickAttachments() async {
+    if (_saving) return;
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const [
+        'pdf',
+        'doc',
+        'docx',
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+      ],
+    );
+    if (result == null || !mounted) return;
+    final selected = <UploadableFile>[];
+    for (final file in result.files.take(3)) {
+      final format = (file.extension ?? '').toLowerCase();
+      final isImage = {'jpg', 'jpeg', 'png', 'webp'}.contains(format);
+      final maxBytes = isImage ? 5_000_000 : 25_000_000;
+      if (file.size <= 0 || file.size > maxBytes) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${file.name} is too large. Images are limited to 5 MB and documents to 25 MB.',
+            ),
+          ),
+        );
+        continue;
+      }
+      selected.add(
+        UploadableFile(
+          name: file.name,
+          size: file.size,
+          format: format,
+          resourceType: isImage ? 'image' : 'raw',
+          path: file.path,
+          bytes: file.bytes,
+        ),
+      );
+    }
+    if (selected.isNotEmpty) {
+      setState(() {
+        _attachments
+          ..clear()
+          ..addAll(selected);
+      });
+    }
+  }
+
+  Future<void> _openAttachments(String submissionId, String title) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => EntityDocumentsSheet(
+        entityType: 'assignment_submission',
+        entityId: submissionId,
+        title: title,
+      ),
+    );
+  }
+
   Future<void> _submit(AssignmentDetail detail) async {
     if (!_formKey.currentState!.validate()) return;
-    final studentId = ref.read(selectedStudentIdProvider) ??
+    final studentId =
+        ref.read(selectedStudentIdProvider) ??
         (widget.user.role == 'student' ? widget.user.linkedStudentId : null);
     setState(() => _saving = true);
+    AssignmentSubmissionReceipt? receipt;
     try {
-      await ref.read(apiClientProvider).submitAssignment(
-        assignmentId: detail.id,
-        studentId: studentId,
-        response: _response.text,
-      );
+      receipt = await ref
+          .read(apiClientProvider)
+          .submitAssignment(
+            assignmentId: detail.id,
+            studentId: studentId,
+            response: _response.text,
+          );
+      for (var index = 0; index < _attachments.length; index++) {
+        final file = _attachments[index];
+        await ref
+            .read(apiClientProvider)
+            .uploadDocument(
+              entityType: 'assignment_submission',
+              entityId: receipt.id,
+              category: 'assignment_attachment',
+              file: file,
+              onSendProgress: (sent, total) {
+                if (!mounted) return;
+                setState(() {
+                  _attachmentProgress = total > 0
+                      ? (index + (sent / total)) / _attachments.length
+                      : null;
+                });
+              },
+            );
+      }
       if (mounted) Navigator.of(context).pop(true);
     } on Object catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(readableApiError(error))),
+          SnackBar(
+            content: Text(
+              receipt == null
+                  ? readableApiError(error)
+                  : 'Submission saved, but an attachment could not be uploaded. ${readableApiError(error)}',
+            ),
+          ),
         );
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _attachmentProgress = null;
+        });
+      }
     }
   }
 
-  Future<void> _grade(AssignmentDetail detail, AssignmentSubmission submission) async {
+  Future<void> _grade(
+    AssignmentDetail detail,
+    AssignmentSubmission submission,
+  ) async {
     final result = await showDialog<(int?, String?)>(
       context: context,
       builder: (context) => _GradeDialog(submission: submission),
@@ -186,12 +295,14 @@ class _AssignmentDetailSheetState
     if (result == null) return;
     setState(() => _saving = true);
     try {
-      await ref.read(apiClientProvider).gradeAssignment(
-        assignmentId: detail.id,
-        submissionId: submission.id,
-        score: result.$1,
-        comment: result.$2,
-      );
+      await ref
+          .read(apiClientProvider)
+          .gradeAssignment(
+            assignmentId: detail.id,
+            submissionId: submission.id,
+            score: result.$1,
+            comment: result.$2,
+          );
       if (mounted) {
         setState(() {
           _future = ref.read(apiClientProvider).getAssignmentDetail(detail.id);
@@ -201,9 +312,9 @@ class _AssignmentDetailSheetState
     } on Object catch (error) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(readableApiError(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(readableApiError(error))));
       }
     }
   }
@@ -228,20 +339,25 @@ class _AssignmentDetailSheetState
             child: ErpErrorState(
               error: snapshot.error!,
               onRetry: () => setState(() {
-                _future = ref.read(apiClientProvider).getAssignmentDetail(
-                  widget.assignmentId,
-                );
+                _future = ref
+                    .read(apiClientProvider)
+                    .getAssignmentDetail(widget.assignmentId);
               }),
             ),
           );
         }
         final detail = snapshot.data!;
-        final selectedStudentId = ref.watch(selectedStudentIdProvider) ??
-            (widget.user.role == 'student' ? widget.user.linkedStudentId : null);
-        final ownSubmission = detail.submissions.cast<AssignmentSubmission?>().firstWhere(
-          (submission) => submission?.studentId == selectedStudentId,
-          orElse: () => null,
-        );
+        final selectedStudentId =
+            ref.watch(selectedStudentIdProvider) ??
+            (widget.user.role == 'student'
+                ? widget.user.linkedStudentId
+                : null);
+        final ownSubmission = detail.submissions
+            .cast<AssignmentSubmission?>()
+            .firstWhere(
+              (submission) => submission?.studentId == selectedStudentId,
+              orElse: () => null,
+            );
         if (!_responseInitialised && ownSubmission != null) {
           _response.text = ownSubmission.response;
           _responseInitialised = true;
@@ -253,12 +369,14 @@ class _AssignmentDetailSheetState
             children: [
               Text(
                 detail.title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: ErpSpacing.xs),
-              Text('Due ${DateFormat('d MMM yyyy, h:mm a').format(detail.dueAt.toLocal())}'),
+              Text(
+                'Due ${DateFormat('d MMM yyyy, h:mm a').format(detail.dueAt.toLocal())}',
+              ),
               if (detail.instructions?.isNotEmpty == true) ...[
                 const SizedBox(height: ErpSpacing.md),
                 Text(detail.instructions!),
@@ -280,29 +398,84 @@ class _AssignmentDetailSheetState
                           alignLabelWithHint: true,
                           prefixIcon: Icon(Icons.edit_note_outlined),
                         ),
-                        validator: (value) => value == null || value.trim().isEmpty
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
                             ? 'Write a response before submitting.'
                             : null,
                       ),
+                      if (ownSubmission?.attachments.isNotEmpty == true) ...[
+                        const SizedBox(height: ErpSpacing.sm),
+                        for (final attachment in ownSubmission!.attachments)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.attach_file_outlined),
+                            title: Text(
+                              attachment.originalFilename ??
+                                  attachment.category,
+                            ),
+                            subtitle: const Text('Open submitted attachment'),
+                            onTap: () => _openAttachments(
+                              ownSubmission.id,
+                              'Assignment attachments',
+                            ),
+                          ),
+                      ],
+                      const SizedBox(height: ErpSpacing.sm),
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : _pickAttachments,
+                        icon: const Icon(Icons.attach_file_outlined),
+                        label: Text(
+                          _attachments.isEmpty
+                              ? 'Add attachments'
+                              : 'Replace attachments (${_attachments.length})',
+                        ),
+                      ),
+                      if (_attachments.isNotEmpty) ...[
+                        const SizedBox(height: ErpSpacing.xs),
+                        for (final attachment in _attachments)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            leading: const Icon(
+                              Icons.insert_drive_file_outlined,
+                            ),
+                            title: Text(attachment.name),
+                            subtitle: Text(
+                              '${(attachment.size / 1024).ceil()} KB',
+                            ),
+                          ),
+                      ],
+                      if (_attachmentProgress != null) ...[
+                        const SizedBox(height: ErpSpacing.xs),
+                        LinearProgressIndicator(value: _attachmentProgress),
+                      ],
                       const SizedBox(height: ErpSpacing.md),
                       FilledButton.icon(
                         onPressed: _saving ? null : () => _submit(detail),
                         icon: _saving
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.send_outlined),
-                        label: Text(ownSubmission == null ? 'Submit assignment' : 'Update submission'),
+                        label: Text(
+                          ownSubmission == null
+                              ? 'Submit assignment'
+                              : 'Update submission',
+                        ),
                       ),
                       if (ownSubmission?.feedback != null) ...[
                         const SizedBox(height: ErpSpacing.lg),
                         Card(
                           child: ListTile(
                             leading: const Icon(Icons.feedback_outlined),
-                            title: Text(ownSubmission!.score == null
-                                ? 'Teacher feedback'
-                                : 'Score: ${ownSubmission.score}'),
+                            title: Text(
+                              ownSubmission!.score == null
+                                  ? 'Teacher feedback'
+                                  : 'Score: ${ownSubmission.score}',
+                            ),
                             subtitle: Text(ownSubmission.feedback!),
                           ),
                         ),
@@ -327,10 +500,28 @@ class _AssignmentDetailSheetState
                           '${submission.response}\n${DateFormat('d MMM yyyy, h:mm a').format(submission.submittedAt.toLocal())}',
                         ),
                         isThreeLine: true,
-                        trailing: submission.score == null
-                            ? const Icon(Icons.rate_review_outlined)
-                            : Text('${submission.score}'),
-                        onTap: _saving ? null : () => _grade(detail, submission),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (submission.attachments.isNotEmpty)
+                              IconButton(
+                                tooltip: 'View attachments',
+                                onPressed: _saving
+                                    ? null
+                                    : () => _openAttachments(
+                                        submission.id,
+                                        '${submission.studentName} attachments',
+                                      ),
+                                icon: const Icon(Icons.attach_file_outlined),
+                              ),
+                            submission.score == null
+                                ? const Icon(Icons.rate_review_outlined)
+                                : Text('${submission.score}'),
+                          ],
+                        ),
+                        onTap: _saving
+                            ? null
+                            : () => _grade(detail, submission),
                       ),
                     ),
               ],
@@ -393,15 +584,15 @@ class _GradeDialogState extends State<_GradeDialog> {
       ),
     ),
     actions: [
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
       FilledButton(
-        onPressed: () => Navigator.pop(
-          context,
-          (
-            int.tryParse(_score.text.trim()),
-            _comment.text.trim().isEmpty ? null : _comment.text.trim(),
-          ),
-        ),
+        onPressed: () => Navigator.pop(context, (
+          int.tryParse(_score.text.trim()),
+          _comment.text.trim().isEmpty ? null : _comment.text.trim(),
+        )),
         child: const Text('Save review'),
       ),
     ],

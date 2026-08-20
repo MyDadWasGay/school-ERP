@@ -318,6 +318,12 @@ class _QuickActions extends StatelessWidget {
         ('Library', '/library', Icons.local_library_outlined),
       if (user.can('transport:read'))
         ('Transport', '/transport', Icons.directions_bus_outlined),
+      if (user.can('admissions:approve') ||
+          user.can('attendance:approve_leave') ||
+          user.can('attendance:approve_correction') ||
+          user.can('procurement:approve') ||
+          user.can('facilities:approve'))
+        ('Approvals', '/approvals', Icons.approval_outlined),
     ];
     if (actions.isEmpty) return const SizedBox.shrink();
     return Column(

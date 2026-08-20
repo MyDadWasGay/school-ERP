@@ -1,4 +1,5 @@
 import 'identity_models.dart';
+import 'student_models.dart';
 
 class AcademicRecord {
   const AcademicRecord({
@@ -54,6 +55,7 @@ class AssignmentSubmission {
     required this.status,
     this.score,
     this.feedback,
+    this.attachments = const [],
   });
 
   factory AssignmentSubmission.fromJson(Json json) => AssignmentSubmission(
@@ -68,8 +70,17 @@ class AssignmentSubmission {
       asString(json['submittedAt'], 'assignmentSubmission.submittedAt'),
     ),
     status: asString(json['status'], 'assignmentSubmission.status'),
-    score: json['score'] == null ? null : asInt(json['score'], 'assignmentSubmission.score'),
+    score: json['score'] == null
+        ? null
+        : asInt(json['score'], 'assignmentSubmission.score'),
     feedback: json['feedback'] as String?,
+    attachments: (json['attachments'] as List? ?? const [])
+        .map(
+          (item) => DocumentRow.fromJson(
+            asJson(item, 'assignmentSubmission.attachment'),
+          ),
+        )
+        .toList(growable: false),
   );
 
   final String id;
@@ -80,6 +91,20 @@ class AssignmentSubmission {
   final String status;
   final int? score;
   final String? feedback;
+  final List<DocumentRow> attachments;
+}
+
+class AssignmentSubmissionReceipt {
+  const AssignmentSubmissionReceipt({required this.id, required this.status});
+
+  factory AssignmentSubmissionReceipt.fromJson(Json json) =>
+      AssignmentSubmissionReceipt(
+        id: asString(json['id'], 'assignmentSubmission.id'),
+        status: asString(json['status'], 'assignmentSubmission.status'),
+      );
+
+  final String id;
+  final String status;
 }
 
 class AssignmentDetail {

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignmentFeedback, assignmentSubmissions, assignments, enrollments, students } from "@/db/schema";
+import { assignmentFeedback, assignmentSubmissions, assignments, documentFiles, enrollments, students } from "@/db/schema";
 import type { CurrentUser } from "@/lib/auth/types";
 import { AppError } from "@/lib/errors/app-error";
 import { hasPermission } from "@/lib/rbac/permissions";
@@ -80,6 +80,33 @@ async function submissionRows(user: CurrentUser, assignment: AssignmentRow) {
     : [];
   const feedbackMap = new Map<string, typeof feedbackRows[number]>();
   for (const feedback of feedbackRows) if (!feedbackMap.has(feedback.referenceId ?? "")) feedbackMap.set(feedback.referenceId ?? "", feedback);
+  const attachmentRows = rows.length
+    ? await getDb().select({
+        id: documentFiles.id,
+        category: documentFiles.category,
+        secureUrl: documentFiles.secureUrl,
+        resourceType: documentFiles.resourceType,
+        format: documentFiles.format,
+        bytes: documentFiles.bytes,
+        originalFilename: documentFiles.originalFilename,
+        accessPolicy: documentFiles.accessPolicy,
+        createdAt: documentFiles.createdAt,
+        status: documentFiles.status,
+        entityId: documentFiles.entityId,
+      }).from(documentFiles).where(and(
+        eq(documentFiles.organizationId, user.organizationId),
+        inArray(documentFiles.entityId, rows.map((row) => row.id)),
+        eq(documentFiles.entityType, "assignment_submission"),
+        eq(documentFiles.status, "active"),
+        user.campusId ? eq(documentFiles.campusId, user.campusId) : undefined,
+      )).orderBy(desc(documentFiles.createdAt))
+    : [];
+  const attachmentMap = new Map<string, typeof attachmentRows>();
+  for (const attachment of attachmentRows) {
+    const existing = attachmentMap.get(attachment.entityId) ?? [];
+    existing.push(attachment);
+    attachmentMap.set(attachment.entityId, existing);
+  }
   return rows.map((row) => {
     const details = parseDetails(row.detailsJson);
     const feedback = feedbackMap.get(row.id);
@@ -93,6 +120,18 @@ async function submissionRows(user: CurrentUser, assignment: AssignmentRow) {
       status: row.status,
       score: typeof feedbackDetails.score === "number" ? feedbackDetails.score : null,
       feedback: typeof feedbackDetails.comment === "string" ? feedbackDetails.comment : null,
+      attachments: (attachmentMap.get(row.id) ?? []).map((attachment) => ({
+        id: attachment.id,
+        category: attachment.category,
+        secureUrl: attachment.secureUrl,
+        resourceType: attachment.resourceType,
+        format: attachment.format,
+        bytes: attachment.bytes,
+        originalFilename: attachment.originalFilename,
+        accessPolicy: attachment.accessPolicy,
+        createdAt: attachment.createdAt.toISOString(),
+        status: attachment.status,
+      })),
     };
   });
 }

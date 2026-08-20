@@ -1,6 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  assignmentSubmissions,
+  assignments,
   applications,
   assets,
   cmsMedia,
@@ -13,10 +15,69 @@ import {
 import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import type { UploadEntityType } from "@/lib/cloudinary/types";
-import { getStudentProfile } from "@/features/students/services/students.service";
+import { hasPermission } from "@/lib/rbac/permissions";
+import { getStudentProfile, resolvePermittedStudentIds } from "@/features/students/services/students.service";
+
+function submissionStudentId(detailsJson: string | null, fallback: string) {
+  if (detailsJson) {
+    try {
+      const details = JSON.parse(detailsJson) as Record<string, unknown>;
+      if (typeof details.studentId === "string") return details.studentId;
+    } catch {
+      // The submission name remains the legacy student-id fallback.
+    }
+  }
+  return fallback;
+}
 
 export async function assertDocumentEntityScope(user: CurrentUser, entityType: UploadEntityType, entityId: string) {
   if (entityType === "custom") return;
+  if (entityType === "assignment_submission") {
+    const submission = await getDb().query.assignmentSubmissions.findFirst({
+      where: and(
+        eq(assignmentSubmissions.id, entityId),
+        eq(assignmentSubmissions.organizationId, user.organizationId),
+        user.campusId ? eq(assignmentSubmissions.campusId, user.campusId) : undefined,
+        eq(assignmentSubmissions.status, "active"),
+      ),
+    });
+    const assignment = submission?.referenceId
+      ? await getDb().query.assignments.findFirst({
+          where: and(
+            eq(assignments.id, submission.referenceId),
+            eq(assignments.organizationId, user.organizationId),
+            user.campusId ? eq(assignments.campusId, user.campusId) : undefined,
+            eq(assignments.status, "published"),
+          ),
+        })
+      : undefined;
+    if (!submission || !assignment) {
+      throw new AppError("TENANT_SCOPE_ERROR", "The linked assignment submission is outside your organization or campus scope.", 403);
+    }
+    if (user.role === "teacher") {
+      if (
+        assignment.teacherId !== user.id ||
+        !(user.classSectionScopes ?? []).some((scope) => scope.classId === assignment.classId)
+      ) {
+        throw new AppError("FORBIDDEN", "This assignment submission is outside your teaching scope.", 403);
+      }
+    } else if (user.role === "student" || user.role === "parent") {
+      const permitted = await resolvePermittedStudentIds(user);
+      if (!permitted?.includes(submissionStudentId(submission.detailsJson, submission.name))) {
+        throw new AppError("FORBIDDEN", "This assignment submission is outside your linked student scope.", 403);
+      }
+    } else if (!hasPermission(user, "academics:read")) {
+      throw new AppError("FORBIDDEN", "Academic access is required for this assignment submission.", 403);
+    }
+    return;
+  }
+  if (
+    entityType === "employee" &&
+    user.linkedEmployeeId !== entityId &&
+    !hasPermission(user, "hr:read")
+  ) {
+    throw new AppError("FORBIDDEN", "You may only access staff documents in your permitted HR scope.", 403);
+  }
   if (entityType === "student" && ["parent", "student", "teacher"].includes(user.role)) {
     await getStudentProfile(user, entityId);
   }

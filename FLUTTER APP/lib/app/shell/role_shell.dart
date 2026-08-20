@@ -60,6 +60,7 @@ class RoleShell extends ConsumerWidget {
       '/transport' => 'Transport',
       '/exams' => 'Exams & results',
       '/admissions' => 'Admissions',
+      '/approvals' => 'Approvals',
       '/finance' => 'Finance',
       '/hr' => 'People & payroll',
       '/people' => 'People directory',
