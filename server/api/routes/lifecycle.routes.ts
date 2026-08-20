@@ -13,6 +13,8 @@ import {
 import {
   createGuardianAndLink,
   createStudentRecord,
+  inviteGuardianPortalUser,
+  inviteStudentPortalUser,
   issueStudentCertificate,
   transferStudentEnrollment,
   unlinkGuardian,
@@ -80,7 +82,14 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     const input = parseApiBody(studentSchema, request.body);
     const row = await createStudentRecord(user, input);
     await auditCommand(user, { action: "create", module: "students", entityType: "student", entityId: row.id, campusId: row.campusId, after: row });
-    return apiCreated(reply, request, { id: row.id });
+    return apiCreated(reply, request, { id: row.id, student: row, invitations: (row as any).invitations });
+  });
+
+  app.post<{ Params: StudentParams }>("/students/:studentId/invite", { ...mutation, schema: routeSchema("Invite student to student portal") }, async (request, reply) => {
+    const user = requireApiPermission(request, "students:update");
+    const result = await inviteStudentPortalUser(user, request.params.studentId);
+    await auditCommand(user, { action: "create", module: "students", entityType: "student_portal_invite", entityId: request.params.studentId, after: { email: result.email } });
+    return apiCreated(reply, request, result);
   });
 
   app.patch<{ Params: IdParams; Body: unknown }>("/students/:id", { ...mutation, schema: routeSchema("Update a student") }, async (request) => {
@@ -97,6 +106,13 @@ export const lifecycleRoutes: FastifyPluginAsync = async (app) => {
     const result = await createGuardianAndLink(user, input);
     await auditCommand(user, { action: "create", module: "students", entityType: "guardian", entityId: result.guardian.id, campusId: result.guardian.campusId, after: { studentId: input.studentId, relationship: input.relationship, customRelationship: input.customRelationship, isPrimary: input.isPrimary, isEmergencyContact: input.isEmergencyContact, isBillingContact: input.isBillingContact } });
     return apiCreated(reply, request, { id: result.guardian.id });
+  });
+
+  app.post<{ Params: StudentParams & IdParams }>("/students/:studentId/guardians/:id/invite", { ...mutation, schema: routeSchema("Invite guardian to parent portal") }, async (request, reply) => {
+    const user = requireApiPermission(request, "students:update");
+    const result = await inviteGuardianPortalUser(user, request.params.studentId, request.params.id);
+    await auditCommand(user, { action: "create", module: "students", entityType: "guardian_portal_invite", entityId: request.params.id, after: { studentId: request.params.studentId, email: result.email } });
+    return apiCreated(reply, request, result);
   });
 
   app.patch<{ Params: StudentParams & IdParams; Body: unknown }>("/students/:studentId/guardians/:id", { ...mutation, schema: routeSchema("Update a student guardian") }, async (request) => {

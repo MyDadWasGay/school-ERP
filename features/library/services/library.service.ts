@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, gt, isNull, like, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  like,
+  or,
+  sql,
+} from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   digitalResources,
@@ -13,6 +24,7 @@ import { AppError } from "@/lib/errors/app-error";
 import type { CurrentUser } from "@/lib/auth/types";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { createId } from "@/lib/utils/ids";
+import { resolvePermittedStudentIds } from "@/features/students/services/students.service";
 import type {
   IssueLibraryCopyInput,
   LibraryCopyInput,
@@ -504,6 +516,9 @@ export async function renewLibraryCopy(
 }
 
 export async function listActiveLibraryIssues(user: CurrentUser) {
+  const permittedStudentIds = await resolvePermittedStudentIds(user);
+  if (permittedStudentIds !== undefined && permittedStudentIds.length === 0)
+    return [];
   const rows = await getDb()
     .select({
       id: libraryIssueTransactions.id,
@@ -537,6 +552,12 @@ export async function listActiveLibraryIssues(user: CurrentUser) {
           ? eq(libraryIssueTransactions.campusId, user.campusId)
           : undefined,
         eq(libraryIssueTransactions.status, "issued"),
+        permittedStudentIds
+          ? and(
+              eq(libraryIssueTransactions.borrowerType, "student"),
+              inArray(libraryIssueTransactions.borrowerId, permittedStudentIds),
+            )
+          : undefined,
       ),
     )
     .orderBy(desc(libraryIssueTransactions.dueAt))
@@ -549,6 +570,10 @@ export async function listActiveLibraryIssues(user: CurrentUser) {
 }
 
 export async function listLibraryBorrowers(user: CurrentUser) {
+  const permittedStudentIds = await resolvePermittedStudentIds(user);
+  if (permittedStudentIds !== undefined && permittedStudentIds.length === 0) {
+    return { students: [], users: [] };
+  }
   const [studentRows, userRows] = await Promise.all([
     getDb()
       .select({
@@ -561,22 +586,27 @@ export async function listLibraryBorrowers(user: CurrentUser) {
           eq(students.organizationId, user.organizationId),
           user.campusId ? eq(students.campusId, user.campusId) : undefined,
           eq(students.status, "active"),
+          permittedStudentIds
+            ? inArray(students.id, permittedStudentIds)
+            : undefined,
         ),
       )
       .orderBy(students.firstName)
       .limit(200),
-    getDb()
-      .select({ id: users.id, name: users.displayName })
-      .from(users)
-      .where(
-        and(
-          eq(users.organizationId, user.organizationId),
-          user.campusId ? eq(users.campusId, user.campusId) : undefined,
-          eq(users.status, "active"),
-        ),
-      )
-      .orderBy(users.displayName)
-      .limit(200),
+    permittedStudentIds !== undefined
+      ? Promise.resolve([])
+      : getDb()
+          .select({ id: users.id, name: users.displayName })
+          .from(users)
+          .where(
+            and(
+              eq(users.organizationId, user.organizationId),
+              user.campusId ? eq(users.campusId, user.campusId) : undefined,
+              eq(users.status, "active"),
+            ),
+          )
+          .orderBy(users.displayName)
+          .limit(200),
   ]);
   return { students: studentRows, users: userRows };
 }
@@ -597,6 +627,9 @@ export async function listLibraryReservations(user: CurrentUser) {
         eq(libraryReservations.organizationId, user.organizationId),
         user.campusId
           ? eq(libraryReservations.campusId, user.campusId)
+          : undefined,
+        user.role === "student" || user.role === "parent"
+          ? eq(libraryReservations.createdBy, user.id)
           : undefined,
       ),
     )

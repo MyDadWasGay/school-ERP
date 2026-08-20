@@ -3,16 +3,23 @@ import { EmptyState } from "@/components/common/empty-state";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/common/page-header";
-import type { ApiPortalSnapshot } from "@/lib/api-client/contracts";
+import type { ApiPortalSnapshot, ApiStudentProfile } from "@/lib/api-client/contracts";
+import { formatIndiaDate } from "@/lib/utils/india-time";
 
 export function PortalDashboard({
   displayName,
   portal,
   snapshot,
+  studentProfile,
+  unlinkedError,
+  linkedStudentId,
 }: {
   displayName: string;
   portal: "teacher" | "student" | "parent";
   snapshot: ApiPortalSnapshot;
+  studentProfile?: ApiStudentProfile | null;
+  unlinkedError?: string | null;
+  linkedStudentId?: string | null;
 }) {
   const title =
     portal === "parent"
@@ -20,18 +27,114 @@ export function PortalDashboard({
       : portal === "student"
         ? "Student dashboard"
         : "Teacher dashboard";
+
+  const primaryEnrollment = studentProfile?.enrollments?.[0];
+  const primaryGuardian = studentProfile?.guardians?.find((g) => g.isPrimary) ?? studentProfile?.guardians?.[0];
+
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={title}
         description={`Welcome, ${displayName}. Data is restricted to your ${portal === "teacher" ? "assigned classes and permissions" : "linked student scope"}.`}
       />
+
+      {portal === "student" && unlinkedError && !studentProfile ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+          <p className="font-semibold">Student Profile Not Linked</p>
+          <p className="mt-1">{unlinkedError}</p>
+        </div>
+      ) : null}
+
+      {portal === "student" && studentProfile?.student ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="md:col-span-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold">Student Master Record</CardTitle>
+                <StatusBadge status={studentProfile.student.status} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Full Name</p>
+                  <p className="font-medium">{studentProfile.student.firstName} {studentProfile.student.lastName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Admission Number</p>
+                  <p className="font-mono font-medium">{studentProfile.student.admissionNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Class & Section</p>
+                  <p className="font-medium">
+                    {primaryEnrollment ? `${primaryEnrollment.className ?? "Class"} - ${primaryEnrollment.sectionName ?? "Section"}` : "No enrollment record"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Roll Number</p>
+                  <p className="font-medium">{primaryEnrollment?.rollNumber || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Campus</p>
+                  <p className="font-medium">{studentProfile.campusName || "Main Campus"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Date of Birth</p>
+                  <p className="font-medium">{studentProfile.student.dateOfBirth ? formatIndiaDate(studentProfile.student.dateOfBirth) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Gender</p>
+                  <p className="font-medium capitalize">{studentProfile.student.gender ? studentProfile.student.gender.replaceAll("_", " ") : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Blood Group</p>
+                  <p className="font-medium">{studentProfile.student.bloodGroup || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Contact Email</p>
+                  <p className="font-medium">{studentProfile.student.email || "—"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Guardian Information</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              {primaryGuardian ? (
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Primary Guardian</p>
+                    <p className="font-medium">{primaryGuardian.firstName} {primaryGuardian.lastName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Relationship</p>
+                    <p className="font-medium capitalize">{primaryGuardian.relationship.replaceAll("_", " ")}</p>
+                  </div>
+                  {primaryGuardian.phone ? (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Emergency Contact</p>
+                      <p className="font-medium">{primaryGuardian.phone}</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-xs">No guardian records linked.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <div
         role="note"
-        className="mb-6 rounded-md border border-dashed p-3 text-sm text-muted-foreground"
+        className="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
       >
         {snapshot.offlineNote}
       </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {snapshot.metrics.map((metric) => (
           <Link key={metric.href} href={metric.href}>
@@ -49,7 +152,8 @@ export function PortalDashboard({
           </Link>
         ))}
       </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>

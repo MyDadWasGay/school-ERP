@@ -57,6 +57,7 @@ export async function listAttendancePage(
   const [rows, totals] = await Promise.all([
     getDb().select({
       id: studentAttendanceRecords.id,
+      studentId: studentAttendanceRecords.studentId,
       firstName: students.firstName,
       lastName: students.lastName,
       state: studentAttendanceRecords.state,
@@ -77,6 +78,7 @@ export async function listAttendancePage(
   return {
     rows: rows.map((row) => ({
       id: row.id,
+      studentId: row.studentId,
       student: `${row.firstName} ${row.lastName}`,
       state: row.state,
       period: row.period,

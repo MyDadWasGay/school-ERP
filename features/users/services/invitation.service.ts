@@ -1,9 +1,10 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLogs, invitationTokens, organizations, users } from "@/db/schema";
+import { auditLogs, invitationTokens, organizations, students, users } from "@/db/schema";
 import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { AppError } from "@/lib/errors/app-error";
-import { hashInvitationToken } from "@/lib/auth/invitation-token";
+import { createInvitationToken, hashInvitationToken, invitationUrl } from "@/lib/auth/invitation-token";
+import type { CurrentUser } from "@/lib/auth/types";
 import type { InvitationAcceptInput } from "../schemas/invitation.schema";
 
 async function findInvitation(rawToken: string) {
@@ -53,11 +54,33 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
         eq(invitationTokens.status, "processing"),
       )).returning();
       if (!accepted) throw new AppError("CONFLICT", "This invitation could not be completed.", 409);
-      await tx.update(users).set({ status: "active", emailVerified: false, updatedAt: now, updatedBy: invitation.user.id }).where(and(
+
+      let resolvedLinkedStudentId = invitation.user.linkedStudentId;
+      if (invitation.user.role === "student" && !resolvedLinkedStudentId) {
+        const matchingStudents = await tx
+          .select({ id: students.id })
+          .from(students)
+          .where(and(
+            eq(students.organizationId, invitation.user.organizationId),
+            sql`lower(${students.email}) = lower(${invitation.user.email})`,
+          ));
+        if (matchingStudents.length === 1) {
+          resolvedLinkedStudentId = matchingStudents[0].id;
+        }
+      }
+
+      await tx.update(users).set({
+        status: "active",
+        linkedStudentId: resolvedLinkedStudentId || null,
+        emailVerified: false,
+        updatedAt: now,
+        updatedBy: invitation.user.id,
+      }).where(and(
         eq(users.id, invitation.user.id),
         eq(users.organizationId, invitation.user.organizationId),
         eq(users.status, "invited"),
       ));
+
       await tx.insert(auditLogs).values({
         organizationId: invitation.user.organizationId,
         campusId: invitation.user.campusId,
@@ -67,14 +90,62 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
         module: "users",
         entityType: "user_invitation",
         entityId: invitation.user.id,
-        metadataJson: JSON.stringify({ invitationId: invitation.row.id }),
+        metadataJson: JSON.stringify({ invitationId: invitation.row.id, linkedStudentId: resolvedLinkedStudentId }),
         createdBy: invitation.user.id,
         updatedBy: invitation.user.id,
       });
+
+      if (resolvedLinkedStudentId && resolvedLinkedStudentId !== invitation.user.linkedStudentId) {
+        await tx.insert(auditLogs).values({
+          organizationId: invitation.user.organizationId,
+          campusId: invitation.user.campusId,
+          actorUserId: invitation.user.id,
+          actorRole: invitation.user.role,
+          action: "user_linked_to_student",
+          module: "users",
+          entityType: "user",
+          entityId: invitation.user.id,
+          metadataJson: JSON.stringify({ studentId: resolvedLinkedStudentId }),
+          createdBy: invitation.user.id,
+          updatedBy: invitation.user.id,
+        });
+      }
     });
     return { email: invitation.user.email, displayName: invitation.user.displayName, verificationLink };
   } catch (error) {
     await getDb().update(invitationTokens).set({ status: "active", updatedAt: new Date(), updatedBy: invitation.user.id }).where(and(eq(invitationTokens.id, claimed.id), eq(invitationTokens.status, "processing"))).catch(() => undefined);
     throw error;
   }
+}
+
+export async function reissueInvitation(actor: CurrentUser, userId: string) {
+  const user = await getDb().query.users.findFirst({
+    where: and(
+      eq(users.id, userId),
+      eq(users.organizationId, actor.organizationId),
+    ),
+  });
+  if (!user) throw new AppError("NOT_FOUND", "User not found.", 404);
+  if (user.status !== "invited") {
+    throw new AppError("CONFLICT", "Only invited users can be re-issued an invitation.", 409);
+  }
+  const invitation = createInvitationToken();
+  const invitationExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 48);
+  await getDb().transaction(async (tx) => {
+    await tx.update(invitationTokens).set({ status: "archived", revokedAt: new Date(), updatedBy: actor.id }).where(and(
+      eq(invitationTokens.userId, user.id),
+      eq(invitationTokens.organizationId, actor.organizationId),
+      eq(invitationTokens.status, "active"),
+    ));
+    await tx.insert(invitationTokens).values({
+      organizationId: actor.organizationId,
+      campusId: user.campusId,
+      userId: user.id,
+      tokenHash: invitation.tokenHash,
+      expiresAt: invitationExpiresAt,
+      createdBy: actor.id,
+      updatedBy: actor.id,
+    });
+  });
+  return { userId: user.id, email: user.email, inviteLink: invitationUrl(invitation.rawToken), invitationExpiresAt };
 }

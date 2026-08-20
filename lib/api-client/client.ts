@@ -251,6 +251,10 @@ export class SchoolErpApiClient {
     return (await this.get<ApiStudentProfile>(studentPath(studentId))).data;
   }
 
+  async getMyStudentProfile() {
+    return (await this.get<ApiStudentProfile>("/api/v1/students/me")).data;
+  }
+
   async getStudentAttendance(studentId: string, pagination?: ApiPagination) {
     return (
       await this.get<ApiStudentAttendance>(

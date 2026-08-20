@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   academicYears,
@@ -13,6 +13,7 @@ import {
   studentMedicalProfiles,
   students,
   studentTimelineEvents,
+  users,
 } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import { normalizePagination } from "@/lib/utils/pagination";
@@ -20,6 +21,9 @@ import type { CurrentUser } from "@/lib/auth/types";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { createId } from "@/lib/utils/ids";
 import { normalizeIndiaCalendarDate } from "@/lib/utils/india-time";
+import { provisionUser } from "@/features/users/services/provision.service";
+import { reissueInvitation } from "@/features/users/services/invitation.service";
+import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import type {
   CertificateIssueInput,
   EnrollmentTransferInput,
@@ -204,9 +208,42 @@ export async function getStudentFormOptions(
 
 export async function resolvePermittedStudentIds(user: CurrentUser) {
   let permittedIds: string[] | undefined;
-  if (user.role === "student")
+  if (user.role === "student") {
+    if (!user.linkedStudentId && user.email) {
+      const matchingStudents = await getDb()
+        .select({ id: students.id })
+        .from(students)
+        .where(and(
+          eq(students.organizationId, user.organizationId),
+          sql`lower(${students.email}) = lower(${user.email})`,
+        ));
+      if (matchingStudents.length === 1) {
+        user.linkedStudentId = matchingStudents[0].id;
+        await getDb()
+          .update(users)
+          .set({ linkedStudentId: user.linkedStudentId, updatedAt: new Date() })
+          .where(eq(users.id, user.id));
+      }
+    }
     permittedIds = user.linkedStudentId ? [user.linkedStudentId] : [];
+  }
   if (user.role === "parent") {
+    if (!user.linkedGuardianId && user.email) {
+      const matchingGuardians = await getDb()
+        .select({ id: guardians.id })
+        .from(guardians)
+        .where(and(
+          eq(guardians.organizationId, user.organizationId),
+          eq(guardians.emailNormalized, user.email.trim().toLowerCase()),
+        ));
+      if (matchingGuardians.length === 1) {
+        user.linkedGuardianId = matchingGuardians[0].id;
+        await getDb()
+          .update(users)
+          .set({ linkedGuardianId: user.linkedGuardianId, updatedAt: new Date() })
+          .where(eq(users.id, user.id));
+      }
+    }
     if (!user.linkedGuardianId) permittedIds = [];
     else {
       const links = await getDb()
@@ -441,7 +478,7 @@ export async function createStudentRecord(
         );
     }
   }
-  return getDb().transaction(async (tx) => {
+  const { student, guardian } = await getDb().transaction(async (tx) => {
     const [student] = await tx
       .insert(students)
       .values({
@@ -472,6 +509,7 @@ export async function createStudentRecord(
         updatedBy: user.id,
       });
     }
+    let savedGuardian: typeof guardians.$inferSelect | undefined;
     if (input.guardian) {
       const guardianEmail = normalizeGuardianEmail(input.guardian.email);
       const guardianPhone = normalizeGuardianPhone(input.guardian.phone);
@@ -486,7 +524,7 @@ export async function createStudentRecord(
       if (existingGuardian && existingGuardian.campusId && existingGuardian.campusId !== input.campusId && !hasPermission(user, "organizations:update")) {
         throw new AppError("FORBIDDEN", "Guardian is outside the selected campus.", 403);
       }
-      const guardian =
+      savedGuardian =
         existingGuardian ??
         (
           await tx
@@ -505,12 +543,12 @@ export async function createStudentRecord(
             })
             .returning()
         )[0];
-      if (!guardian) throw new AppError("DATABASE_ERROR", "Guardian could not be saved.", 500);
+      if (!savedGuardian) throw new AppError("DATABASE_ERROR", "Guardian could not be saved.", 500);
       await tx.insert(studentGuardianLinks).values({
         organizationId: user.organizationId,
         campusId: input.campusId,
         studentId: student.id,
-        guardianId: guardian.id,
+        guardianId: savedGuardian.id,
         relationship: input.guardian.relationship,
         customRelationship: input.guardian.customRelationship || undefined,
         isPrimary: true,
@@ -528,14 +566,60 @@ export async function createStudentRecord(
       createdBy: user.id,
       updatedBy: user.id,
     });
-    return student;
+    return { student, guardian: savedGuardian };
   });
+
+  let studentInvitation: { email: string; inviteLink: string; expiresAt: Date } | undefined;
+  let guardianInvitation: { email: string; inviteLink: string; expiresAt: Date } | undefined;
+
+  if (input.inviteStudent && input.email) {
+    try {
+      const invite = await provisionUser(user, {
+        email: input.email,
+        displayName: `${input.firstName} ${input.lastName}`,
+        role: "student",
+        campusId: input.campusId,
+        linkedStudentId: student.id,
+      });
+      studentInvitation = { email: input.email, inviteLink: invite.inviteLink, expiresAt: invite.invitationExpiresAt };
+    } catch {
+      // Non-blocking for student creation
+    }
+  }
+
+  if (input.inviteGuardian && input.guardian?.email && guardian) {
+    try {
+      const invite = await provisionUser(user, {
+        email: input.guardian.email,
+        displayName: `${input.guardian.firstName} ${input.guardian.lastName}`,
+        role: "parent",
+        campusId: input.campusId,
+        linkedGuardianId: guardian.id,
+      });
+      guardianInvitation = { email: input.guardian.email, inviteLink: invite.inviteLink, expiresAt: invite.invitationExpiresAt };
+    } catch {
+      // Non-blocking for student creation
+    }
+  }
+
+  return {
+    ...student,
+    invitations: {
+      student: studentInvitation,
+      guardian: guardianInvitation,
+    },
+  };
 }
 
 export async function getStudentProfile(user: CurrentUser, studentId: string) {
   const student = await getReadableStudent(user, studentId);
-  const [guardianRows, enrollmentRows, timelineRows, certificateRows] =
-    await Promise.all([
+  const [
+    guardianRows,
+    enrollmentRows,
+    timelineRows,
+    certificateRows,
+    campusRows,
+  ] = await Promise.all([
       getDb()
         .select({
           id: guardians.id,
@@ -568,8 +652,34 @@ export async function getStudentProfile(user: CurrentUser, studentId: string) {
           ),
         ),
       getDb()
-        .select()
+        .select({
+          id: enrollments.id,
+          academicYearId: enrollments.academicYearId,
+          classId: enrollments.classId,
+          sectionId: enrollments.sectionId,
+          rollNumber: enrollments.rollNumber,
+          startsOn: enrollments.startsOn,
+          endsOn: enrollments.endsOn,
+          status: enrollments.status,
+          className: classes.name,
+          sectionName: sections.name,
+        })
         .from(enrollments)
+        .leftJoin(
+          classes,
+          and(
+            eq(classes.id, enrollments.classId),
+            eq(classes.organizationId, user.organizationId),
+          ),
+        )
+        .leftJoin(
+          sections,
+          and(
+            eq(sections.id, enrollments.sectionId),
+            eq(sections.classId, enrollments.classId),
+            eq(sections.organizationId, user.organizationId),
+          ),
+        )
         .where(
           and(
             eq(enrollments.organizationId, user.organizationId),
@@ -598,14 +708,232 @@ export async function getStudentProfile(user: CurrentUser, studentId: string) {
           ),
         )
         .orderBy(desc(studentCertificates.issuedAt)),
+      getDb()
+        .select({ name: campuses.name })
+        .from(campuses)
+        .where(
+          and(
+            eq(campuses.id, student.campusId ?? "__no_campus__"),
+            eq(campuses.organizationId, user.organizationId),
+          ),
+        )
+        .limit(1),
+      student.email
+        ? getDb().query.users.findFirst({
+            where: and(
+              eq(users.organizationId, user.organizationId),
+              or(eq(users.linkedStudentId, student.id), eq(users.email, student.email)),
+            ),
+          })
+        : Promise.resolve(undefined),
+      guardianRows.length > 0
+        ? getDb()
+            .select({
+              id: users.id,
+              email: users.email,
+              status: users.status,
+              linkedGuardianId: users.linkedGuardianId,
+            })
+            .from(users)
+            .where(
+              and(
+                eq(users.organizationId, user.organizationId),
+                inArray(
+                  users.linkedGuardianId,
+                  guardianRows.map((g) => g.id),
+                ),
+              ),
+            )
+        : Promise.resolve([]),
     ]);
+
+  const guardianUsersMap = new Map<string, { id: string; email: string; status: string }>();
+  for (const gu of guardianUserRows) {
+    if (gu.linkedGuardianId) {
+      guardianUsersMap.set(gu.linkedGuardianId, gu);
+    }
+  }
+
+  const enrichedGuardians = guardianRows.map((g) => ({
+    ...g,
+    portalUser: guardianUsersMap.get(g.id) ?? null,
+  }));
+
   return {
     student,
-    guardians: guardianRows,
+    studentPortalUser: studentUser ? { id: studentUser.id, email: studentUser.email, status: studentUser.status } : null,
+    campusName: campusRows[0]?.name ?? null,
+    guardians: enrichedGuardians,
     enrollments: enrollmentRows,
     timeline: timelineRows,
     certificates: certificateRows,
   };
+}
+
+export async function getMyStudentProfile(user: CurrentUser) {
+  let studentId = user.linkedStudentId;
+  if (!studentId && user.role === "student") {
+    const matchingStudents = await getDb()
+      .select({ id: students.id })
+      .from(students)
+      .where(and(
+        eq(students.organizationId, user.organizationId),
+        sql`lower(${students.email}) = lower(${user.email})`,
+      ));
+    if (matchingStudents.length === 1) {
+      studentId = matchingStudents[0].id;
+      await getDb()
+        .update(users)
+        .set({ linkedStudentId: studentId, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+      user.linkedStudentId = studentId;
+    }
+  }
+
+  if (!studentId) {
+    throw new AppError(
+      "NOT_FOUND",
+      "Your account is active, but your student profile has not been linked yet. Please contact your school administrator.",
+      404,
+      "STUDENT_NOT_LINKED",
+    );
+  }
+
+  const profile = await getStudentProfile(user, studentId);
+  return {
+    student: {
+      id: profile.student.id,
+      admissionNumber: profile.student.admissionNumber,
+      firstName: profile.student.firstName,
+      lastName: profile.student.lastName,
+      dateOfBirth: profile.student.dateOfBirth,
+      gender: profile.student.gender,
+      email: profile.student.email,
+      phone: profile.student.phone,
+      photoUrl: profile.student.photoUrl,
+      bloodGroup: profile.student.bloodGroup,
+      campusId: profile.student.campusId,
+      campusName: profile.campusName,
+      joinedOn: profile.student.joinedOn,
+      status: profile.student.status,
+    },
+    campusName: profile.campusName,
+    guardians: profile.guardians.map((g) => ({
+      id: g.id,
+      firstName: g.firstName,
+      lastName: g.lastName,
+      relationship: g.relationship,
+      customRelationship: g.customRelationship,
+      isPrimary: g.isPrimary,
+      isEmergencyContact: g.isEmergencyContact,
+      isBillingContact: g.isBillingContact,
+      phone: g.phone,
+    })),
+    enrollments: profile.enrollments.map((e) => ({
+      id: e.id,
+      academicYearId: e.academicYearId,
+      classId: e.classId,
+      sectionId: e.sectionId,
+      rollNumber: e.rollNumber,
+      startsOn: e.startsOn,
+      endsOn: e.endsOn,
+      className: e.className,
+      sectionName: e.sectionName,
+      status: e.status,
+    })),
+    timeline: profile.timeline.map((t) => ({
+      id: t.id,
+      eventType: t.eventType,
+      title: t.title,
+      occurredAt: t.occurredAt,
+      status: t.status,
+    })),
+    certificates: profile.certificates.map((c) => ({
+      id: c.id,
+      certificateNumber: c.certificateNumber,
+      certificateType: c.certificateType,
+      verificationCode: c.verificationCode,
+      issuedAt: c.issuedAt,
+      status: c.status,
+    })),
+  };
+}
+
+export async function inviteStudentPortalUser(user: CurrentUser, studentId: string) {
+  const student = await getReadableStudent(user, studentId);
+  if (!student.email) {
+    throw new AppError("VALIDATION_ERROR", "Student must have an email address to receive an invitation.", 422);
+  }
+  const existingUser = await getDb().query.users.findFirst({
+    where: and(
+      eq(users.organizationId, user.organizationId),
+      or(eq(users.linkedStudentId, student.id), eq(users.email, student.email)),
+    ),
+  });
+  if (existingUser) {
+    if (existingUser.status === "active") {
+      throw new AppError("CONFLICT", "This student already has an active portal account.", 409);
+    }
+    if (existingUser.status === "invited") {
+      const renewed = await reissueInvitation(user, existingUser.id);
+      return { email: student.email, inviteLink: renewed.inviteLink, expiresAt: renewed.invitationExpiresAt };
+    }
+    throw new AppError("CONFLICT", `User account is currently ${existingUser.status}.`, 409);
+  }
+  const invite = await provisionUser(user, {
+    email: student.email,
+    displayName: `${student.firstName} ${student.lastName}`,
+    role: "student",
+    campusId: student.campusId,
+    linkedStudentId: student.id,
+  });
+  return { email: student.email, inviteLink: invite.inviteLink, expiresAt: invite.invitationExpiresAt };
+}
+
+export async function inviteGuardianPortalUser(user: CurrentUser, studentId: string, guardianId: string) {
+  const student = await getReadableStudent(user, studentId);
+  const link = await getDb().query.studentGuardianLinks.findFirst({
+    where: and(
+      eq(studentGuardianLinks.organizationId, user.organizationId),
+      eq(studentGuardianLinks.studentId, student.id),
+      eq(studentGuardianLinks.guardianId, guardianId),
+    ),
+  });
+  if (!link) throw new AppError("NOT_FOUND", "Guardian is not linked to this student.", 404);
+  const guardian = await getDb().query.guardians.findFirst({
+    where: and(
+      eq(guardians.id, guardianId),
+      eq(guardians.organizationId, user.organizationId),
+    ),
+  });
+  if (!guardian) throw new AppError("NOT_FOUND", "Guardian not found.", 404);
+  if (!guardian.email) {
+    throw new AppError("VALIDATION_ERROR", "Guardian must have an email address to receive an invitation.", 422);
+  }
+  const existingUser = await getDb().query.users.findFirst({
+    where: and(
+      eq(users.organizationId, user.organizationId),
+      or(eq(users.linkedGuardianId, guardian.id), eq(users.email, guardian.email)),
+    ),
+  });
+  if (existingUser) {
+    if (existingUser.status === "active") {
+      throw new AppError("CONFLICT", "This guardian already has an active portal account.", 409);
+    }
+    if (existingUser.status === "invited") {
+      const renewed = await reissueInvitation(user, existingUser.id);
+      return { email: guardian.email, inviteLink: renewed.inviteLink, expiresAt: renewed.invitationExpiresAt };
+    }
+    throw new AppError("CONFLICT", `User account is currently ${existingUser.status}.`, 409);
+  }
+  const invite = await provisionUser(user, {
+    email: guardian.email,
+    displayName: `${guardian.firstName} ${guardian.lastName}`,
+    role: "parent",
+    campusId: student.campusId,
+    linkedGuardianId: guardian.id,
+  });
+  return { email: guardian.email, inviteLink: invite.inviteLink, expiresAt: invite.invitationExpiresAt };
 }
 
 export async function updateStudentRecord(
@@ -613,6 +941,9 @@ export async function updateStudentRecord(
   input: StudentUpdateInput,
 ) {
   const existing = await getReadableStudent(user, input.id);
+  const normalizedNewEmail = input.email?.trim().toLowerCase() || null;
+  const auth = getFirebaseAdminAuth();
+
   return getDb().transaction(async (tx) => {
     const [updated] = await tx
       .update(students)
@@ -620,7 +951,7 @@ export async function updateStudentRecord(
         firstName: input.firstName,
         lastName: input.lastName,
         gender: input.gender || null,
-        email: input.email || null,
+        email: normalizedNewEmail,
         phone: input.phone || null,
         status: input.status,
         updatedAt: new Date(),
@@ -633,6 +964,7 @@ export async function updateStudentRecord(
         ),
       )
       .returning();
+
     if (existing.status !== updated.status) {
       await tx.insert(studentTimelineEvents).values({
         organizationId: user.organizationId,
@@ -644,7 +976,62 @@ export async function updateStudentRecord(
         createdBy: user.id,
         updatedBy: user.id,
       });
+
+      // Synchronize portal user status if a linked user exists
+      const linkedUser = await tx.query.users.findFirst({
+        where: and(
+          eq(users.organizationId, user.organizationId),
+          eq(users.linkedStudentId, existing.id),
+        ),
+      });
+
+      if (linkedUser) {
+        const nextUserStatus = updated.status === "active" ? "active" : "inactive";
+        await tx
+          .update(users)
+          .set({ status: nextUserStatus, updatedAt: new Date(), updatedBy: user.id })
+          .where(eq(users.id, linkedUser.id));
+
+        if (auth && linkedUser.firebaseUid) {
+          await auth
+            .updateUser(linkedUser.firebaseUid, { disabled: updated.status !== "active" })
+            .catch(() => undefined);
+        }
+      }
     }
+
+    // Synchronize email change to linked user if applicable
+    if (normalizedNewEmail && existing.email !== normalizedNewEmail) {
+      const linkedUser = await tx.query.users.findFirst({
+        where: and(
+          eq(users.organizationId, user.organizationId),
+          eq(users.linkedStudentId, existing.id),
+        ),
+      });
+
+      if (linkedUser && linkedUser.email !== normalizedNewEmail) {
+        const conflictingUser = await tx.query.users.findFirst({
+          where: and(
+            eq(users.organizationId, user.organizationId),
+            sql`lower(${users.email}) = ${normalizedNewEmail}`,
+          ),
+        });
+
+        if (!conflictingUser) {
+          await tx
+            .update(users)
+            .set({ email: normalizedNewEmail, updatedAt: new Date(), updatedBy: user.id })
+            .where(eq(users.id, linkedUser.id));
+
+          if (auth && linkedUser.firebaseUid) {
+            await auth
+              .updateUser(linkedUser.firebaseUid, { email: normalizedNewEmail })
+              .catch(() => undefined);
+          }
+        }
+      }
+    }
+
     return { existing, updated };
   });
 }

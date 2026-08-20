@@ -110,6 +110,7 @@ describe("shared student data API", () => {
         joinedOn: new Date("2025-06-01T00:00:00.000Z"),
         status: "active",
       },
+      campusName: "Main Campus",
       guardians: [
         {
           id: "guardian-1",
@@ -126,6 +127,8 @@ describe("shared student data API", () => {
           academicYearId: "year-1",
           classId: "class-1",
           sectionId: "section-1",
+          className: "Class 5",
+          sectionName: "A",
           rollNumber: "10",
           startsOn: new Date("2025-06-01T00:00:00.000Z"),
           endsOn: null,
@@ -176,8 +179,13 @@ describe("shared student data API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       data: {
-        student: { id: "student-1", admissionNumber: "ADM-1" },
+        student: {
+          id: "student-1",
+          admissionNumber: "ADM-1",
+          campusName: "Main Campus",
+        },
         guardians: [{ id: "guardian-1", isPrimary: true }],
+        enrollments: [{ className: "Class 5", sectionName: "A" }],
       },
     });
     expect(response.json().data.student).not.toHaveProperty("organizationId");

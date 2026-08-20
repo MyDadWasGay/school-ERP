@@ -3,7 +3,14 @@ import { auditColumns, idColumn, tenantColumns, statusColumn } from "./shared";
 
 export const users = sqliteTable("users", {
   id: idColumn("user"), firebaseUid: text("firebase_uid").notNull(), ...tenantColumns(), email: text("email").notNull(), displayName: text("display_name").notNull(), role: text("role").notNull(), linkedStudentId: text("linked_student_id"), linkedEmployeeId: text("linked_employee_id"), linkedGuardianId: text("linked_guardian_id"), emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false), ...auditColumns(), status: statusColumn(),
-}, (table) => [uniqueIndex("users_firebase_uid_unique").on(table.firebaseUid), index("users_org_idx").on(table.organizationId), index("users_email_idx").on(table.email)]);
+}, (table) => [
+  uniqueIndex("users_firebase_uid_unique").on(table.firebaseUid),
+  index("users_org_idx").on(table.organizationId),
+  index("users_email_idx").on(table.email),
+  index("users_linked_student_idx").on(table.organizationId, table.linkedStudentId),
+  index("users_linked_guardian_idx").on(table.organizationId, table.linkedGuardianId),
+  index("users_linked_employee_idx").on(table.organizationId, table.linkedEmployeeId),
+]);
 
 /** Platform identities intentionally have no organization boundary. */
 export const platformAdmins = sqliteTable("platform_admins", {

@@ -86,6 +86,8 @@ export const studentSchema = z.object({
   classId: z.string().trim().min(1).optional().or(z.literal("")),
   sectionId: z.string().trim().min(1).optional().or(z.literal("")),
   rollNumber: z.string().trim().max(30).optional(),
+  inviteStudent: z.boolean().optional(),
+  inviteGuardian: z.boolean().optional(),
   guardian: requireCustomRelationship(guardianDetailsFields.pick({
     firstName: true,
     lastName: true,
@@ -131,6 +133,17 @@ export const guardianUnlinkSchema = z.object({
   guardianId: z.string().min(1),
 });
 export type GuardianUnlinkInput = z.infer<typeof guardianUnlinkSchema>;
+
+export const inviteStudentSchema = z.object({
+  studentId: z.string().min(1),
+});
+export type InviteStudentInput = z.infer<typeof inviteStudentSchema>;
+
+export const inviteGuardianSchema = z.object({
+  studentId: z.string().min(1),
+  guardianId: z.string().min(1),
+});
+export type InviteGuardianInput = z.infer<typeof inviteGuardianSchema>;
 
 export const enrollmentTransferSchema = z.object({
   studentId: z.string().min(1),

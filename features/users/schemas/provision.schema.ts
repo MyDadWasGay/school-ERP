@@ -6,5 +6,8 @@ export const provisionUserSchema = z.object({
   displayName: z.string().trim().min(2, "Enter the person’s name.").max(120),
   role: z.enum(provisionRoles),
   campusId: z.string().trim().min(1, "Choose a campus."),
+  linkedStudentId: z.string().trim().optional(),
+  linkedGuardianId: z.string().trim().optional(),
+  linkedEmployeeId: z.string().trim().optional(),
 });
 export type ProvisionUserInput = z.infer<typeof provisionUserSchema>;

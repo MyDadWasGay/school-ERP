@@ -31,7 +31,7 @@ class StudentOverviewScreen extends ConsumerWidget {
       }
     }
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Column(
         children: [
           if (portal != null && portal.students.isNotEmpty)

@@ -14,3 +14,8 @@ authorized campuses. No web-specific bearer bridge is accepted.
 campus, and CSRF cookies. `POST /api/v1/auth/campus` changes the active campus
 only after the server confirms that the campus is in the authenticated user's
 scope.
+
+Native clients call bearer-authenticated `POST /api/v1/auth/revoke` before local
+sign-out. The API revokes the authenticated Firebase user's refresh tokens and
+writes an audit event; the client must still clear its local Firebase session if
+the network is unavailable.

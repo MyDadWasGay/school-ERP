@@ -19,13 +19,17 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
   const [open, setOpen] = useState(initiallyOpen);
   const [addGuardian, setAddGuardian] = useState(false);
   const [result, setResult] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState("");
   const [createdStudentId, setCreatedStudentId] = useState<string>();
+  const [invitations, setInvitations] = useState<{ student?: { email: string; inviteLink: string }; guardian?: { email: string; inviteLink: string } }>();
   const form = useForm<StudentInput>({
     resolver: zodResolver(studentSchema) as Resolver<StudentInput>,
-    defaultValues: { ...defaultStudentValues, campusId: options.campuses[0]?.id ?? "" },
+    defaultValues: { ...defaultStudentValues, campusId: options.campuses[0]?.id ?? "", inviteStudent: true, inviteGuardian: true },
   });
   const campusId = form.watch("campusId");
   const classId = form.watch("classId");
+  const studentEmail = form.watch("email");
+  const guardianEmail = form.watch("guardian.email");
   const guardianRelationship = form.watch("guardian.relationship");
   const availableYears = options.academicYears.filter((year) => !year.campusId || year.campusId === campusId);
   const availableClasses = options.classes.filter((classRow) => !classRow.campusId || classRow.campusId === campusId);
@@ -38,12 +42,24 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
 
   function openCreate() {
     setResult("");
+    setCopyFeedback("");
+    setInvitations(undefined);
     setCreatedStudentId(undefined);
     setOpen(true);
   }
 
+  async function copyInvite(link: string, label: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      await navigator.clipboard.writeText(link);
+      setCopyFeedback(`${label} link copied to clipboard.`);
+      setTimeout(() => setCopyFeedback(""), 4000);
+    }
+  }
+
   const submit = form.handleSubmit(async (values) => {
     setResult("");
+    setCopyFeedback("");
+    setInvitations(undefined);
     const response = await createStudentAction(values);
     if (!response.ok) {
       setResult(response.error);
@@ -54,13 +70,33 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
     }
     setResult(response.message ?? "Student created.");
     setCreatedStudentId(response.data.id);
-    form.reset({ ...defaultStudentValues, campusId: options.campuses[0]?.id ?? "" });
+    setInvitations(response.data.invitations);
+    form.reset({ ...defaultStudentValues, campusId: options.campuses[0]?.id ?? "", inviteStudent: true, inviteGuardian: true });
     setAddGuardian(false);
     setOpen(false);
   });
 
   if (!open) return <div className="mb-6 space-y-3">
-    {result ? <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900" role="status"><p className="font-medium">{result}</p><div className="mt-3 flex flex-wrap gap-2"><ButtonLink href="/students" variant="outline" size="sm">Return to students</ButtonLink>{createdStudentId ? <ButtonLink href={`/students/${createdStudentId}`} size="sm">Open student profile</ButtonLink> : null}<Button type="button" size="sm" variant="ghost" onClick={openCreate}>Create another</Button></div></div> : <Button onClick={openCreate}>New student</Button>}
+    {result ? <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
+      <p className="font-semibold">{result}</p>
+      {invitations?.student?.inviteLink || invitations?.guardian?.inviteLink ? <div className="my-3 space-y-2 rounded-md border border-emerald-200 bg-white p-3 text-card-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Portal Activation Links</p>
+        {invitations.student?.inviteLink ? <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0 last:pb-0">
+          <div><p className="font-medium">Student Portal ({invitations.student.email})</p><p className="text-xs text-muted-foreground">One-time 48-hour activation link</p></div>
+          <Button type="button" size="sm" variant="outline" onClick={() => copyInvite(invitations.student!.inviteLink, "Student activation")}>Copy Student Link</Button>
+        </div> : null}
+        {invitations.guardian?.inviteLink ? <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div><p className="font-medium">Parent Portal ({invitations.guardian.email})</p><p className="text-xs text-muted-foreground">One-time 48-hour activation link</p></div>
+          <Button type="button" size="sm" variant="outline" onClick={() => copyInvite(invitations.guardian!.inviteLink, "Parent activation")}>Copy Parent Link</Button>
+        </div> : null}
+        {copyFeedback ? <p className="text-xs font-medium text-emerald-700">{copyFeedback}</p> : null}
+      </div> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <ButtonLink href="/students" variant="outline" size="sm">Return to students</ButtonLink>
+        {createdStudentId ? <ButtonLink href={`/students/${createdStudentId}`} size="sm">Open student profile</ButtonLink> : null}
+        <Button type="button" size="sm" variant="ghost" onClick={openCreate}>Create another</Button>
+      </div>
+    </div> : <Button onClick={openCreate}>New student</Button>}
   </div>;
 
   return <form onSubmit={submit} className="mb-6 space-y-5 rounded-lg border bg-muted/20 p-4" noValidate>
@@ -98,6 +134,7 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
         <FormField label="Email" error={form.formState.errors.email?.message}><Input type="email" {...form.register("email")} /></FormField>
         <FormField label="Phone" error={form.formState.errors.phone?.message}><Input type="tel" {...form.register("phone")} /></FormField>
       </div>
+      {studentEmail ? <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" {...form.register("inviteStudent")} /> Invite student to Student Portal immediately</label> : null}
     </fieldset>
 
     <div>
@@ -109,7 +146,9 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
         {guardianRelationship === "other" ? <FormField label="Specify relationship" error={form.formState.errors.guardian?.customRelationship?.message}><Input {...form.register("guardian.customRelationship")} placeholder="For example, Grandmother" /></FormField> : null}
         <FormField label="Email" error={form.formState.errors.guardian?.email?.message}><Input type="email" {...form.register("guardian.email")} /></FormField>
         <FormField label="Phone" error={form.formState.errors.guardian?.phone?.message}><Input type="tel" {...form.register("guardian.phone")} /></FormField>
-      </div></fieldset> : null}
+      </div>
+      {guardianEmail ? <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" {...form.register("inviteGuardian")} /> Invite guardian to Parent Portal immediately</label> : null}
+      </fieldset> : null}
     </div>
 
     {!options.campuses.length ? <p className="text-sm text-red-600" role="alert">No active campuses are available. Create a campus before adding students.</p> : null}

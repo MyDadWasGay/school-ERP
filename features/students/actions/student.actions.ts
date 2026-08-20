@@ -1,3 +1,3 @@
 "use client";
 
-export { createStudentAction, updateStudentAction, createGuardianAction, updateGuardianAction, unlinkGuardianAction, transferEnrollmentAction, updateMedicalProfileAction, issueCertificateAction } from "@/lib/api-client/actions";
+export { createStudentAction, updateStudentAction, createGuardianAction, updateGuardianAction, unlinkGuardianAction, transferEnrollmentAction, updateMedicalProfileAction, issueCertificateAction, inviteStudentAction, inviteGuardianAction } from "@/lib/api-client/actions";

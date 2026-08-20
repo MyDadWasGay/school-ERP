@@ -32,6 +32,8 @@ class _StudentCreateFormState extends ConsumerState<StudentCreateForm> {
   String? _gender;
   String _guardianRelationship = 'father';
   DateTime? _dateOfBirth;
+  bool _inviteStudent = true;
+  bool _inviteGuardian = true;
 
   @override
   void dispose() {
@@ -163,6 +165,13 @@ class _StudentCreateFormState extends ConsumerState<StudentCreateForm> {
               'Email (optional)',
               keyboard: TextInputType.emailAddress,
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Invite student immediately'),
+              subtitle: const Text('Generates portal invitation link'),
+              value: _inviteStudent,
+              onChanged: (value) => setState(() => _inviteStudent = value),
+            ),
             const SizedBox(height: ErpSpacing.md),
             _text(_phone, 'Phone (optional)', keyboard: TextInputType.phone),
             const SizedBox(height: ErpSpacing.lg),
@@ -223,6 +232,13 @@ class _StudentCreateFormState extends ConsumerState<StudentCreateForm> {
             ),
             const SizedBox(height: ErpSpacing.md),
             _text(_guardianEmail, 'Guardian email'),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Invite guardian immediately'),
+              subtitle: const Text('Generates parent portal invitation link'),
+              value: _inviteGuardian,
+              onChanged: (value) => setState(() => _inviteGuardian = value),
+            ),
             const SizedBox(height: ErpSpacing.md),
             _text(
               _guardianPhone,
@@ -278,6 +294,8 @@ class _StudentCreateFormState extends ConsumerState<StudentCreateForm> {
                   'classId': _classId,
                   'sectionId': _sectionId,
                   'rollNumber': _rollNumber.text.trim(),
+                  'inviteStudent': _inviteStudent,
+                  'inviteGuardian': _inviteGuardian,
                   'guardianFirstName': hasGuardian
                       ? _guardianFirstName.text.trim()
                       : null,

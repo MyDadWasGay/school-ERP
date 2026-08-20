@@ -39,7 +39,9 @@ function textId(input: unknown, key: string) {
 export const createAcademicRecordAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/academics/${encodeURIComponent(textId(input, "kind"))}`, input, "Academic record created.");
 export const archiveAcademicRecordAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/academics/${encodeURIComponent(textId(input, "kind"))}/${encodeURIComponent(textId(input, "id"))}/archive`, undefined, "Academic record archived.");
 
-export const createStudentAction = (input: unknown) => callApiAction<{ id: string }>("POST", "/api/v1/students", input, "Student created.");
+export const createStudentAction = (input: unknown) => callApiAction<{ id: string; invitations?: { student?: { email: string; inviteLink: string }; guardian?: { email: string; inviteLink: string } } }>("POST", "/api/v1/students", input, "Student created.");
+export const inviteStudentAction = (studentId: string) => callApiAction<{ email: string; inviteLink: string; expiresAt: string }>("POST", `/api/v1/students/${encodeURIComponent(studentId)}/invite`, undefined, "Student invitation generated.");
+export const inviteGuardianAction = (studentId: string, guardianId: string) => callApiAction<{ email: string; inviteLink: string; expiresAt: string }>("POST", `/api/v1/students/${encodeURIComponent(studentId)}/guardians/${encodeURIComponent(guardianId)}/invite`, undefined, "Guardian invitation generated.");
 export const updateStudentAction = (input: unknown) => callApiAction<{ id: string }>("PATCH", `/api/v1/students/${encodeURIComponent(textId(input, "id"))}`, input, "Student updated.");
 export const createGuardianAction = (input: unknown) => callApiAction<{ id: string }>("POST", `/api/v1/students/${encodeURIComponent(textId(input, "studentId"))}/guardians`, input, "Guardian linked.");
 export const updateGuardianAction = (input: unknown) => callApiAction<{ id: string }>("PATCH", `/api/v1/students/${encodeURIComponent(textId(input, "studentId"))}/guardians/${encodeURIComponent(textId(input, "id"))}`, input, "Guardian updated.");

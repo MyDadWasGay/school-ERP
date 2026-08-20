@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { authenticateApiRequest, requireApiUser } from "../auth/bearer-auth";
 import { meCampusesSchema, meSchema } from "../schemas";
+import { getMyStudentProfile } from "../../../features/students/services/students.service";
 
 /**
  * CLIENT_API_CONTRACT:
@@ -32,6 +33,19 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
           linkedGuardianId: user.linkedGuardianId ?? null,
           permissions: user.permissions,
         },
+        meta: { requestId: request.id },
+      };
+    },
+  );
+
+  app.get(
+    "/me/student",
+    { preHandler: authenticateApiRequest },
+    async (request) => {
+      const user = requireApiUser(request);
+      const profile = await getMyStudentProfile(user);
+      return {
+        data: profile,
         meta: { requestId: request.id },
       };
     },

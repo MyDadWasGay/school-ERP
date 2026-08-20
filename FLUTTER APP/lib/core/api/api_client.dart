@@ -956,6 +956,9 @@ class ApiClient {
         await _get('/students/${Uri.encodeComponent(studentId)}'),
       );
 
+  Future<StudentProfileSummary> getMyStudentProfile() async =>
+      StudentProfileSummary.fromJson(await _get('/students/me'));
+
   Future<StudentFormOptions> getStudentFormOptions() async =>
       StudentFormOptions.fromJson(await _get('/students/form-options'));
 
@@ -972,6 +975,8 @@ class ApiClient {
     String? classId,
     String? sectionId,
     String? rollNumber,
+    bool? inviteStudent,
+    bool? inviteGuardian,
     String? guardianFirstName,
     String? guardianLastName,
     String? guardianRelationship,
@@ -1000,6 +1005,8 @@ class ApiClient {
           if (sectionId != null && sectionId.isNotEmpty) 'sectionId': sectionId,
           if (rollNumber != null && rollNumber.trim().isNotEmpty)
             'rollNumber': rollNumber.trim(),
+          if (inviteStudent != null) 'inviteStudent': inviteStudent,
+          if (inviteGuardian != null) 'inviteGuardian': inviteGuardian,
           if (guardianReady)
             'guardian': {
               'firstName': guardianFirstName.trim(),
@@ -1013,6 +1020,28 @@ class ApiClient {
         },
       ),
     );
+  }
+
+  Future<Map<String, dynamic>> inviteStudentToPortal(String studentId) async {
+    final response = await _request(
+      () => _dio.post<Map<String, dynamic>>('/students/$studentId/invite'),
+    );
+    final data = response.data;
+    if (data is Map<String, dynamic> && data['data'] is Map<String, dynamic>) {
+      return data['data'] as Map<String, dynamic>;
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> inviteGuardianToPortal(String studentId, String guardianId) async {
+    final response = await _request(
+      () => _dio.post<Map<String, dynamic>>('/students/$studentId/guardians/$guardianId/invite'),
+    );
+    final data = response.data;
+    if (data is Map<String, dynamic> && data['data'] is Map<String, dynamic>) {
+      return data['data'] as Map<String, dynamic>;
+    }
+    return <String, dynamic>{};
   }
 
   Future<void> updateStudent({

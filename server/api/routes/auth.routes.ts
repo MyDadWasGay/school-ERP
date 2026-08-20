@@ -71,6 +71,30 @@ const campusSchema = {
   },
 } as const;
 
+const revokeSchema = {
+  tags: ["authentication"],
+  summary: "Revoke the authenticated user's Firebase sessions",
+  security: [{ firebaseBearer: [] }],
+  response: {
+    200: {
+      type: "object",
+      required: ["data", "meta"],
+      properties: {
+        data: {
+          type: "object",
+          required: ["ok"],
+          properties: { ok: { type: "boolean" } },
+        },
+        meta: {
+          type: "object",
+          required: ["requestId"],
+          properties: { requestId: { type: "string" } },
+        },
+      },
+    },
+  },
+} as const;
+
 function requestIp(request: FastifyRequest) {
   return request.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim();
 }
@@ -252,6 +276,34 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     ]);
     return { data: { ok: true }, meta: { requestId: request.id } };
   });
+
+  app.post(
+    "/auth/revoke",
+    {
+      preHandler: [authenticateApiRequest, requireApiCsrf],
+      schema: revokeSchema,
+    },
+    async (request) => {
+      const user = requireApiUser(request);
+      const auth = getFirebaseAdminAuth();
+      if (!auth)
+        throw new AppError(
+          "CONFIGURATION_ERROR",
+          "Firebase Admin is not configured.",
+          503,
+        );
+      await auth.revokeRefreshTokens(user.firebaseUid);
+      await writeAuditLog(user, {
+        action: "logout",
+        module: "identity",
+        entityType: "firebase_session",
+        entityId: user.id,
+        campusId: user.campusId,
+        metadata: { scope: "all_refresh_tokens" },
+      });
+      return { data: { ok: true }, meta: { requestId: request.id } };
+    },
+  );
 
   app.post<{ Body: CampusBody }>(
     "/auth/campus",

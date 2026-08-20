@@ -3,6 +3,7 @@ import type { CurrentUser } from "../../../lib/auth/types";
 
 const mocks = vi.hoisted(() => ({
   verifyIdToken: vi.fn(),
+  revokeRefreshTokens: vi.fn(),
   getFirebaseAdminAuth: vi.fn(),
   getUserByFirebaseUid: vi.fn(),
   getPortalSnapshot: vi.fn(),
@@ -66,6 +67,7 @@ describe("Firebase Bearer authentication", () => {
     vi.clearAllMocks();
     mocks.getFirebaseAdminAuth.mockReturnValue({
       verifyIdToken: mocks.verifyIdToken,
+      revokeRefreshTokens: mocks.revokeRefreshTokens,
     });
     mocks.verifyIdToken.mockResolvedValue({
       uid: "firebase-1",
@@ -102,6 +104,20 @@ describe("Firebase Bearer authentication", () => {
       "firebase-1",
       undefined,
     );
+    await app.close();
+  });
+
+  it("revokes Firebase refresh tokens for mobile logout", async () => {
+    const app = await buildApi({ logger: false, documentation: false });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/revoke",
+      headers: { authorization: "Bearer valid-token" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ data: { ok: true } });
+    expect(mocks.revokeRefreshTokens).toHaveBeenCalledWith("firebase-1");
     await app.close();
   });
 

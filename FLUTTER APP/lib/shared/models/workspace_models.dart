@@ -328,6 +328,8 @@ class StudentEnrollmentSummary {
     this.endsOn,
     this.classId,
     this.sectionId,
+    this.className,
+    this.sectionName,
   });
 
   factory StudentEnrollmentSummary.fromJson(Json json) =>
@@ -338,6 +340,8 @@ class StudentEnrollmentSummary {
         endsOn: json['endsOn'] as String?,
         classId: json['classId'] as String?,
         sectionId: json['sectionId'] as String?,
+        className: json['className'] as String?,
+        sectionName: json['sectionName'] as String?,
       );
 
   final String status;
@@ -346,6 +350,8 @@ class StudentEnrollmentSummary {
   final String? endsOn;
   final String? classId;
   final String? sectionId;
+  final String? className;
+  final String? sectionName;
 }
 
 class StudentTimelineEvent {
@@ -407,6 +413,8 @@ class StudentProfileSummary {
     this.dateOfBirth,
     this.gender,
     this.bloodGroup,
+    this.photoUrl,
+    this.campusName,
   });
 
   factory StudentProfileSummary.fromJson(Json json) {
@@ -427,6 +435,8 @@ class StudentProfileSummary {
       dateOfBirth: student['dateOfBirth'] as String?,
       gender: student['gender'] as String?,
       bloodGroup: student['bloodGroup'] as String?,
+      photoUrl: student['photoUrl'] as String?,
+      campusName: student['campusName'] as String?,
       guardians: asJsonList(
         json['guardians'],
         'studentProfile.guardians',
@@ -460,6 +470,8 @@ class StudentProfileSummary {
   final String? dateOfBirth;
   final String? gender;
   final String? bloodGroup;
+  final String? photoUrl;
+  final String? campusName;
 }
 
 class AdmissionEnquiry {

@@ -14,6 +14,7 @@ import {
 } from "@/features/students/components/guardian-form";
 import { MedicalProfileForm } from "@/features/students/components/medical-profile-form";
 import { StudentUpdateForm } from "@/features/students/components/student-update-form";
+import { PortalInviteButton } from "@/features/students/components/portal-invite-button";
 import {
   getStudentFormOptions,
   getStudentMedicalProfile,
@@ -125,6 +126,31 @@ export default async function StudentDetailPage({
       />
       {activeTab === "profile" ? (
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Student Portal Access</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="font-medium text-sm">{profile.student.email ? profile.student.email : "No email address registered"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {profile.studentPortalUser?.status === "active"
+                    ? "Student has activated their portal account and can log in."
+                    : profile.studentPortalUser?.status === "invited"
+                      ? "Invitation generated. The student has not yet activated their password."
+                      : "Invite this student to let them view timetable, syllabus, assignments, and grades."}
+                </p>
+              </div>
+              {canUpdate ? (
+                <PortalInviteButton
+                  studentId={id}
+                  email={profile.student.email}
+                  portalStatus={profile.studentPortalUser?.status}
+                  targetName={studentName}
+                />
+              ) : null}
+            </CardContent>
+          </Card>
           {canUpdate ? (
             <StudentUpdateForm
               student={{
@@ -180,6 +206,19 @@ export default async function StudentDetailPage({
                     key: "phone",
                     header: "Phone",
                     cell: (row) => row.phone ?? "-",
+                  },
+                  {
+                    key: "portal",
+                    header: "Portal Access",
+                    cell: (row) => (
+                      <PortalInviteButton
+                        studentId={id}
+                        guardianId={row.id}
+                        email={row.email}
+                        portalStatus={row.portalUser?.status}
+                        targetName={`${row.firstName} ${row.lastName}`}
+                      />
+                    ),
                   },
                   {
                     key: "actions",

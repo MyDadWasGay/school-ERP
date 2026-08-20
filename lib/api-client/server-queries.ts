@@ -302,6 +302,10 @@ export async function getStudentProfile(user: CurrentUser, id: string): Promise<
   return apiGet(user, `/api/v1/students/${encodeURIComponent(id)}`);
 }
 
+export async function getMyStudentProfile(user: CurrentUser): Promise<AsyncResult<StudentService["getMyStudentProfile"]>> {
+  return apiGet(user, "/api/v1/students/me");
+}
+
 export async function getStudentMedicalProfile(user: CurrentUser, id: string): Promise<AsyncResult<StudentService["getStudentMedicalProfile"]>> {
   return apiGet(user, `/api/v1/students/${encodeURIComponent(id)}/medical`);
 }

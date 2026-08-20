@@ -27,6 +27,7 @@ export type GuardianRecord = {
   occupation: string | null;
   address: string | null;
   custodyNotes: string | null;
+  portalUser?: { id: string; email: string; status: string } | null;
 };
 
 const knownRelationships = new Set<string>(guardianRelationshipOptions.map((option) => option.value));

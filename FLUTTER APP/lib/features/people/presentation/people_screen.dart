@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_error.dart';
@@ -89,6 +90,8 @@ class _StudentDirectoryState extends ConsumerState<_StudentDirectory> {
             classId: values['classId'] as String?,
             sectionId: values['sectionId'] as String?,
             rollNumber: values['rollNumber'] as String?,
+            inviteStudent: values['inviteStudent'] as bool?,
+            inviteGuardian: values['inviteGuardian'] as bool?,
             guardianFirstName: values['guardianFirstName'] as String?,
             guardianLastName: values['guardianLastName'] as String?,
             guardianRelationship: values['guardianRelationship'] as String?,
@@ -211,6 +214,7 @@ class _StudentDirectoryState extends ConsumerState<_StudentDirectory> {
                           context: context,
                           isScrollControlled: true,
                           useSafeArea: true,
+                          showDragHandle: true,
                           builder: (_) =>
                               _StudentProfileSheet(studentId: row.id),
                         ),
@@ -443,7 +447,8 @@ class _StudentProfileSheet extends ConsumerWidget {
     final value = ref.watch(studentProfileProvider(studentId));
     return ConstrainedBox(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * .9,
+        maxHeight: MediaQuery.sizeOf(context).height * .92,
+        maxWidth: 720,
       ),
       child: value.when(
         loading: () => const SizedBox(height: 240, child: ErpLoadingList()),
@@ -455,203 +460,221 @@ class _StudentProfileSheet extends ConsumerWidget {
           final user = ref.watch(sessionProvider).valueOrNull;
           final canUpdate = user?.can('students:update') == true;
           final canSensitive = user?.can('students:view_sensitive') == true;
-          return ListView(
-            padding: const EdgeInsets.all(ErpSpacing.lg),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      profile.name,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  ErpStatusChip(profile.status),
-                ],
+          final currentEnrollment = _currentEnrollment(profile.enrollments);
+          final recentEvents = profile.timeline.take(8).toList(growable: false);
+          final moreActions = <PopupMenuEntry<String>>[
+            if (canUpdate)
+              const PopupMenuItem(
+                value: 'guardian',
+                child: Text('Add guardian'),
               ),
-              const SizedBox(height: ErpSpacing.xs),
-              Text('Admission ${profile.admissionNumber}'),
+            if (canSensitive)
+              const PopupMenuItem(
+                value: 'medical',
+                child: Text('Medical profile'),
+              ),
+            if (canUpdate)
+              const PopupMenuItem(
+                value: 'certificate',
+                child: Text('Issue certificate'),
+              ),
+            if (canUpdate && user?.can('students:create') == true)
+              const PopupMenuItem(
+                value: 'transfer',
+                child: Text('Transfer class'),
+              ),
+          ];
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+              ErpSpacing.lg,
+              ErpSpacing.sm,
+              ErpSpacing.lg,
+              ErpSpacing.xl,
+            ),
+            children: [
+              _ProfileHeader(profile: profile, enrollment: currentEnrollment),
               if (canUpdate || canSensitive) ...[
                 const SizedBox(height: ErpSpacing.md),
-                Wrap(
-                  spacing: ErpSpacing.sm,
-                  runSpacing: ErpSpacing.sm,
+                Row(
                   children: [
                     if (canUpdate)
-                      OutlinedButton.icon(
-                        onPressed: () => _editStudent(context, ref, profile),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Edit student'),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _editStudent(context, ref, profile),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Edit student'),
+                        ),
                       ),
-                    if (canUpdate)
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            _editGuardian(context, ref, profile, null),
-                        icon: const Icon(Icons.person_add_outlined),
-                        label: const Text('Add guardian'),
+                    if (moreActions.isNotEmpty) ...[
+                      if (canUpdate) const SizedBox(width: ErpSpacing.sm),
+                      PopupMenuButton<String>(
+                        tooltip: 'More profile actions',
+                        onSelected: (action) {
+                          switch (action) {
+                            case 'guardian':
+                              _editGuardian(context, ref, profile, null);
+                            case 'medical':
+                              _editMedical(context, ref, profile);
+                            case 'certificate':
+                              _issueCertificate(context, ref, profile);
+                            case 'transfer':
+                              _transferEnrollment(context, ref, profile);
+                          }
+                        },
+                        itemBuilder: (_) => moreActions,
                       ),
-                    if (canSensitive)
-                      OutlinedButton.icon(
-                        onPressed: () => _editMedical(context, ref, profile),
-                        icon: const Icon(Icons.medical_information_outlined),
-                        label: const Text('Medical'),
-                      ),
-                    if (canUpdate)
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            _issueCertificate(context, ref, profile),
-                        icon: const Icon(Icons.verified_outlined),
-                        label: const Text('Issue certificate'),
-                      ),
-                    if (canUpdate && user?.can('students:create') == true)
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            _transferEnrollment(context, ref, profile),
-                        icon: const Icon(Icons.swap_horiz_outlined),
-                        label: const Text('Transfer class'),
-                      ),
+                    ],
                   ],
                 ),
               ],
               const SizedBox(height: ErpSpacing.lg),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(ErpSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SheetSectionTitle('Student details'),
-                      _InfoLine('Joined', _friendlyDate(profile.joinedOn)),
-                      if (profile.dateOfBirth != null)
+              _ProfileSection(
+                title: 'Personal information',
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(ErpSpacing.md),
+                    child: Column(
+                      children: [
+                        _InfoLine('Admission no.', profile.admissionNumber),
+                        _InfoLine('Joined', _friendlyDate(profile.joinedOn)),
                         _InfoLine(
                           'Date of birth',
-                          _friendlyDate(profile.dateOfBirth!),
+                          _friendlyDate(profile.dateOfBirth),
                         ),
-                      if (profile.gender?.isNotEmpty == true)
-                        _InfoLine('Gender', profile.gender!),
-                      if (profile.bloodGroup?.isNotEmpty == true)
-                        _InfoLine('Blood group', profile.bloodGroup!),
-                      if (profile.email?.isNotEmpty == true)
-                        _InfoLine('Email', profile.email!),
-                      if (profile.phone?.isNotEmpty == true)
-                        _InfoLine('Phone', profile.phone!),
-                    ],
+                        _InfoLine('Gender', _humanize(profile.gender)),
+                        _InfoLine(
+                          'Blood group',
+                          _displayValue(profile.bloodGroup),
+                        ),
+                        _InfoLine('Email', _displayValue(profile.email)),
+                        _InfoLine('Phone', _displayValue(profile.phone)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              if (profile.guardians.isNotEmpty) ...[
-                const SizedBox(height: ErpSpacing.md),
-                const _SheetSectionTitle('Guardians and contacts'),
-                for (final guardian in profile.guardians)
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.contact_phone_outlined),
-                      title: Text(guardian.name),
-                      subtitle: Text(
-                        [
-                          guardian.relationship,
-                          if (guardian.phone?.isNotEmpty == true)
-                            guardian.phone!,
-                          if (guardian.email?.isNotEmpty == true)
-                            guardian.email!,
-                        ].join(' · '),
+              const SizedBox(height: ErpSpacing.lg),
+              _ProfileSection(
+                title: 'Guardians and contacts',
+                child: profile.guardians.isEmpty
+                    ? const _ProfileEmptyCard(
+                        icon: Icons.contact_phone_outlined,
+                        title: 'No guardian added',
+                        message:
+                            'Guardian contact details will appear here when linked.',
+                      )
+                    : Column(
+                        children: [
+                          for (
+                            var index = 0;
+                            index < profile.guardians.length;
+                            index++
+                          ) ...[
+                            _GuardianCard(
+                              guardian: profile.guardians[index],
+                              canUpdate: canUpdate,
+                              onEdit: () => _editGuardian(
+                                context,
+                                ref,
+                                profile,
+                                profile.guardians[index],
+                              ),
+                              onUnlink: () => _unlinkGuardian(
+                                context,
+                                ref,
+                                profile,
+                                profile.guardians[index],
+                              ),
+                              onContact: (scheme, value) =>
+                                  _openContact(context, scheme, value),
+                            ),
+                            if (index < profile.guardians.length - 1)
+                              const SizedBox(height: ErpSpacing.sm),
+                          ],
+                        ],
                       ),
-                      trailing: canUpdate
-                          ? PopupMenuButton<String>(
-                              tooltip: 'Guardian actions',
-                              onSelected: (action) {
-                                if (action == 'edit') {
-                                  _editGuardian(
-                                    context,
-                                    ref,
-                                    profile,
-                                    guardian,
-                                  );
-                                } else if (action == 'unlink') {
-                                  _unlinkGuardian(
-                                    context,
-                                    ref,
-                                    profile,
-                                    guardian,
-                                  );
-                                }
-                              },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Text('Edit'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'unlink',
-                                  child: Text('Unlink'),
-                                ),
+              ),
+              const SizedBox(height: ErpSpacing.lg),
+              _ProfileSection(
+                title: 'Enrollment',
+                child: profile.enrollments.isEmpty
+                    ? const _ProfileEmptyCard(
+                        icon: Icons.class_outlined,
+                        title: 'Enrollment information unavailable',
+                        message:
+                            'Class, section and roll details will appear here when enrolled.',
+                      )
+                    : Column(
+                        children: [
+                          for (
+                            var index = 0;
+                            index < profile.enrollments.length;
+                            index++
+                          ) ...[
+                            _EnrollmentCard(
+                              enrollment: profile.enrollments[index],
+                            ),
+                            if (index < profile.enrollments.length - 1)
+                              const SizedBox(height: ErpSpacing.sm),
+                          ],
+                        ],
+                      ),
+              ),
+              const SizedBox(height: ErpSpacing.lg),
+              _ProfileSection(
+                title: 'Recent activity',
+                child: profile.timeline.isEmpty
+                    ? const _ProfileEmptyCard(
+                        icon: Icons.history_outlined,
+                        title: 'No recent activity',
+                        message: 'New profile events will appear here.',
+                      )
+                    : Card(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: ErpSpacing.xs,
+                          ),
+                          child: Column(
+                            children: [
+                              for (
+                                var index = 0;
+                                index < recentEvents.length;
+                                index++
+                              ) ...[
+                                _ActivityTile(event: recentEvents[index]),
+                                if (index < recentEvents.length - 1)
+                                  const Divider(height: 1, indent: 56),
                               ],
-                            )
-                          : guardian.emergencyContact
-                          ? const Tooltip(
-                              message: 'Emergency contact',
-                              child: Icon(Icons.emergency_outlined),
-                            )
-                          : guardian.primary
-                          ? const Tooltip(
-                              message: 'Primary guardian',
-                              child: Icon(Icons.star_outline),
-                            )
-                          : null,
-                    ),
-                  ),
-              ],
-              if (profile.enrollments.isNotEmpty) ...[
-                const SizedBox(height: ErpSpacing.md),
-                const _SheetSectionTitle('Enrollment'),
-                for (final enrollment in profile.enrollments)
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.class_outlined),
-                      title: Text(
-                        enrollment.rollNumber == null
-                            ? 'Enrollment'
-                            : 'Roll ${enrollment.rollNumber}',
+                            ],
+                          ),
+                        ),
                       ),
-                      subtitle: Text(
-                        [
-                          if (enrollment.classId != null)
-                            'Class ${enrollment.classId}',
-                          if (enrollment.sectionId != null)
-                            'Section ${enrollment.sectionId}',
-                          _friendlyDate(enrollment.startsOn),
-                        ].join(' · '),
-                      ),
-                      trailing: ErpStatusChip(enrollment.status),
-                    ),
-                  ),
-              ],
-              if (profile.timeline.isNotEmpty) ...[
-                const SizedBox(height: ErpSpacing.md),
-                const _SheetSectionTitle('Recent activity'),
-                for (final event in profile.timeline.take(8))
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.history_outlined),
-                    title: Text(event.title),
-                    subtitle: Text(_friendlyDate(event.occurredAt)),
-                    trailing: ErpStatusChip(event.status),
-                  ),
-              ],
+              ),
+              const SizedBox(height: ErpSpacing.lg),
               if (profile.certificates.isNotEmpty) ...[
-                const SizedBox(height: ErpSpacing.md),
-                const _SheetSectionTitle('Certificates'),
-                for (final certificate in profile.certificates)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.verified_outlined),
-                    title: Text(certificate.type),
-                    subtitle: Text(
-                      '${certificate.number} · ${_friendlyDate(certificate.issuedAt)}',
+                _ProfileSection(
+                  title: 'Certificates',
+                  child: Card(
+                    child: Column(
+                      children: [
+                        for (final certificate in profile.certificates)
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: ErpSpacing.md,
+                            ),
+                            leading: const Icon(Icons.verified_outlined),
+                            title: Text(_humanize(certificate.type)),
+                            subtitle: Text(
+                              '${certificate.number} · ${_friendlyDate(certificate.issuedAt)}',
+                            ),
+                            trailing: ErpStatusChip(
+                              _humanize(certificate.status),
+                            ),
+                          ),
+                      ],
                     ),
-                    trailing: ErpStatusChip(certificate.status),
                   ),
+                ),
               ],
             ],
           );
@@ -661,19 +684,109 @@ class _StudentProfileSheet extends ConsumerWidget {
   }
 }
 
-class _SheetSectionTitle extends StatelessWidget {
-  const _SheetSectionTitle(this.title);
-  final String title;
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({required this.profile, required this.enrollment});
+
+  final StudentProfileSummary profile;
+  final StudentEnrollmentSummary? enrollment;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: ErpSpacing.sm),
-    child: Text(
-      title,
-      style: Theme.of(
-        context,
-      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-    ),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final photoUrl = profile.photoUrl?.trim();
+    return Card(
+      color: scheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(ErpSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: scheme.primaryContainer,
+                  foregroundImage: photoUrl == null || photoUrl.isEmpty
+                      ? null
+                      : NetworkImage(photoUrl),
+                  child: Text(
+                    _initials(profile.name),
+                    style: TextStyle(
+                      color: scheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: ErpSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _displayName(profile.name),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: ErpSpacing.xs),
+                      Text(
+                        _studentRoleLine(enrollment),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: ErpSpacing.md),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_city_outlined,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: ErpSpacing.sm),
+                Expanded(
+                  child: Text(
+                    _displayValue(profile.campusName, 'Campus not provided'),
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                const SizedBox(width: ErpSpacing.sm),
+                ErpStatusChip(_humanize(profile.status)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(left: ErpSpacing.xs),
+        child: Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ),
+      const SizedBox(height: ErpSpacing.sm),
+      child,
+    ],
   );
 }
 
@@ -684,16 +797,319 @@ class _InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: ErpSpacing.sm),
+    padding: const EdgeInsets.symmetric(vertical: ErpSpacing.xs),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final labelWidth = (constraints.maxWidth * .3)
+            .clamp(96.0, 128.0)
+            .toDouble();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: labelWidth,
+              child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+            ),
+            const SizedBox(width: ErpSpacing.sm),
+            Expanded(child: Text(value, softWrap: true)),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _GuardianCard extends StatelessWidget {
+  const _GuardianCard({
+    required this.guardian,
+    required this.canUpdate,
+    required this.onEdit,
+    required this.onUnlink,
+    required this.onContact,
+  });
+
+  final StudentGuardianSummary guardian;
+  final bool canUpdate;
+  final VoidCallback onEdit;
+  final VoidCallback onUnlink;
+  final void Function(String scheme, String value) onContact;
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = guardian.phone?.trim();
+    final email = guardian.email?.trim();
+    final flags = [
+      if (guardian.primary) 'Primary guardian',
+      if (guardian.emergencyContact) 'Emergency contact',
+      if (guardian.billingContact) 'Billing contact',
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          ErpSpacing.md,
+          ErpSpacing.sm,
+          ErpSpacing.xs,
+          ErpSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(radius: 22, child: Text(_initials(guardian.name))),
+            const SizedBox(width: ErpSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _displayName(guardian.name),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(_humanize(guardian.relationship)),
+                  if (flags.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      flags.join(' / '),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (phone == null && email == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: ErpSpacing.xs),
+                      child: Text(
+                        'No contact details provided',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    )
+                  else ...[
+                    if (phone != null)
+                      _ContactRow(
+                        icon: Icons.phone_outlined,
+                        value: phone,
+                        actionLabel: 'Call $phone',
+                        onTap: () => onContact('tel', phone),
+                      ),
+                    if (email != null)
+                      _ContactRow(
+                        icon: Icons.email_outlined,
+                        value: email,
+                        actionLabel: 'Email $email',
+                        onTap: () => onContact('mailto', email),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            if (canUpdate)
+              PopupMenuButton<String>(
+                tooltip: 'Guardian actions',
+                onSelected: (action) {
+                  if (action == 'edit') {
+                    onEdit();
+                  } else if (action == 'unlink') {
+                    onUnlink();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  PopupMenuItem(value: 'unlink', child: Text('Unlink')),
+                ],
+              )
+            else if (flags.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(ErpSpacing.sm),
+                child: Tooltip(
+                  message: flags.join(' / '),
+                  child: Icon(
+                    guardian.emergencyContact
+                        ? Icons.emergency_outlined
+                        : Icons.star_outline,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.icon,
+    required this.value,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String value;
+  final String actionLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: actionLabel,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: ErpSpacing.sm),
+              Expanded(child: Text(value, softWrap: true)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _EnrollmentCard extends StatelessWidget {
+  const _EnrollmentCard({required this.enrollment});
+
+  final StudentEnrollmentSummary enrollment;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = enrollment.status.trim();
+    final roll = enrollment.rollNumber?.trim();
+    final endsOn = enrollment.endsOn?.trim();
+    final metadata = <String>[
+      _academicLabel('Section', enrollment.sectionName),
+      if (roll != null && roll.isNotEmpty) 'Roll No. $roll',
+      'Joined ${_friendlyDate(enrollment.startsOn)}',
+      if (endsOn != null && endsOn.isNotEmpty) 'Ended ${_friendlyDate(endsOn)}',
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(ErpSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: ErpSpacing.xs,
+              children: [
+                Text(
+                  _academicLabel('Class', enrollment.className),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (status.isNotEmpty) ErpStatusChip(_humanize(status)),
+              ],
+            ),
+            const SizedBox(height: ErpSpacing.sm),
+            for (final item in metadata) _EnrollmentMeta(item),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EnrollmentMeta extends StatelessWidget {
+  const _EnrollmentMeta(this.value);
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: ErpSpacing.xs),
+    child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
+  );
+}
+
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({required this.event});
+  final StudentTimelineEvent event;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: ErpSpacing.md,
+      vertical: ErpSpacing.sm,
+    ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 112,
-          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Icon(
+          Icons.history_outlined,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
-        Expanded(child: Text(value)),
+        const SizedBox(width: ErpSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.title,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _friendlyDateTime(event.occurredAt),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
       ],
+    ),
+  );
+}
+
+class _ProfileEmptyCard extends StatelessWidget {
+  const _ProfileEmptyCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(ErpSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(width: ErpSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(message, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -809,8 +1225,93 @@ class _StaffDirectoryState extends ConsumerState<_StaffDirectory> {
   }
 }
 
-String _friendlyDate(String value) {
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null) return value;
+Future<void> _openContact(
+  BuildContext context,
+  String scheme,
+  String value,
+) async {
+  final launched = await launchUrl(
+    Uri(scheme: scheme, path: value),
+    mode: LaunchMode.externalApplication,
+  );
+  if (!launched && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Could not open $scheme contact.')));
+  }
+}
+
+StudentEnrollmentSummary? _currentEnrollment(
+  List<StudentEnrollmentSummary> enrollments,
+) {
+  for (final enrollment in enrollments) {
+    if (enrollment.status.toLowerCase() == 'active') return enrollment;
+  }
+  return enrollments.isEmpty ? null : enrollments.first;
+}
+
+String _studentRoleLine(StudentEnrollmentSummary? enrollment) {
+  final roll = enrollment?.rollNumber?.trim();
+  return roll == null || roll.isEmpty ? 'Student' : 'Student · Roll $roll';
+}
+
+String _displayValue(String? value, [String fallback = 'Not provided']) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty || trimmed.toLowerCase() == 'null') {
+    return fallback;
+  }
+  return trimmed;
+}
+
+String _displayName(String value) => _humanize(value);
+
+String _humanize(String? value) {
+  final display = _displayValue(value);
+  if (display == 'Not provided') return display;
+  return display
+      .replaceAll('_', ' ')
+      .replaceAll('-', ' ')
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map(
+        (word) =>
+            '${word.substring(0, 1).toUpperCase()}${word.substring(1).toLowerCase()}',
+      )
+      .join(' ');
+}
+
+String _initials(String value) {
+  final words = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList(growable: false);
+  if (words.isEmpty) return '?';
+  return words.take(2).map((word) => word.substring(0, 1).toUpperCase()).join();
+}
+
+String _academicLabel(String label, String? value) {
+  final display = _humanize(value);
+  if (display == 'Not provided') return '$label not provided';
+  final lowerDisplay = display.toLowerCase();
+  final lowerLabel = label.toLowerCase();
+  if (lowerDisplay.startsWith('$lowerLabel ')) return display;
+  if (label == 'Class' && lowerDisplay.startsWith('grade ')) return display;
+  return '$label $display';
+}
+
+String _friendlyDate(String? value) {
+  final display = _displayValue(value);
+  if (display == 'Not provided') return display;
+  final parsed = DateTime.tryParse(display);
+  if (parsed == null) return display;
   return DateFormat('d MMM yyyy').format(parsed.toLocal());
+}
+
+String _friendlyDateTime(String? value) {
+  final display = _displayValue(value);
+  if (display == 'Not provided') return display;
+  final parsed = DateTime.tryParse(display);
+  if (parsed == null) return display;
+  return DateFormat('d MMM yyyy · h:mm a').format(parsed.toLocal());
 }

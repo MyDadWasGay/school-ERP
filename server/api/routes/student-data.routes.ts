@@ -9,7 +9,7 @@ import { listStudentPublishedResults } from "../../../features/exams/services/ex
 import { listStudentAdmitCards } from "../../../features/exams/services/exam-workspace.service";
 import { listStudentReportCards } from "../../../features/exams/services/deep-feature.service";
 import { listStudentInvoices, listStudentPayments } from "../../../features/finance/services/finance-workspace.service";
-import { getStudentFormOptions, getStudentMedicalProfile, getStudentProfile, listStudents, listStudentsPage } from "../../../features/students/services/students.service";
+import { getMyStudentProfile, getStudentFormOptions, getStudentMedicalProfile, getStudentProfile, listStudents, listStudentsPage } from "../../../features/students/services/students.service";
 import { writeAuditLog } from "../../../lib/audit/audit-log";
 import {
   authenticateApiRequest,
@@ -68,6 +68,74 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
     async (request) => {
       const user = requireApiPermission(request, "students:read");
       return apiSuccess(request, await listStudents(user));
+    },
+  );
+
+  app.get(
+    "/students/me",
+    { preHandler: authenticateApiRequest, schema: routeSchema("Get current student profile") },
+    async (request) => {
+      const user = requireApiPermission(request, "students:read");
+      const profile = await getMyStudentProfile(user);
+      return {
+        data: {
+          student: {
+            id: profile.student.id,
+            admissionNumber: profile.student.admissionNumber,
+            firstName: profile.student.firstName,
+            lastName: profile.student.lastName,
+            dateOfBirth: profile.student.dateOfBirth?.toISOString() ?? null,
+            gender: profile.student.gender,
+            email: profile.student.email,
+            phone: profile.student.phone,
+            photoUrl: profile.student.photoUrl,
+            bloodGroup: profile.student.bloodGroup,
+            campusId: profile.student.campusId,
+            campusName: profile.campusName ?? null,
+            joinedOn: profile.student.joinedOn.toISOString(),
+            status: profile.student.status,
+          },
+          guardians: profile.guardians.map((guardian) => ({
+            id: guardian.id,
+            firstName: guardian.firstName,
+            lastName: guardian.lastName,
+            relationship: guardian.relationship,
+            customRelationship: guardian.customRelationship ?? null,
+            isPrimary: Boolean(guardian.isPrimary),
+            isEmergencyContact: Boolean(guardian.isEmergencyContact),
+            isBillingContact: Boolean(guardian.isBillingContact),
+            phone: guardian.phone ?? null,
+          })),
+          enrollments: profile.enrollments.map((enrollment) => ({
+            id: enrollment.id,
+            academicYearId: enrollment.academicYearId,
+            classId: enrollment.classId,
+            sectionId: enrollment.sectionId,
+            rollNumber: enrollment.rollNumber,
+            startsOn: enrollment.startsOn.toISOString(),
+            endsOn: enrollment.endsOn?.toISOString() ?? null,
+            className: enrollment.className ?? null,
+            sectionName: enrollment.sectionName ?? null,
+            status: enrollment.status,
+          })),
+          timeline: profile.timeline.map((event) => ({
+            id: event.id,
+            eventType: event.eventType,
+            title: event.title,
+            occurredAt: event.occurredAt.toISOString(),
+            status: event.status,
+          })),
+          certificates: profile.certificates.map((certificate) => ({
+            id: certificate.id,
+            certificateNumber: certificate.certificateNumber,
+            certificateType: certificate.certificateType,
+            verificationCode: certificate.verificationCode,
+            issuedAt: certificate.issuedAt.toISOString(),
+            status: certificate.status,
+          })),
+        },
+        meta: { requestId: request.id },
+      };
     },
   );
 

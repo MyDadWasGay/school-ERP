@@ -74,6 +74,8 @@ void main() {
         'status': 'active',
         'joinedOn': '2026-06-01T00:00:00.000Z',
         'bloodGroup': 'O+',
+        'photoUrl': 'https://example.com/asha.jpg',
+        'campusName': 'Main Campus',
       },
       'guardians': [
         {
@@ -92,6 +94,8 @@ void main() {
           'startsOn': '2026-06-01T00:00:00.000Z',
           'classId': 'class-1',
           'sectionId': 'section-a',
+          'className': 'Class 5',
+          'sectionName': 'A',
         },
       ],
       'timeline': [
@@ -106,8 +110,12 @@ void main() {
     });
 
     expect(profile.name, 'Asha Rao');
+    expect(profile.campusName, 'Main Campus');
+    expect(profile.photoUrl, 'https://example.com/asha.jpg');
     expect(profile.guardians.single.emergencyContact, isTrue);
     expect(profile.enrollments.single.rollNumber, '12');
+    expect(profile.enrollments.single.className, 'Class 5');
+    expect(profile.enrollments.single.sectionName, 'A');
     expect(profile.timeline.single.title, 'Admission approved');
   });
 

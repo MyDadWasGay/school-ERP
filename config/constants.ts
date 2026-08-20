@@ -15,7 +15,7 @@ export const SUPPORTED_ROLES = [
 export type RoleKey = (typeof SUPPORTED_ROLES)[number];
 
 export const AUDIT_ACTIONS = [
-  "create", "update", "delete", "approve", "reject", "import", "export", "login",
+  "create", "update", "delete", "approve", "reject", "import", "export", "login", "logout",
   "upload", "download", "view_sensitive", "collect_payment", "refund_payment", "publish_result",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

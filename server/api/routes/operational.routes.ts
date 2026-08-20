@@ -518,7 +518,11 @@ export const operationalRoutes: FastifyPluginAsync = async (app) => {
     { schema: { ...publicOperationSchema, summary: "Accept an invitation" } },
     async (request) => {
       const parsed = invitationAcceptSchema.safeParse(request.body);
-      if (!parsed.success) throw new AppError("VALIDATION_ERROR", "Invitation details are invalid.", 422, parsed.error.flatten().fieldErrors);
+      if (!parsed.success) {
+        const issues = parsed.error.flatten();
+        const firstError = Object.values(issues.fieldErrors)[0]?.[0] ?? "Invitation details are invalid.";
+        throw new AppError("VALIDATION_ERROR", firstError, 422, issues.fieldErrors);
+      }
       const result = await acceptInvitation(parsed.data);
       return { data: result, meta: { requestId: request.id } };
     },
