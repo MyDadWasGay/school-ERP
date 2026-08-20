@@ -1,131 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getMyStudentProfile, getReadableStudent, getStudentProfile, inviteStudentPortalUser } from "@/features/students/services/students.service";
+import { createClient, type Client } from "@libsql/client";
+import { and, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import * as schema from "@/db/schema";
+import {
+  getMyStudentProfile,
+  getReadableStudent,
+  getStudentProfile,
+  inviteStudentPortalUser,
+  resolvePermittedStudentIds,
+  updateStudentRecord,
+} from "@/features/students/services/students.service";
 import { provisionUser } from "@/features/users/services/provision.service";
 import { acceptInvitation } from "@/features/users/services/invitation.service";
 import type { CurrentUser } from "@/lib/auth/types";
 import { AppError } from "@/lib/errors/app-error";
 
-// Mock DB and Firebase
-const mockDb = vi.hoisted(() => {
-  const state = {
-    students: [] as any[],
-    users: [] as any[],
-    guardians: [] as any[],
-    studentGuardianLinks: [] as any[],
-    enrollments: [] as any[],
-    campuses: [] as any[],
-    organizations: [] as any[],
-    invitationTokens: [] as any[],
-    auditLogs: [] as any[],
-  };
-  return { state };
-});
+let client: Client;
+let db: ReturnType<typeof drizzle<typeof schema>>;
+let tempDirectory: string;
 
 vi.mock("@/db/client", () => ({
-  getDb: () => ({
-    query: {
-      students: {
-        findFirst: vi.fn(async ({ where }: any) => {
-          return mockDb.state.students[0] || null;
-        }),
-      },
-      users: {
-        findFirst: vi.fn(async ({ where }: any) => {
-          return mockDb.state.users[0] || null;
-        }),
-      },
-      organizations: {
-        findFirst: vi.fn(async () => mockDb.state.organizations[0] || null),
-      },
-      campuses: {
-        findFirst: vi.fn(async () => mockDb.state.campuses[0] || null),
-      },
-      invitationTokens: {
-        findFirst: vi.fn(async () => mockDb.state.invitationTokens[0] || null),
-      },
-      studentGuardianLinks: {
-        findFirst: vi.fn(async () => mockDb.state.studentGuardianLinks[0] || null),
-      },
-      guardians: {
-        findFirst: vi.fn(async () => mockDb.state.guardians[0] || null),
-      },
-    },
-    select: vi.fn((fields: any) => ({
-      from: vi.fn((table: any) => ({
-        where: vi.fn(async (cond: any) => {
-          if (table._?.name === "campuses" || table.name === "campuses") {
-            return mockDb.state.campuses;
-          }
-          if (table._?.name === "students" || table.name === "students") {
-            return mockDb.state.students;
-          }
-          if (table._?.name === "guardians" || table.name === "guardians") {
-            return mockDb.state.guardians;
-          }
-          if (table._?.name === "users" || table.name === "users") {
-            return mockDb.state.users;
-          }
-          if (table._?.name === "enrollments" || table.name === "enrollments") {
-            return mockDb.state.enrollments;
-          }
-          return [];
-        }),
-        innerJoin: vi.fn(() => ({
-          where: vi.fn(async () => []),
-        })),
-        leftJoin: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({
-            where: vi.fn(async () => mockDb.state.enrollments),
-          })),
-          where: vi.fn(async () => mockDb.state.guardians),
-        })),
-      })),
-    })),
-    insert: vi.fn((table: any) => ({
-      values: vi.fn((val: any) => ({
-        returning: vi.fn(async () => {
-          const item = { ...val, id: val.id || "gen-id" };
-          return [item];
-        }),
-      })),
-    })),
-    update: vi.fn((table: any) => ({
-      set: vi.fn((val: any) => ({
-        where: vi.fn(() => ({
-          returning: vi.fn(async () => [{ ...mockDb.state.invitationTokens[0], ...val }]),
-        })),
-      })),
-    })),
-    transaction: vi.fn(async (callback: any) => {
-      return callback({
-        insert: vi.fn((table: any) => ({
-          values: vi.fn((val: any) => ({
-            returning: vi.fn(async () => {
-              const item = { ...val, id: val.id || "gen-id" };
-              return [item];
-            }),
-          })),
-        })),
-        update: vi.fn((table: any) => ({
-          set: vi.fn((val: any) => ({
-            where: vi.fn(() => ({
-              returning: vi.fn(async () => [{ ...mockDb.state.invitationTokens[0], ...val }]),
-            })),
-          })),
-        })),
-        select: vi.fn(() => ({
-          from: vi.fn(() => ({
-            where: vi.fn(async () => mockDb.state.students),
-          })),
-        })),
-        query: {
-          students: { findFirst: vi.fn(async () => mockDb.state.students[0]) },
-          guardians: { findFirst: vi.fn(async () => mockDb.state.guardians[0]) },
-          studentGuardianLinks: { findFirst: vi.fn(async () => mockDb.state.studentGuardianLinks[0]) },
-        },
-      });
-    }),
-  }),
+  getDb: () => db,
 }));
 
 vi.mock("@/lib/auth/firebase-admin-core", () => ({
@@ -150,54 +50,120 @@ describe("Student Invitation & Profile Data Synchronization", () => {
     permissions: ["*"],
   };
 
-  const sampleStudent = {
-    id: "student-sam-123",
-    organizationId: "org-thinkschool",
-    campusId: "campus-main",
-    admissionNumber: "ADM-2026-001",
-    firstName: "Sam",
-    lastName: "Altman",
-    dateOfBirth: new Date("2010-05-15"),
-    gender: "male",
-    email: "sam@thinkschool.in",
-    phone: "9876543210",
-    bloodGroup: "O+",
-    joinedOn: new Date("2026-01-10"),
-    status: "active",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  beforeAll(async () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://app.thinkschool.in";
+    tempDirectory = mkdtempSync(path.join(tmpdir(), "school-erp-sync-"));
+    const databasePath = path.join(tempDirectory, "sync.db");
+    client = createClient({ url: `file:${databasePath}` });
+    db = drizzle(client, { schema });
+    await migrate(db, {
+      migrationsFolder: path.join(process.cwd(), "drizzle"),
+    });
+  });
 
-  beforeEach(() => {
-    mockDb.state.students = [sampleStudent];
-    mockDb.state.users = [];
-    mockDb.state.guardians = [{
-      id: "guardian-1",
-      organizationId: "org-thinkschool",
-      firstName: "John",
-      lastName: "Altman",
-      email: "john@thinkschool.in",
-      emailNormalized: "john@thinkschool.in",
-      phone: "9876543211",
-      relationship: "father",
-      isPrimary: true,
-    }];
-    mockDb.state.enrollments = [{
-      id: "enrollment-1",
-      organizationId: "org-thinkschool",
-      studentId: "student-sam-123",
-      academicYearId: "ay-2026",
-      classId: "class-10",
-      sectionId: "section-a",
-      className: "Class 10",
-      sectionName: "Section A",
-      rollNumber: "12",
-      startsOn: new Date("2026-04-01"),
-      status: "active",
-    }];
-    mockDb.state.campuses = [{ id: "campus-main", organizationId: "org-thinkschool", name: "Main Campus", status: "active" }];
-    mockDb.state.organizations = [{ id: "org-thinkschool", name: "Think School", status: "active" }];
-    mockDb.state.invitationTokens = [];
+  afterAll(() => {
+    try {
+      client.close();
+      rmSync(tempDirectory, { recursive: true, force: true });
+    } catch {
+      // Best effort cleanup
+    }
+  });
+
+  beforeEach(async () => {
+    // Reset data
+    const now = Date.now();
+    await client.batch([
+      { sql: "DELETE FROM invitation_tokens", args: [] },
+      { sql: "DELETE FROM user_campus_scopes", args: [] },
+      { sql: "DELETE FROM users", args: [] },
+      { sql: "DELETE FROM enrollments", args: [] },
+      { sql: "DELETE FROM student_guardian_links", args: [] },
+      { sql: "DELETE FROM guardians", args: [] },
+      { sql: "DELETE FROM students", args: [] },
+      { sql: "DELETE FROM sections", args: [] },
+      { sql: "DELETE FROM classes", args: [] },
+      { sql: "DELETE FROM academic_years", args: [] },
+      { sql: "DELETE FROM campuses", args: [] },
+      { sql: "DELETE FROM organizations", args: [] },
+      {
+        sql: "INSERT INTO organizations (id, name, slug, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+        args: ["org-thinkschool", "Think School", "think-school", now, now, "active"],
+      },
+      {
+        sql: "INSERT INTO campuses (id, organization_id, name, code, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        args: ["campus-main", "org-thinkschool", "Main Campus", "MAIN", now, now, "active"],
+      },
+      {
+        sql: "INSERT INTO academic_years (id, organization_id, name, starts_on, ends_on, is_active, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: ["ay-2026", "org-thinkschool", "2026-2027", now, now + 31536000000, 1, now, now, "active"],
+      },
+      {
+        sql: "INSERT INTO classes (id, organization_id, name, code, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        args: ["class-10", "org-thinkschool", "Class 10", "10", now, now, "active"],
+      },
+      {
+        sql: "INSERT INTO sections (id, organization_id, class_id, name, capacity, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        args: ["section-a", "org-thinkschool", "class-10", "Section A", 40, now, now, "active"],
+      },
+      {
+        sql: "INSERT INTO students (id, organization_id, campus_id, admission_number, first_name, last_name, gender, date_of_birth, email, phone, blood_group, joined_on, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: [
+          "student-sam-123",
+          "org-thinkschool",
+          "campus-main",
+          "ADM-2026-001",
+          "Sam",
+          "Altman",
+          "male",
+          new Date("2010-05-15").getTime(),
+          "sam@thinkschool.in",
+          "9876543210",
+          "O+",
+          new Date("2026-01-10").getTime(),
+          now,
+          now,
+          "active",
+        ],
+      },
+      {
+        sql: "INSERT INTO guardians (id, organization_id, first_name, last_name, email, email_normalized, phone, phone_normalized, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: [
+          "guardian-1",
+          "org-thinkschool",
+          "John",
+          "Altman",
+          "john@thinkschool.in",
+          "john@thinkschool.in",
+          "9876543211",
+          "9876543211",
+          now,
+          now,
+          "active",
+        ],
+      },
+      {
+        sql: "INSERT INTO student_guardian_links (id, organization_id, student_id, guardian_id, relationship, is_primary, is_emergency_contact, is_billing_contact, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: ["link-1", "org-thinkschool", "student-sam-123", "guardian-1", "father", 1, 1, 1, now, now],
+      },
+      {
+        sql: "INSERT INTO enrollments (id, organization_id, campus_id, student_id, academic_year_id, class_id, section_id, roll_number, starts_on, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: [
+          "enrollment-1",
+          "org-thinkschool",
+          "campus-main",
+          "student-sam-123",
+          "ay-2026",
+          "class-10",
+          "section-a",
+          "12",
+          now,
+          now,
+          now,
+          "active",
+        ],
+      },
+    ]);
   });
 
   it("Test 1: Admin Create -> Invite -> Accept -> Dashboard Data Sync Flow", async () => {
@@ -206,21 +172,39 @@ describe("Student Invitation & Profile Data Synchronization", () => {
     expect(invite.email).toBe("sam@thinkschool.in");
     expect(invite.inviteLink).toContain("https://");
 
-    // 2. Student user record has linkedStudentId set
+    // Extract raw token from invite link: https://.../invite/accept?token=RAW_TOKEN
+    const rawToken = new URL(invite.inviteLink).searchParams.get("token")!;
+    expect(rawToken).toBeDefined();
+
+    // 2. Student accepts the invitation
+    const acceptResult = await acceptInvitation({
+      token: rawToken,
+      password: "SecurePassword123",
+    });
+    expect(acceptResult.email).toBe("sam@thinkschool.in");
+
+    // 3. Verify user account in DB
+    const userRow = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.email, "sam@thinkschool.in"),
+    });
+    expect(userRow).toBeDefined();
+    expect(userRow?.status).toBe("active");
+    expect(userRow?.linkedStudentId).toBe("student-sam-123");
+
+    // 4. Student logs in and fetches self profile
     const studentUser: CurrentUser = {
-      id: "user-sam-456",
-      firebaseUid: "fb-sam",
-      email: "sam@thinkschool.in",
-      displayName: "Sam Altman",
+      id: userRow!.id,
+      firebaseUid: userRow!.firebaseUid,
+      email: userRow!.email,
+      displayName: userRow!.displayName,
       role: "student",
-      organizationId: "org-thinkschool",
-      campusId: "campus-main",
-      campusIds: ["campus-main"],
-      linkedStudentId: "student-sam-123",
+      organizationId: userRow!.organizationId,
+      campusId: userRow!.campusId,
+      campusIds: [userRow!.campusId!],
+      linkedStudentId: userRow!.linkedStudentId,
       permissions: ["students:read", "portals:read"],
     };
 
-    // 3. Student logs in and fetches self profile
     const profile = await getMyStudentProfile(studentUser);
     expect(profile.student.id).toBe("student-sam-123");
     expect(profile.student.admissionNumber).toBe("ADM-2026-001");
@@ -228,36 +212,41 @@ describe("Student Invitation & Profile Data Synchronization", () => {
     expect(profile.student.lastName).toBe("Altman");
     expect(profile.student.bloodGroup).toBe("O+");
     expect(profile.student.email).toBe("sam@thinkschool.in");
+    expect(profile.campusName).toBe("Main Campus");
     expect(profile.enrollments).toHaveLength(1);
+    expect(profile.enrollments[0].className).toBe("Class 10");
+    expect(profile.enrollments[0].sectionName).toBe("Section A");
     expect(profile.enrollments[0].rollNumber).toBe("12");
+    expect(profile.guardians).toHaveLength(1);
+    expect(profile.guardians[0].firstName).toBe("John");
+    expect(profile.guardians[0].relationship).toBe("father");
   });
 
   it("Test 2: Zero Student Duplication - Student table count remains 1", async () => {
-    const studentCountBefore = mockDb.state.students.length;
-    await inviteStudentPortalUser(adminActor, "student-sam-123");
-    const studentCountAfter = mockDb.state.students.length;
-    expect(studentCountAfter).toBe(studentCountBefore);
-    expect(studentCountAfter).toBe(1);
+    const studentsBefore = await db.query.students.findMany();
+    expect(studentsBefore).toHaveLength(1);
+
+    const invite = await inviteStudentPortalUser(adminActor, "student-sam-123");
+    const rawToken = new URL(invite.inviteLink).searchParams.get("token")!;
+    await acceptInvitation({ token: rawToken, password: "SecurePassword123" });
+
+    const studentsAfter = await db.query.students.findMany();
+    expect(studentsAfter).toHaveLength(1);
+    expect(studentsAfter[0].id).toBe("student-sam-123");
   });
 
   it("Test 3: Canonical Link Check - user.linkedStudentId matches student.id", async () => {
-    const studentUser: CurrentUser = {
-      id: "user-sam-456",
-      firebaseUid: "fb-sam",
-      email: "sam@thinkschool.in",
-      displayName: "Sam Altman",
-      role: "student",
-      organizationId: "org-thinkschool",
-      campusId: "campus-main",
-      campusIds: ["campus-main"],
-      linkedStudentId: "student-sam-123",
-      permissions: ["students:read"],
-    };
-    expect(studentUser.linkedStudentId).toBe(sampleStudent.id);
+    const invite = await inviteStudentPortalUser(adminActor, "student-sam-123");
+    const rawToken = new URL(invite.inviteLink).searchParams.get("token")!;
+    await acceptInvitation({ token: rawToken, password: "SecurePassword123" });
+
+    const user = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.email, "sam@thinkschool.in"),
+    });
+    expect(user?.linkedStudentId).toBe("student-sam-123");
   });
 
   it("Test 4: Auto-link during General User Provisioning without explicit linkedStudentId", async () => {
-    // When admin provisions a user with role 'student' and email 'sam@thinkschool.in'
     const result = await provisionUser(adminActor, {
       email: "sam@thinkschool.in",
       displayName: "Sam Altman",
@@ -265,27 +254,31 @@ describe("Student Invitation & Profile Data Synchronization", () => {
       campusId: "campus-main",
     });
     expect(result.userId).toBeDefined();
-    expect(result.inviteLink).toBeDefined();
+
+    const createdUser = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.id, result.userId),
+    });
+    expect(createdUser?.linkedStudentId).toBe("student-sam-123");
   });
 
   it("Test 5: Conflicting Link Protection - Prevents hijacking when user is already bound to another student", async () => {
-    mockDb.state.users = [{
-      id: "user-other",
+    // Provision student user for student-sam-123
+    await provisionUser(adminActor, {
       email: "sam@thinkschool.in",
-      organizationId: "org-thinkschool",
-      campusId: "campus-main",
+      displayName: "Sam Altman",
       role: "student",
-      linkedStudentId: "student-DIFFERENT-999",
-      status: "invited",
-    }];
+      campusId: "campus-main",
+      linkedStudentId: "student-sam-123",
+    });
 
+    // Attempting to provision same email with a DIFFERENT student ID throws CONFLICT
     await expect(
       provisionUser(adminActor, {
         email: "sam@thinkschool.in",
         displayName: "Sam Altman",
         role: "student",
         campusId: "campus-main",
-        linkedStudentId: "student-sam-123",
+        linkedStudentId: "student-OTHER-999",
       }),
     ).rejects.toThrow(/already linked to a different student/);
   });
@@ -303,35 +296,33 @@ describe("Student Invitation & Profile Data Synchronization", () => {
       permissions: ["*"],
     };
 
-    mockDb.state.students = [{
-      ...sampleStudent,
-      organizationId: "org-thinkschool", // Different org
-    }];
-
-    // Attempting to read student from different org throws 404 or 403
     await expect(
       getReadableStudent(foreignActor, "student-sam-123"),
     ).rejects.toThrow();
   });
 
   it("Test 7: Case-Insensitive Email Matching handles mixed casing", async () => {
-    mockDb.state.students = [{
-      ...sampleStudent,
-      email: "Sam@ThinkSchool.IN",
-    }];
+    // Update student email to mixed case
+    await db
+      .update(schema.students)
+      .set({ email: "Sam.Altman@ThinkSchool.IN" })
+      .where(eq(schema.students.id, "student-sam-123"));
 
     const result = await provisionUser(adminActor, {
-      email: "sam@thinkschool.in",
+      email: "sam.altman@thinkschool.in",
       displayName: "Sam Altman",
       role: "student",
       campusId: "campus-main",
     });
-    expect(result.inviteLink).toBeDefined();
+    expect(result.userId).toBeDefined();
+
+    const createdUser = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.id, result.userId),
+    });
+    expect(createdUser?.linkedStudentId).toBe("student-sam-123");
   });
 
   it("Test 8: Missing Student Relationship returns controlled STUDENT_NOT_LINKED error", async () => {
-    mockDb.state.students = []; // No matching student
-
     const unlinkedStudentUser: CurrentUser = {
       id: "user-unlinked",
       firebaseUid: "fb-unlinked",
@@ -359,12 +350,12 @@ describe("Student Invitation & Profile Data Synchronization", () => {
       organizationId: "org-thinkschool",
       campusId: "campus-main",
       campusIds: ["campus-main"],
-      linkedStudentId: "student-A",
+      linkedStudentId: "student-sam-123",
       permissions: ["students:read"],
     };
 
     await expect(
-      getStudentProfile(studentUserA, "student-B"),
+      getStudentProfile(studentUserA, "student-OTHER-999"),
     ).rejects.toThrow(/Student is outside your linked or assigned scope/);
   });
 
@@ -402,13 +393,28 @@ describe("Student Invitation & Profile Data Synchronization", () => {
       permissions: ["students:read", "portals:read"],
     };
 
-    mockDb.state.studentGuardianLinks = [{
-      studentId: "student-sam-123",
-      guardianId: "guardian-1",
-      organizationId: "org-thinkschool",
-    }];
-
     const permitted = await resolvePermittedStudentIds(parentUser);
     expect(permitted).toContain("student-sam-123");
+  });
+
+  it("Test 12: Student Status Lifecycle Sync to User Account", async () => {
+    // 1. Provision user
+    const invite = await inviteStudentPortalUser(adminActor, "student-sam-123");
+    const rawToken = new URL(invite.inviteLink).searchParams.get("token")!;
+    await acceptInvitation({ token: rawToken, password: "SecurePassword123" });
+
+    // 2. Admin updates student status to suspended
+    await updateStudentRecord(adminActor, {
+      id: "student-sam-123",
+      firstName: "Sam",
+      lastName: "Altman",
+      status: "suspended",
+    });
+
+    // 3. User account is automatically set to inactive
+    const updatedUser = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.email, "sam@thinkschool.in"),
+    });
+    expect(updatedUser?.status).toBe("inactive");
   });
 });

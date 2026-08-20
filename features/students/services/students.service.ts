@@ -718,34 +718,37 @@ export async function getStudentProfile(user: CurrentUser, studentId: string) {
           ),
         )
         .limit(1),
-      student.email
-        ? getDb().query.users.findFirst({
-            where: and(
-              eq(users.organizationId, user.organizationId),
-              or(eq(users.linkedStudentId, student.id), eq(users.email, student.email)),
-            ),
-          })
-        : Promise.resolve(undefined),
-      guardianRows.length > 0
-        ? getDb()
-            .select({
-              id: users.id,
-              email: users.email,
-              status: users.status,
-              linkedGuardianId: users.linkedGuardianId,
-            })
-            .from(users)
-            .where(
-              and(
-                eq(users.organizationId, user.organizationId),
-                inArray(
-                  users.linkedGuardianId,
-                  guardianRows.map((g) => g.id),
-                ),
-              ),
-            )
-        : Promise.resolve([]),
     ]);
+
+  const [studentUser, guardianUserRows] = await Promise.all([
+    student.email
+      ? getDb().query.users.findFirst({
+          where: and(
+            eq(users.organizationId, user.organizationId),
+            or(eq(users.linkedStudentId, student.id), eq(users.email, student.email)),
+          ),
+        })
+      : Promise.resolve(undefined),
+    guardianRows.length > 0
+      ? getDb()
+          .select({
+            id: users.id,
+            email: users.email,
+            status: users.status,
+            linkedGuardianId: users.linkedGuardianId,
+          })
+          .from(users)
+          .where(
+            and(
+              eq(users.organizationId, user.organizationId),
+              inArray(
+                users.linkedGuardianId,
+                guardianRows.map((g) => g.id),
+              ),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
 
   const guardianUsersMap = new Map<string, { id: string; email: string; status: string }>();
   for (const gu of guardianUserRows) {
@@ -880,11 +883,15 @@ export async function inviteStudentPortalUser(user: CurrentUser, studentId: stri
     }
     throw new AppError("CONFLICT", `User account is currently ${existingUser.status}.`, 409);
   }
+  const campusId = student.campusId ?? user.campusId ?? user.campusIds?.[0];
+  if (!campusId) {
+    throw new AppError("VALIDATION_ERROR", "Student must have an assigned campus to create a portal account.", 422);
+  }
   const invite = await provisionUser(user, {
     email: student.email,
     displayName: `${student.firstName} ${student.lastName}`,
     role: "student",
-    campusId: student.campusId,
+    campusId,
     linkedStudentId: student.id,
   });
   return { email: student.email, inviteLink: invite.inviteLink, expiresAt: invite.invitationExpiresAt };
@@ -926,11 +933,15 @@ export async function inviteGuardianPortalUser(user: CurrentUser, studentId: str
     }
     throw new AppError("CONFLICT", `User account is currently ${existingUser.status}.`, 409);
   }
+  const guardianCampusId = student.campusId ?? user.campusId ?? user.campusIds?.[0];
+  if (!guardianCampusId) {
+    throw new AppError("VALIDATION_ERROR", "Student must have an assigned campus to invite a guardian.", 422);
+  }
   const invite = await provisionUser(user, {
     email: guardian.email,
     displayName: `${guardian.firstName} ${guardian.lastName}`,
     role: "parent",
-    campusId: student.campusId,
+    campusId: guardianCampusId,
     linkedGuardianId: guardian.id,
   });
   return { email: guardian.email, inviteLink: invite.inviteLink, expiresAt: invite.invitationExpiresAt };

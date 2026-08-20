@@ -98,14 +98,14 @@ export default async function StudentDetailPage({
       : undefined,
   ]);
   const studentName = `${profile.student.firstName} ${profile.student.lastName}`;
-  const enrollmentRows = profile.enrollments.map((enrollment) => ({
+  const enrollmentRows = profile.enrollments.map((enrollment: any) => ({
     id: enrollment.id,
     classId: enrollment.classId,
     sectionId: enrollment.sectionId,
     rollNumber: enrollment.rollNumber,
     status: enrollment.status,
   }));
-  const guardianRows: GuardianRecord[] = profile.guardians.map((guardian) => ({
+  const guardianRows: GuardianRecord[] = profile.guardians.map((guardian: any) => ({
     ...guardian,
     address: guardian.address ?? null,
     custodyNotes: guardian.custodyNotes ?? null,

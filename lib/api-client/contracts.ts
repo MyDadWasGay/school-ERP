@@ -60,9 +60,10 @@ export type ApiStudentProfile = {
     joinedOn: string;
     status: string;
   };
+  campusName?: string | null;
   guardians: Array<{
     id: string;
-    linkId: string;
+    linkId?: string;
     firstName: string;
     lastName: string;
     relationship: string;
@@ -70,11 +71,11 @@ export type ApiStudentProfile = {
     isPrimary: boolean;
     isEmergencyContact: boolean;
     isBillingContact: boolean;
-    email: string | null;
+    email?: string | null;
     phone: string | null;
-    occupation: string | null;
-    address: string | null;
-    custodyNotes: string | null;
+    occupation?: string | null;
+    address?: string | null;
+    custodyNotes?: string | null;
   }>;
   enrollments: Array<{
     id: string;
@@ -84,6 +85,8 @@ export type ApiStudentProfile = {
     rollNumber: string | null;
     startsOn: string;
     endsOn: string | null;
+    className?: string | null;
+    sectionName?: string | null;
     status: string;
   }>;
   timeline: Array<{
@@ -258,6 +261,7 @@ export type ApiUploadEntityType =
   | "asset"
   | "cms_media"
   | "health_record"
+  | "assignment_submission"
   | "custom";
 
 export type ApiUploadResourceType = "image" | "raw" | "video";
