@@ -1005,8 +1005,8 @@ class ApiClient {
           if (sectionId != null && sectionId.isNotEmpty) 'sectionId': sectionId,
           if (rollNumber != null && rollNumber.trim().isNotEmpty)
             'rollNumber': rollNumber.trim(),
-          if (inviteStudent != null) 'inviteStudent': inviteStudent,
-          if (inviteGuardian != null) 'inviteGuardian': inviteGuardian,
+          if (inviteStudent == true) 'inviteStudent': true,
+          if (inviteGuardian == true) 'inviteGuardian': true,
           if (guardianReady)
             'guardian': {
               'firstName': guardianFirstName.trim(),
