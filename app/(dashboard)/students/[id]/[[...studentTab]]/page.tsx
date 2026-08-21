@@ -104,15 +104,17 @@ export default async function StudentDetailPage({
       ? api!.getStudentResults(id, { pageSize: 50 })
       : undefined,
   ]);
-  const studentName = `${profile.student.firstName} ${profile.student.lastName}`;
-  const enrollmentRows = profile.enrollments.map((enrollment: any) => ({
+  const studentName = profile?.student
+    ? `${profile.student.firstName ?? ""} ${profile.student.lastName ?? ""}`.trim() || "Student Profile"
+    : "Student Profile";
+  const enrollmentRows = (profile?.enrollments ?? []).map((enrollment: any) => ({
     id: enrollment.id,
-    classId: enrollment.classId,
-    sectionId: enrollment.sectionId,
+    classId: enrollment.className || enrollment.classId,
+    sectionId: enrollment.sectionName || enrollment.sectionId,
     rollNumber: enrollment.rollNumber,
     status: enrollment.status,
   }));
-  const guardianRows: GuardianRecord[] = profile.guardians.map((guardian: any) => ({
+  const guardianRows: GuardianRecord[] = (profile?.guardians ?? []).map((guardian: any) => ({
     ...guardian,
     address: guardian.address ?? null,
     custodyNotes: guardian.custodyNotes ?? null,
@@ -121,10 +123,10 @@ export default async function StudentDetailPage({
     <div>
       <EntityHeader
         name={studentName}
-        identifier={`Admission ${profile.student.admissionNumber}`}
+        identifier={profile?.student?.admissionNumber ? `Admission ${profile.student.admissionNumber}` : "Student Record"}
         description="One authorized master record shared across student, academic, attendance and finance workflows."
-        status={profile.student.status}
-        meta={<><span>{profile.student.email || "No email"}</span><span>{profile.student.phone || "No phone"}</span></>}
+        status={profile?.student?.status ?? "active"}
+        meta={<><span>{profile?.student?.email || "No email"}</span><span>{profile?.student?.phone || "No phone"}</span></>}
         backHref="/students"
       />
       <EntityTabs

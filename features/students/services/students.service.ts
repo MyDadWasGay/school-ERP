@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   academicYears,
@@ -120,17 +120,17 @@ export async function getStudentFormOptions(
   const academicYearScope = organizationWide
     ? undefined
     : scopedCampusIds.length
-      ? inArray(academicYears.campusId, scopedCampusIds)
+      ? or(isNull(academicYears.campusId), inArray(academicYears.campusId, scopedCampusIds))
       : eq(academicYears.campusId, "__no_campus__");
   const classScope = organizationWide
     ? undefined
     : scopedCampusIds.length
-      ? inArray(classes.campusId, scopedCampusIds)
+      ? or(isNull(classes.campusId), inArray(classes.campusId, scopedCampusIds))
       : eq(classes.campusId, "__no_campus__");
   const sectionScope = organizationWide
     ? undefined
     : scopedCampusIds.length
-      ? inArray(sections.campusId, scopedCampusIds)
+      ? or(isNull(sections.campusId), inArray(sections.campusId, scopedCampusIds))
       : eq(sections.campusId, "__no_campus__");
   const [campusRows, yearRows, classRows, sectionRows] = await Promise.all([
     getDb()
