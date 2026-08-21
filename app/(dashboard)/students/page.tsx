@@ -14,14 +14,27 @@ import Link from "next/link";
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ page?: string; search?: string }> }) {
   const user = await requirePermission("students:read");
   const params = await searchParams;
-  const api = await createServerApiClient();
-  const query = new URLSearchParams({ page: String(Number(params.page) || 1) });
-  if (params.search) query.set("search", params.search);
-  const resultResponse = await api.call<{
+  let result: {
     rows: Array<{ id: string; name: string; detail: string; status: string }>;
     pageInfo: { page: number; pageSize: number; total: number; pageCount: number };
-  }>("GET", `/api/v1/students?${query.toString()}`);
-  const result = resultResponse.data;
+  };
+
+  try {
+    const api = await createServerApiClient();
+    const query = new URLSearchParams({ page: String(Number(params.page) || 1) });
+    if (params.search) query.set("search", params.search);
+    const resultResponse = await api.call<{
+      rows: Array<{ id: string; name: string; detail: string; status: string }>;
+      pageInfo: { page: number; pageSize: number; total: number; pageCount: number };
+    }>("GET", `/api/v1/students?${query.toString()}`);
+    result = resultResponse.data;
+  } catch {
+    const { listStudentsPage } = await import("@/features/students/services/students.service");
+    result = await listStudentsPage(user, {
+      page: Number(params.page) || 1,
+      search: params.search,
+    });
+  }
   return <div>
     <PageHeader title="Students" description="The single student master powering attendance, fees, exams, portals, transport, library and certificates." action={hasPermission(user, "students:create") ? { label: "New student", href: "/students/new" } : undefined} />
     <FilterBar summary={params.search ? `Searching for “${params.search}”` : "Search by name or admission number"}>

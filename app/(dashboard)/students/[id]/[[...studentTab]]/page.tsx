@@ -26,6 +26,14 @@ import { hasPermission } from "@/lib/rbac/permissions";
 import { formatIndiaDate, formatIndiaDateTime } from "@/lib/utils/india-time";
 
 import { StudentDocumentSection } from "@/features/documents/components/student-document-section";
+import type {
+  ApiDetailedStudentDocument,
+  ApiDocumentType,
+  ApiStudentAttendance,
+  ApiStudentDocumentSummary,
+  ApiStudentInvoices,
+  ApiStudentResults,
+} from "@/lib/api-client/contracts";
 
 const tabs = [
   "profile",
@@ -87,23 +95,49 @@ export default async function StudentDetailPage({
       ? getStudentMedicalProfile(user, id)
       : Promise.resolve(null),
   ]);
-  const api = ["documents", "attendance", "fees", "results"].includes(activeTab)
-    ? await createServerApiClient()
-    : undefined;
-  const [docSummary, docDetailed, docTypes, attendance, invoices, results] = await Promise.all([
-    activeTab === "documents" ? api!.getStudentDocumentSummary(id) : undefined,
-    activeTab === "documents" ? api!.getDetailedStudentDocuments(id) : undefined,
-    activeTab === "documents" ? api!.getDocumentTypes() : undefined,
-    activeTab === "attendance"
-      ? api!.getStudentAttendance(id, { pageSize: 50 })
-      : undefined,
-    activeTab === "fees"
-      ? api!.getStudentInvoices(id, { pageSize: 50 })
-      : undefined,
-    activeTab === "results"
-      ? api!.getStudentResults(id, { pageSize: 50 })
-      : undefined,
-  ]);
+  let docSummary: ApiStudentDocumentSummary | undefined = undefined;
+  let docDetailed: { studentId: string; documents: ApiDetailedStudentDocument[] } | undefined = undefined;
+  let docTypes: { documentTypes: ApiDocumentType[] } | undefined = undefined;
+  let attendance: ApiStudentAttendance | undefined = undefined;
+  let invoices: ApiStudentInvoices | undefined = undefined;
+  let results: ApiStudentResults | undefined = undefined;
+
+  if (["documents", "attendance", "fees", "results"].includes(activeTab)) {
+    try {
+      const api = await createServerApiClient();
+      [docSummary, docDetailed, docTypes, attendance, invoices, results] = await Promise.all([
+        activeTab === "documents" ? api.getStudentDocumentSummary(id) : undefined,
+        activeTab === "documents" ? api.getDetailedStudentDocuments(id) : undefined,
+        activeTab === "documents" ? api.getDocumentTypes() : undefined,
+        activeTab === "attendance"
+          ? api.getStudentAttendance(id, { pageSize: 50 })
+          : undefined,
+        activeTab === "fees"
+          ? api.getStudentInvoices(id, { pageSize: 50 })
+          : undefined,
+        activeTab === "results"
+          ? api.getStudentResults(id, { pageSize: 50 })
+          : undefined,
+      ]);
+    } catch {
+      if (activeTab === "documents") {
+        const { calculateStudentDocumentSummary, listDocumentTypes } = await import(
+          "@/features/documents/services/document-requirements.service"
+        );
+        const { listStudentDocumentsDetailed } = await import(
+          "@/features/documents/services/student-document.service"
+        );
+        const [sum, docs, types] = await Promise.all([
+          calculateStudentDocumentSummary(user, id),
+          listStudentDocumentsDetailed(user, id),
+          listDocumentTypes(user),
+        ]);
+        docSummary = sum as any;
+        docDetailed = { studentId: id, documents: docs as any };
+        docTypes = { documentTypes: types as any };
+      }
+    }
+  }
   const studentName = profile?.student
     ? `${profile.student.firstName ?? ""} ${profile.student.lastName ?? ""}`.trim() || "Student Profile"
     : "Student Profile";

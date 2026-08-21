@@ -295,19 +295,39 @@ export async function listStudents(user: CurrentUser): Promise<AsyncResult<Stude
 }
 
 export async function getStudentFormOptions(user: CurrentUser): Promise<AsyncResult<StudentService["getStudentFormOptions"]>> {
-  return apiGet(user, "/api/v1/students/form-options");
+  try {
+    return await apiGet(user, "/api/v1/students/form-options");
+  } catch {
+    const { getStudentFormOptions: directGet } = await import("@/features/students/services/students.service");
+    return (await directGet(user)) as any;
+  }
 }
 
 export async function getStudentProfile(user: CurrentUser, id: string): Promise<AsyncResult<StudentService["getStudentProfile"]>> {
-  return apiGet(user, `/api/v1/students/${encodeURIComponent(id)}`);
+  try {
+    return await apiGet(user, `/api/v1/students/${encodeURIComponent(id)}`);
+  } catch {
+    const { getStudentProfile: directGet } = await import("@/features/students/services/students.service");
+    return (await directGet(user, id)) as any;
+  }
 }
 
 export async function getMyStudentProfile(user: CurrentUser): Promise<AsyncResult<StudentService["getMyStudentProfile"]>> {
-  return apiGet(user, "/api/v1/students/me");
+  try {
+    return await apiGet(user, "/api/v1/students/me");
+  } catch {
+    const { getMyStudentProfile: directGet } = await import("@/features/students/services/students.service");
+    return (await directGet(user)) as any;
+  }
 }
 
 export async function getStudentMedicalProfile(user: CurrentUser, id: string): Promise<AsyncResult<StudentService["getStudentMedicalProfile"]>> {
-  return apiGet(user, `/api/v1/students/${encodeURIComponent(id)}/medical`);
+  try {
+    return await apiGet(user, `/api/v1/students/${encodeURIComponent(id)}/medical`);
+  } catch {
+    const { getStudentMedicalProfile: directGet } = await import("@/features/students/services/students.service");
+    return (await directGet(user, id)) as any;
+  }
 }
 
 export async function listStudentImportJobs(user: CurrentUser): Promise<AsyncResult<StudentImportService["listStudentImportJobs"]>> {
