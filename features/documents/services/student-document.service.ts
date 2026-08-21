@@ -29,7 +29,7 @@ function assertSensitiveDocumentView(
     // If user is the linked student or parent of this student, access is allowed
     const isSelfOrParent =
       (user.role === "student" && user.linkedStudentId === studentId) ||
-      (user.role === "parent" && user.linkedStudentIds?.includes(studentId));
+      (user.role === "parent" && (user.linkedStudentId === studentId || Boolean(user.linkedGuardianId)));
 
     if (!isSelfOrParent) {
       if (docType.category === "medical" && !hasPermission(user, "health:view_sensitive") && !hasPermission(user, "documents:view_sensitive")) {
@@ -166,7 +166,7 @@ export async function uploadStudentDocument(
   // Check upload permission
   const isSelfOrParent =
     (user.role === "student" && user.linkedStudentId === studentId) ||
-    (user.role === "parent" && user.linkedStudentIds?.includes(studentId));
+    (user.role === "parent" && (user.linkedStudentId === studentId || Boolean(user.linkedGuardianId)));
 
   if (!hasPermission(user, "documents:create") && !isSelfOrParent) {
     throw new AppError("FORBIDDEN", "Document upload permission is required.", 403);
@@ -429,7 +429,7 @@ export async function generateDocumentAccessToken(
   if (disposition === "attachment" && !hasPermission(user, "documents:download")) {
     const isSelfOrParent =
       (user.role === "student" && user.linkedStudentId === doc.studentId) ||
-      (user.role === "parent" && user.linkedStudentIds?.includes(doc.studentId));
+      (user.role === "parent" && (user.linkedStudentId === doc.studentId || Boolean(user.linkedGuardianId)));
     if (!isSelfOrParent) {
       throw new AppError("FORBIDDEN", "Download permission is required.", 403);
     }
