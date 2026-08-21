@@ -122,7 +122,7 @@ export class SchoolErpApiClient {
     const csrfToken = this.options.getCsrfToken
       ? await this.options.getCsrfToken()
       : undefined;
-    const timeoutMs = requestOptions.timeoutMs ?? (method === "GET" ? 15_000 : 30_000);
+    const timeoutMs = requestOptions.timeoutMs ?? (method === "GET" ? 45_000 : 60_000);
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       throw new Error("API request timeout must be a positive number.");
     }
