@@ -2696,8 +2696,10 @@ class ApiClient {
           'documentTypeId': documentTypeId,
           'filename': filename,
           'fileBase64': fileBase64,
-          if (claimedMimeType != null) 'claimedMimeType': claimedMimeType,
-          if (changeReason != null) 'changeReason': changeReason,
+          if (claimedMimeType != null && claimedMimeType.isNotEmpty)
+            'claimedMimeType': claimedMimeType,
+          if (changeReason != null && changeReason.isNotEmpty)
+            'changeReason': changeReason,
           if (issuedAt != null) 'issuedAt': issuedAt.toIso8601String(),
           if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
         },
@@ -2711,7 +2713,9 @@ class ApiClient {
     await _request(
       () => _dio.post<Object?>(
         '/documents/${Uri.encodeComponent(documentId)}/verify',
-        data: {if (notes != null) 'notes': notes},
+        data: {
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        },
       ),
     );
   }
@@ -2724,7 +2728,10 @@ class ApiClient {
     await _request(
       () => _dio.post<Object?>(
         '/documents/${Uri.encodeComponent(documentId)}/reject',
-        data: {'reason': reason, if (notes != null) 'notes': notes},
+        data: {
+          'reason': reason,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        },
       ),
     );
   }
@@ -2736,7 +2743,9 @@ class ApiClient {
     await _request(
       () => _dio.delete<Object?>(
         '/documents/${Uri.encodeComponent(documentId)}',
-        data: {if (reason != null) 'reason': reason},
+        data: {
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        },
       ),
     );
   }

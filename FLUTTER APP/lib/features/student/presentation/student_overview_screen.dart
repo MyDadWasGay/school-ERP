@@ -928,7 +928,7 @@ class _UploadDocumentSheetContentState
               const SizedBox(height: ErpSpacing.sm),
             ],
             DropdownButtonFormField<String>(
-              value: _selectedTypeId,
+              initialValue: _selectedTypeId,
               decoration: const InputDecoration(
                 labelText: 'Document Type *',
                 border: OutlineInputBorder(),

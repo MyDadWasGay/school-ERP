@@ -103,6 +103,7 @@ export const DEFAULT_DOCUMENT_TYPES: DocumentTypeSeed[] = [
     description: "Required when student is marked as having a disability or chronic medical condition.",
     category: "medical",
     requirementType: "conditional",
+    appliesTo: "student",
     conditionExpression: JSON.stringify({ field: "hasDisability", operator: "equals", value: true }),
     allowedFileTypes: "pdf,jpg,jpeg,png,webp",
     maxFileSizeBytes: 15_728_640,
