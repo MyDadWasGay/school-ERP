@@ -58,15 +58,26 @@ export function formatIndiaMonth(value: DateLike) {
 }
 
 /** Convert an HTML date input into the instant representing midnight in India. */
-export function parseIndiaDateInput(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Invalid Indian date input.");
+export function parseIndiaDateInput(value: unknown) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error("Invalid Indian date input.");
+    return value;
+  }
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error("Invalid Indian date input.");
+  }
   const date = new Date(`${value}T00:00:00+05:30`);
   if (Number.isNaN(date.getTime()) || indiaDateKey(date) !== value) throw new Error("Invalid Indian date input.");
   return date;
 }
 
 /** Convert an HTML datetime-local input into an instant in the Indian timezone. */
-export function parseIndiaDateTimeInput(value: string) {
+export function parseIndiaDateTimeInput(value: unknown) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error("Invalid Indian date-time input.");
+    return value;
+  }
+  if (typeof value !== "string") throw new Error("Invalid Indian date-time input.");
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
   if (!match) throw new Error("Invalid Indian date-time input.");
   const [, year, month, day, hour, minute, second = "00"] = match;

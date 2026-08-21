@@ -29,7 +29,7 @@ export function EnrollmentTransferForm({ studentId, options }: { studentId: stri
       <Field label="Class" error={form.formState.errors.classId?.message}><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" {...form.register("classId")}><option value="">Select class</option>{(options?.classes ?? []).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></Field>
       <Field label="Section" error={form.formState.errors.sectionId?.message}><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" {...form.register("sectionId")}><option value="">Select section</option>{(options?.sections ?? []).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></Field>
       <Field label="Roll number" error={form.formState.errors.rollNumber?.message}><Input {...form.register("rollNumber")} /></Field>
-      <Field label="Effective date" error={form.formState.errors.startsOn?.message}><Input type="date" {...form.register("startsOn", { setValueAs: (value) => parseIndiaDateInput(value) })} /></Field>
+      <Field label="Effective date" error={form.formState.errors.startsOn?.message}><Input type="date" defaultValue={indiaTodayKey()} {...form.register("startsOn", { setValueAs: (value) => value ? (value instanceof Date ? value : parseIndiaDateInput(String(value))) : undefined })} /></Field>
     </div>
     {message ? <p role="status" className="mt-3 text-sm text-muted-foreground">{message}</p> : null}
     <div className="mt-4 flex justify-end"><Button disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "Transferring..." : "Transfer enrollment"}</Button></div>
