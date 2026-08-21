@@ -218,7 +218,7 @@ export async function uploadStudentDocument(
     });
 
     throw new AppError(
-      "MALWARE_DETECTED",
+      "VALIDATION_ERROR",
       "Upload rejected: The file triggered malware/security heuristic detection.",
       422,
     );
@@ -445,7 +445,7 @@ export async function generateDocumentAccessToken(
   }
 
   if (currentVersion.scanStatus === "infected") {
-    throw new AppError("SECURITY_ERROR", "Access blocked: This document was quarantined due to detected malware.", 403);
+    throw new AppError("FORBIDDEN", "Access blocked: This document was quarantined due to detected malware.", 403);
   }
 
   const storage = getDocumentStorage();

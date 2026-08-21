@@ -121,7 +121,7 @@ export function validateUploadedFile(
   }
   if (buffer.length > maxBytes) {
     throw new AppError(
-      "FILE_TOO_LARGE",
+      "VALIDATION_ERROR",
       `File size (${(buffer.length / (1024 * 1024)).toFixed(1)} MB) exceeds maximum allowed limit of ${(maxBytes / (1024 * 1024)).toFixed(1)} MB.`,
       422,
     );
@@ -134,7 +134,7 @@ export function validateUploadedFile(
   const magic = detectMagicBytes(buffer);
   if (!magic) {
     throw new AppError(
-      "UNSUPPORTED_FILE_TYPE",
+      "VALIDATION_ERROR",
       "Unsupported file format. Please upload a valid PDF, JPEG, PNG, or WebP document.",
       422,
     );
@@ -149,7 +149,7 @@ export function validateUploadedFile(
 
   if (!isExtCompatible && claimedExt) {
     throw new AppError(
-      "INVALID_FILE_SIGNATURE",
+      "VALIDATION_ERROR",
       `File extension (.${claimedExt}) does not match actual file content signature (${magic.mime}).`,
       422,
     );
@@ -165,7 +165,7 @@ export function validateUploadedFile(
 
     if (!allowed) {
       throw new AppError(
-        "UNSUPPORTED_FILE_TYPE",
+        "VALIDATION_ERROR",
         `Document format ${magic.extension.toUpperCase()} is not allowed for this document type. Allowed: ${normalizedAllowed.join(", ").toUpperCase()}`,
         422,
       );
