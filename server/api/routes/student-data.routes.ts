@@ -57,7 +57,7 @@ export const studentDataRoutes: FastifyPluginAsync = async (app) => {
     "/students/form-options",
     { preHandler: authenticateApiRequest, schema: routeSchema("Read student form options") },
     async (request) => {
-      const user = requireApiPermission(request, "students:create");
+      const user = requireApiPermission(request, "students:read");
       return apiSuccess(request, await getStudentFormOptions(user));
     },
   );

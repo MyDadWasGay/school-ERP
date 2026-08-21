@@ -24,16 +24,16 @@ export function StudentCreateForm({ options, initiallyOpen = false }: { options:
   const [invitations, setInvitations] = useState<{ student?: { email: string; inviteLink: string }; guardian?: { email: string; inviteLink: string } }>();
   const form = useForm<StudentInput>({
     resolver: zodResolver(studentSchema) as Resolver<StudentInput>,
-    defaultValues: { ...defaultStudentValues, campusId: options.campuses[0]?.id ?? "", inviteStudent: true, inviteGuardian: true },
+    defaultValues: { ...defaultStudentValues, campusId: (options?.campuses ?? [])[0]?.id ?? "", inviteStudent: true, inviteGuardian: true },
   });
   const campusId = form.watch("campusId");
   const classId = form.watch("classId");
   const studentEmail = form.watch("email");
   const guardianEmail = form.watch("guardian.email");
   const guardianRelationship = form.watch("guardian.relationship");
-  const availableYears = options.academicYears.filter((year) => !year.campusId || year.campusId === campusId);
-  const availableClasses = options.classes.filter((classRow) => !classRow.campusId || classRow.campusId === campusId);
-  const availableSections = options.sections.filter((section) => section.classId === classId && (!section.campusId || section.campusId === campusId));
+  const availableYears = (options?.academicYears ?? []).filter((year) => !year.campusId || year.campusId === campusId);
+  const availableClasses = (options?.classes ?? []).filter((classRow) => !classRow.campusId || classRow.campusId === campusId);
+  const availableSections = (options?.sections ?? []).filter((section) => section.classId === classId && (!section.campusId || section.campusId === campusId));
   const needsAcademicYearSetup = Boolean(campusId) && availableYears.length === 0;
   const needsClassSetup = Boolean(campusId) && availableClasses.length === 0;
   const needsSectionSetup = Boolean(classId) && availableSections.length === 0;
