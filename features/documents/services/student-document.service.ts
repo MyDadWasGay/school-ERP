@@ -205,12 +205,13 @@ export async function uploadStudentDocument(
   if (scanResult.status === "infected") {
     // Write security audit log and immediately reject
     await writeAuditLog(user, {
-      action: "malware_detected",
+      action: "reject",
       module: "documents",
       entityType: "student_document",
       entityId: student.id,
       campusId: student.campusId ?? undefined,
       metadata: {
+        reason: "malware_detected",
         filename: validation.sanitizedFilename,
         hash: validation.fileHash,
         scannerDetails: scanResult.details,
@@ -361,7 +362,7 @@ export async function uploadStudentDocument(
 
   // 6. Write Audit Log
   await writeAuditLog(user, {
-    action: result.version.versionNumber > 1 ? "replace" : "upload",
+    action: result.version.versionNumber > 1 ? "update" : "upload",
     module: "documents",
     entityType: "student_document",
     entityId: result.document.id,
@@ -458,7 +459,7 @@ export async function generateDocumentAccessToken(
 
   // Audit view/download
   await writeAuditLog(user, {
-    action: disposition === "attachment" ? "download" : "view",
+    action: disposition === "attachment" ? "download" : "view_sensitive",
     module: "documents",
     entityType: "student_document",
     entityId: doc.id,
@@ -519,7 +520,7 @@ export async function verifyStudentDocument(
   }
 
   await writeAuditLog(user, {
-    action: "verify",
+    action: "approve",
     module: "documents",
     entityType: "student_document",
     entityId: doc.id,
@@ -659,11 +660,12 @@ export async function restoreStudentDocument(user: CurrentUser, documentId: stri
     .returning();
 
   await writeAuditLog(user, {
-    action: "restore",
+    action: "update",
     module: "documents",
     entityType: "student_document",
     entityId: doc.id,
     campusId: doc.campusId ?? undefined,
+    metadata: { action: "restore" },
   });
 
   return updatedDoc;

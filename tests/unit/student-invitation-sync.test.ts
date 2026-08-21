@@ -199,9 +199,9 @@ describe("Student Invitation & Profile Data Synchronization", () => {
       displayName: userRow!.displayName,
       role: "student",
       organizationId: userRow!.organizationId,
-      campusId: userRow!.campusId,
-      campusIds: [userRow!.campusId!],
-      linkedStudentId: userRow!.linkedStudentId,
+      campusId: userRow!.campusId ?? undefined,
+      campusIds: userRow!.campusId ? [userRow!.campusId] : [],
+      linkedStudentId: userRow!.linkedStudentId ?? undefined,
       permissions: ["students:read", "portals:read"],
     };
 
@@ -408,7 +408,7 @@ describe("Student Invitation & Profile Data Synchronization", () => {
       id: "student-sam-123",
       firstName: "Sam",
       lastName: "Altman",
-      status: "suspended",
+      status: "inactive",
     });
 
     // 3. User account is automatically set to inactive

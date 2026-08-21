@@ -32,7 +32,7 @@ export class PrivateDiskStorageProvider implements DocumentStorageProvider {
     }
     const targetPath = path.resolve(this.baseDir, sanitizedKey);
     if (!targetPath.startsWith(this.baseDir)) {
-      throw new AppError("SECURITY_ERROR", "Path traversal detected.", 403);
+      throw new AppError("FORBIDDEN", "Path traversal detected.", 403);
     }
     return targetPath;
   }
