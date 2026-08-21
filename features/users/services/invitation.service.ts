@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLogs, invitationTokens, organizations, students, users } from "@/db/schema";
+import { auditLogs, employees, guardians, invitationTokens, organizations, students, users } from "@/db/schema";
 import { getFirebaseAdminAuth } from "@/lib/auth/firebase-admin-core";
 import { AppError } from "@/lib/errors/app-error";
 import { createInvitationToken, hashInvitationToken, invitationUrl } from "@/lib/auth/invitation-token";
@@ -56,6 +56,9 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
       if (!accepted) throw new AppError("CONFLICT", "This invitation could not be completed.", 409);
 
       let resolvedLinkedStudentId = invitation.user.linkedStudentId;
+      let resolvedLinkedGuardianId = invitation.user.linkedGuardianId;
+      let resolvedLinkedEmployeeId = invitation.user.linkedEmployeeId;
+
       if (invitation.user.role === "student" && !resolvedLinkedStudentId) {
         const matchingStudents = await tx
           .select({ id: students.id })
@@ -67,11 +70,38 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
         if (matchingStudents.length === 1) {
           resolvedLinkedStudentId = matchingStudents[0].id;
         }
+      } else if (invitation.user.role === "parent" && !resolvedLinkedGuardianId) {
+        const matchingGuardians = await tx
+          .select({ id: guardians.id })
+          .from(guardians)
+          .where(and(
+            eq(guardians.organizationId, invitation.user.organizationId),
+            sql`lower(${guardians.emailNormalized}) = lower(${invitation.user.email})`,
+          ));
+        if (matchingGuardians.length === 1) {
+          resolvedLinkedGuardianId = matchingGuardians[0].id;
+        }
+      } else if (
+        ["teacher", "principal", "office_staff", "accountant", "librarian", "transport_staff", "hostel_warden"].includes(invitation.user.role) &&
+        !resolvedLinkedEmployeeId
+      ) {
+        const matchingEmployees = await tx
+          .select({ id: employees.id })
+          .from(employees)
+          .where(and(
+            eq(employees.organizationId, invitation.user.organizationId),
+            sql`lower(${employees.email}) = lower(${invitation.user.email})`,
+          ));
+        if (matchingEmployees.length === 1) {
+          resolvedLinkedEmployeeId = matchingEmployees[0].id;
+        }
       }
 
       await tx.update(users).set({
         status: "active",
         linkedStudentId: resolvedLinkedStudentId || null,
+        linkedGuardianId: resolvedLinkedGuardianId || null,
+        linkedEmployeeId: resolvedLinkedEmployeeId || null,
         emailVerified: false,
         updatedAt: now,
         updatedBy: invitation.user.id,
@@ -80,6 +110,17 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
         eq(users.organizationId, invitation.user.organizationId),
         eq(users.status, "invited"),
       ));
+
+      if (resolvedLinkedEmployeeId) {
+        await tx.update(employees).set({
+          linkedUserId: invitation.user.id,
+          updatedAt: now,
+          updatedBy: invitation.user.id,
+        }).where(and(
+          eq(employees.id, resolvedLinkedEmployeeId),
+          eq(employees.organizationId, invitation.user.organizationId),
+        ));
+      }
 
       await tx.insert(auditLogs).values({
         organizationId: invitation.user.organizationId,
@@ -90,7 +131,12 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
         module: "users",
         entityType: "user_invitation",
         entityId: invitation.user.id,
-        metadataJson: JSON.stringify({ invitationId: invitation.row.id, linkedStudentId: resolvedLinkedStudentId }),
+        metadataJson: JSON.stringify({
+          invitationId: invitation.row.id,
+          linkedStudentId: resolvedLinkedStudentId,
+          linkedGuardianId: resolvedLinkedGuardianId,
+          linkedEmployeeId: resolvedLinkedEmployeeId,
+        }),
         createdBy: invitation.user.id,
         updatedBy: invitation.user.id,
       });
@@ -106,6 +152,38 @@ export async function acceptInvitation(input: InvitationAcceptInput) {
           entityType: "user",
           entityId: invitation.user.id,
           metadataJson: JSON.stringify({ studentId: resolvedLinkedStudentId }),
+          createdBy: invitation.user.id,
+          updatedBy: invitation.user.id,
+        });
+      }
+
+      if (resolvedLinkedEmployeeId && resolvedLinkedEmployeeId !== invitation.user.linkedEmployeeId) {
+        await tx.insert(auditLogs).values({
+          organizationId: invitation.user.organizationId,
+          campusId: invitation.user.campusId,
+          actorUserId: invitation.user.id,
+          actorRole: invitation.user.role,
+          action: "user_linked_to_employee",
+          module: "users",
+          entityType: "user",
+          entityId: invitation.user.id,
+          metadataJson: JSON.stringify({ employeeId: resolvedLinkedEmployeeId }),
+          createdBy: invitation.user.id,
+          updatedBy: invitation.user.id,
+        });
+      }
+
+      if (resolvedLinkedGuardianId && resolvedLinkedGuardianId !== invitation.user.linkedGuardianId) {
+        await tx.insert(auditLogs).values({
+          organizationId: invitation.user.organizationId,
+          campusId: invitation.user.campusId,
+          actorUserId: invitation.user.id,
+          actorRole: invitation.user.role,
+          action: "user_linked_to_guardian",
+          module: "users",
+          entityType: "user",
+          entityId: invitation.user.id,
+          metadataJson: JSON.stringify({ guardianId: resolvedLinkedGuardianId }),
           createdBy: invitation.user.id,
           updatedBy: invitation.user.id,
         });
