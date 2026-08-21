@@ -10,6 +10,7 @@ import '../shared/models/approval_models.dart';
 import '../shared/models/asset_models.dart';
 import '../shared/models/attendance_models.dart';
 import '../shared/models/communication_models.dart';
+import '../shared/models/document_models.dart';
 import '../shared/models/exam_models.dart';
 import '../shared/models/finance_models.dart';
 import '../shared/models/hr_models.dart';
@@ -1057,6 +1058,9 @@ class StudentOverview {
     this.results,
     this.reportCards,
     this.documents,
+    this.documentSummary,
+    this.detailedDocuments,
+    this.documentTypes,
     this.discipline,
   });
   final PagedRows<AttendanceRow>? attendance;
@@ -1065,6 +1069,9 @@ class StudentOverview {
   final PagedRows<ResultRow>? results;
   final List<StudentReportCardRow>? reportCards;
   final List<DocumentRow>? documents;
+  final StudentDocumentSummary? documentSummary;
+  final List<DetailedStudentDocument>? detailedDocuments;
+  final List<DocumentTypeRow>? documentTypes;
   final List<DisciplineIncidentRow>? discipline;
 }
 
@@ -1096,6 +1103,15 @@ final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
       api.getStudentDiscipline(studentId)
     else
       Future.value(null),
+    if (me.can('documents:read'))
+      api.getStudentDocumentSummary(studentId)
+    else
+      Future.value(null),
+    if (me.can('documents:read'))
+      api.getDetailedStudentDocuments(studentId)
+    else
+      Future.value(null),
+    api.getDocumentTypes(),
   ]);
   return StudentOverview(
     attendance: values[0] as PagedRows<AttendanceRow>?,
@@ -1105,7 +1121,31 @@ final studentOverviewProvider = FutureProvider<StudentOverview>((ref) async {
     reportCards: values[4] as List<StudentReportCardRow>?,
     documents: values[5] as List<DocumentRow>?,
     discipline: values[6] as List<DisciplineIncidentRow>?,
+    documentSummary: values[7] as StudentDocumentSummary?,
+    detailedDocuments: values[8] as List<DetailedStudentDocument>?,
+    documentTypes: values[9] as List<DocumentTypeRow>?,
   );
+});
+
+final studentDocumentSummaryProvider =
+    FutureProvider.family<StudentDocumentSummary?, String>((ref, studentId) async {
+      final me = await ref.watch(sessionProvider.future);
+      if (!me.can('documents:read')) return null;
+      return ref.watch(apiClientProvider).getStudentDocumentSummary(studentId);
+    });
+
+final detailedStudentDocumentsProvider =
+    FutureProvider.family<List<DetailedStudentDocument>, String>((
+      ref,
+      studentId,
+    ) async {
+      final me = await ref.watch(sessionProvider.future);
+      if (!me.can('documents:read')) return const [];
+      return ref.watch(apiClientProvider).getDetailedStudentDocuments(studentId);
+    });
+
+final documentTypesProvider = FutureProvider<List<DocumentTypeRow>>((ref) async {
+  return ref.watch(apiClientProvider).getDocumentTypes();
 });
 
 final admitCardsProvider = FutureProvider<List<AdmitCard>>((ref) async {

@@ -9,6 +9,13 @@ abstract final class ErpSpacing {
   static const double xxl = 32;
 }
 
+abstract final class ErpRadius {
+  static const double card = 16;
+  static const double field = 12;
+  static const double sheet = 20;
+  static const double pill = 999;
+}
+
 ThemeData buildErpTheme() {
   const seed = Color(0xFF185FA5);
   final scheme = ColorScheme.fromSeed(

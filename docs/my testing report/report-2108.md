@@ -37,15 +37,3 @@ Malware scanning for uploads
 Separate permissions for sensitive/legal/medical documents
 
 
-
-after inviting student it showed 
-
-Activate your School ERP account
-ayesha · student · ayesha@thinkmart.in
-
-Create password
-••••••••
-Confirm password
-••••••••
-Invitation details are invalid.
-

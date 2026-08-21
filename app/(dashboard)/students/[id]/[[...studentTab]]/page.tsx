@@ -25,6 +25,8 @@ import { createServerApiClient } from "@/lib/api-client/server";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { formatIndiaDate, formatIndiaDateTime } from "@/lib/utils/india-time";
 
+import { StudentDocumentSection } from "@/features/documents/components/student-document-section";
+
 const tabs = [
   "profile",
   "guardians",
@@ -63,6 +65,9 @@ export default async function StudentDetailPage({
   const canUpdate = hasPermission(user, "students:update");
   const canViewSensitive = hasPermission(user, "students:view_sensitive");
   const canPayOnline = hasPermission(user, "fees:pay_online");
+  const canUploadDoc = hasPermission(user, "documents:create") || ["student", "parent"].includes(user.role);
+  const canVerifyDoc = hasPermission(user, "documents:verify") || hasPermission(user, "documents:approve");
+  const canDeleteDoc = hasPermission(user, "documents:delete");
   const requestedTab = studentTab?.[0] ?? "profile";
   const visibleTabs = tabs.filter((tab) => {
     if (tab === "documents") return hasPermission(user, "documents:read");
@@ -85,8 +90,10 @@ export default async function StudentDetailPage({
   const api = ["documents", "attendance", "fees", "results"].includes(activeTab)
     ? await createServerApiClient()
     : undefined;
-  const [documents, attendance, invoices, results] = await Promise.all([
-    activeTab === "documents" ? api!.getStudentDocuments(id) : undefined,
+  const [docSummary, docDetailed, docTypes, attendance, invoices, results] = await Promise.all([
+    activeTab === "documents" ? api!.getStudentDocumentSummary(id) : undefined,
+    activeTab === "documents" ? api!.getDetailedStudentDocuments(id) : undefined,
+    activeTab === "documents" ? api!.getDocumentTypes() : undefined,
     activeTab === "attendance"
       ? api!.getStudentAttendance(id, { pageSize: 50 })
       : undefined,
@@ -234,81 +241,16 @@ export default async function StudentDetailPage({
           {canUpdate ? <GuardianForm studentId={id} /> : null}
         </div>
       ) : null}
-      {activeTab === "documents" ? (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Secure documents</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                rows={documents?.documents ?? []}
-                columns={[
-                  {
-                    key: "category",
-                    header: "Category",
-                    cell: (row) => (
-                      <span className="font-medium capitalize">
-                        {row.category.replaceAll("_", " ")}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "file",
-                    header: "File",
-                    cell: (row) => (
-                      <a
-                        className="text-primary hover:underline"
-                        href={row.secureUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {row.originalFilename ?? "Open document"}
-                      </a>
-                    ),
-                  },
-                  {
-                    key: "type",
-                    header: "Type",
-                    cell: (row) => row.format ?? row.resourceType,
-                  },
-                  {
-                    key: "uploaded",
-                    header: "Uploaded",
-                    cell: (row) => formatIndiaDateTime(row.createdAt),
-                  },
-                  {
-                    key: "status",
-                    header: "Status",
-                    cell: (row) => <StatusBadge status={row.status} />,
-                  },
-                ]}
-                emptyTitle="No student documents"
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload a document</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {hasPermission(user, "documents:create") ? (
-                <FileUploadField
-                  entityType="student"
-                  entityId={id}
-                  category="student_document"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                  campusId={user.campusId}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  You can view this student record, but your role cannot upload
-                  documents.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {activeTab === "documents" && docSummary && docDetailed && docTypes ? (
+        <StudentDocumentSection
+          studentId={id}
+          summary={docSummary}
+          documents={docDetailed.documents}
+          documentTypes={docTypes.documentTypes}
+          canUpload={canUploadDoc}
+          canVerify={canVerifyDoc}
+          canDelete={canDeleteDoc}
+        />
       ) : null}
       {activeTab === "enrollment" ? (
         <div className="space-y-4">

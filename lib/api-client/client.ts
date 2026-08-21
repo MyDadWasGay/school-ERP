@@ -356,6 +356,106 @@ export class SchoolErpApiClient {
     ).data;
   }
 
+  async getDocumentTypes() {
+    return (
+      await this.get<{ documentTypes: import("./contracts").ApiDocumentType[] }>(
+        "/api/v1/document-types",
+      )
+    ).data;
+  }
+
+  async getStudentDocumentSummary(studentId: string) {
+    return (
+      await this.get<import("./contracts").ApiStudentDocumentSummary>(
+        `${studentPath(studentId)}/documents/summary`,
+      )
+    ).data;
+  }
+
+  async getDetailedStudentDocuments(studentId: string) {
+    return (
+      await this.get<{
+        studentId: string;
+        documents: import("./contracts").ApiDetailedStudentDocument[];
+      }>(`${studentPath(studentId)}/documents/detailed`)
+    ).data;
+  }
+
+  async uploadStudentDocument(
+    studentId: string,
+    input: {
+      documentTypeId: string;
+      guardianId?: string;
+      fileBase64: string;
+      filename: string;
+      claimedMimeType?: string;
+      changeReason?: string;
+      issuedAt?: string;
+      expiresAt?: string;
+    },
+  ) {
+    return (
+      await this.request<{
+        documentId: string;
+        versionId: string;
+        versionNumber: number;
+        status: string;
+        verificationStatus: string;
+        fileHash: string;
+        fileSizeBytes: number;
+      }>("POST", `${studentPath(studentId)}/documents/upload`, input)
+    ).data;
+  }
+
+  async getDocumentAccessToken(documentId: string, disposition: "inline" | "attachment" = "inline") {
+    return (
+      await this.get<import("./contracts").ApiDocumentAccessToken>(
+        `/api/v1/documents/${encodeURIComponent(documentId)}/token?disposition=${disposition}`,
+      )
+    ).data;
+  }
+
+  async verifyDocument(documentId: string, notes?: string) {
+    return (
+      await this.request<{
+        id: string;
+        status: string;
+        verificationStatus: string;
+        verifiedAt: string;
+      }>("POST", `/api/v1/documents/${encodeURIComponent(documentId)}/verify`, { notes })
+    ).data;
+  }
+
+  async rejectDocument(documentId: string, reason: string, notes?: string) {
+    return (
+      await this.request<{
+        id: string;
+        status: string;
+        verificationStatus: string;
+        rejectionReason: string;
+      }>("POST", `/api/v1/documents/${encodeURIComponent(documentId)}/reject`, { reason, notes })
+    ).data;
+  }
+
+  async softDeleteDocument(documentId: string, reason?: string) {
+    return (
+      await this.request<{ id: string; status: string; deletedAt: string }>(
+        "DELETE",
+        `/api/v1/documents/${encodeURIComponent(documentId)}`,
+        { reason },
+      )
+    ).data;
+  }
+
+  async restoreDocument(documentId: string) {
+    return (
+      await this.request<{ id: string; status: string }>(
+        "POST",
+        `/api/v1/documents/${encodeURIComponent(documentId)}/restore`,
+      )
+    ).data;
+  }
+
   async markNotificationRead(notificationId: string) {
     if (!notificationId.trim())
       throw new Error("A notification ID is required.");

@@ -24,6 +24,7 @@ export * from "./operations";
 export * from "./reports";
 export * from "./security";
 export * from "./students";
+export * from "./documents";
 export * from "./transport";
 export * from "./users";
 export * from "./workspace";

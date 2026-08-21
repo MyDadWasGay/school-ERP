@@ -14,6 +14,7 @@ import { supportRoutes } from "./support.routes";
 import { operationsRoutes } from "./operations.routes";
 import { communityIntegrationsRoutes } from "./community-integrations.routes";
 import { catalogRoutes } from "./catalog.routes";
+import { studentDocumentRoutes } from "./student-documents.routes";
 
 export const apiV1Routes: FastifyPluginAsync = async (app) => {
   await app.register(authRoutes);
@@ -30,5 +31,6 @@ export const apiV1Routes: FastifyPluginAsync = async (app) => {
   await app.register(portalRoutes);
   await app.register(studentDataRoutes);
   await app.register(paymentDocumentRoutes);
+  await app.register(studentDocumentRoutes);
   await app.register(academicRoutes);
 };

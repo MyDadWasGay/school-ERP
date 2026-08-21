@@ -72,6 +72,12 @@ Object.assign(permissions, {
   "settings:update": "Update settings",
   "integrations:manage": "Manage integrations",
   "cms:publish": "Publish CMS content",
+  "documents:verify": "Verify student documents",
+  "documents:reject": "Reject student documents",
+  "documents:restore": "Restore deleted documents",
+  "documents:download": "Download documents",
+  "documents:download_sensitive": "Download sensitive documents",
+  "documents:manage_requirements": "Manage document requirements",
 });
 
 export const permissionKeys = Object.keys(permissions);
@@ -108,6 +114,11 @@ export const rolePermissionDefaults: Record<string, string[]> = {
     "communication:update",
     "reports:export",
     "documents:create",
+    "documents:update",
+    "documents:verify",
+    "documents:reject",
+    "documents:approve",
+    "documents:download",
   ],
   teacher: [
     ...read(

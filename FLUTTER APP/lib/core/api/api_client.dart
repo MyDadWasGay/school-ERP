@@ -2641,6 +2641,114 @@ class ApiClient {
     ).map(DocumentRow.fromJson).toList(growable: false);
   }
 
+  Future<List<DocumentTypeRow>> getDocumentTypes() async {
+    final data = await _get('/document-types');
+    return asJsonList(
+      data['documentTypes'],
+      'documentTypes',
+    ).map(DocumentTypeRow.fromJson).toList(growable: false);
+  }
+
+  Future<StudentDocumentSummary> getStudentDocumentSummary(String studentId) async {
+    final data = await _get(
+      '/students/${Uri.encodeComponent(studentId)}/documents/summary',
+    );
+    return StudentDocumentSummary.fromJson(data);
+  }
+
+  Future<List<DetailedStudentDocument>> getDetailedStudentDocuments(
+    String studentId,
+  ) async {
+    final data = await _get(
+      '/students/${Uri.encodeComponent(studentId)}/documents/detailed',
+    );
+    return asJsonList(
+      data['documents'],
+      'detailedDocuments',
+    ).map(DetailedStudentDocument.fromJson).toList(growable: false);
+  }
+
+  Future<DocumentAccessToken> getDocumentAccessToken(
+    String documentId, {
+    String disposition = 'inline',
+  }) async {
+    final data = await _get(
+      '/documents/${Uri.encodeComponent(documentId)}/token',
+      query: {'disposition': disposition},
+    );
+    return DocumentAccessToken.fromJson(data);
+  }
+
+  Future<Map<String, Object?>> uploadStudentDocumentWithBase64({
+    required String studentId,
+    required String documentTypeId,
+    required String filename,
+    required String fileBase64,
+    String? claimedMimeType,
+    String? changeReason,
+    DateTime? issuedAt,
+    DateTime? expiresAt,
+  }) async {
+    final response = await _request(
+      () => _dio.post<Object?>(
+        '/students/${Uri.encodeComponent(studentId)}/documents/upload',
+        data: {
+          'documentTypeId': documentTypeId,
+          'filename': filename,
+          'fileBase64': fileBase64,
+          if (claimedMimeType != null) 'claimedMimeType': claimedMimeType,
+          if (changeReason != null) 'changeReason': changeReason,
+          if (issuedAt != null) 'issuedAt': issuedAt.toIso8601String(),
+          if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
+        },
+      ),
+    );
+    final envelope = asJson(response.data, 'uploadStudentDocument.response');
+    return asJson(envelope['data'], 'uploadStudentDocument.data');
+  }
+
+  Future<void> verifyStudentDocument(String documentId, {String? notes}) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/documents/${Uri.encodeComponent(documentId)}/verify',
+        data: {if (notes != null) 'notes': notes},
+      ),
+    );
+  }
+
+  Future<void> rejectStudentDocument(
+    String documentId, {
+    required String reason,
+    String? notes,
+  }) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/documents/${Uri.encodeComponent(documentId)}/reject',
+        data: {'reason': reason, if (notes != null) 'notes': notes},
+      ),
+    );
+  }
+
+  Future<void> deleteStudentDocument(
+    String documentId, {
+    String? reason,
+  }) async {
+    await _request(
+      () => _dio.delete<Object?>(
+        '/documents/${Uri.encodeComponent(documentId)}',
+        data: {if (reason != null) 'reason': reason},
+      ),
+    );
+  }
+
+  Future<void> restoreStudentDocument(String documentId) async {
+    await _request(
+      () => _dio.post<Object?>(
+        '/documents/${Uri.encodeComponent(documentId)}/restore',
+      ),
+    );
+  }
+
   Future<List<DocumentRow>> getEntityDocuments({
     required String entityType,
     required String entityId,

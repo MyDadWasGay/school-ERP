@@ -317,3 +317,105 @@ export type ApiStudentDocuments = {
     status: string;
   }>;
 };
+
+export type ApiDocumentType = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  category: string;
+  requirementType: "required" | "conditional" | "optional";
+  appliesTo: string;
+  allowedFileTypes: string;
+  maxFileSizeBytes: number;
+  requiresVerification: boolean;
+  expiryEnabled: boolean;
+  isSensitive: boolean;
+  status: string;
+};
+
+export type ApiStudentDocumentSummary = {
+  totalRequired: number;
+  completedRequired: number;
+  completionPercentage: number;
+  isComplete: boolean;
+  missingDocuments: Array<{
+    documentTypeId: string;
+    code: string;
+    name: string;
+    category: string;
+    requirementType: string;
+  }>;
+  pendingVerification: Array<{
+    documentId: string;
+    documentTypeId: string;
+    name: string;
+    status: string;
+  }>;
+  expiredDocuments: Array<{
+    documentId: string;
+    documentTypeId: string;
+    name: string;
+    expiresAt: string;
+  }>;
+  warnings: string[];
+  requirements: Array<{
+    documentTypeId: string;
+    code: string;
+    name: string;
+    category: string;
+    requirementType: "required" | "conditional" | "optional";
+    isApplicable: boolean;
+    conditionMetReason?: string | null;
+    status: string;
+    documentId?: string | null;
+  }>;
+};
+
+export type ApiDetailedStudentDocument = {
+  id: string;
+  studentId: string;
+  guardianId: string | null;
+  documentTypeId: string;
+  status: string;
+  verificationStatus: string;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
+  verificationNotes: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  expiryStatus: string | null;
+  isSensitive: boolean;
+  createdAt: string;
+  docTypeName: string;
+  docTypeCode: string;
+  docTypeCategory: string;
+  docTypeRequirement: string;
+  docTypeAllowedTypes: string;
+  docTypeRequiresVerification: boolean;
+  docTypeExpiryEnabled: boolean;
+  currentVersion: {
+    id: string;
+    versionNumber: number;
+    originalFilename: string;
+    sanitizedFilename: string;
+    mimeType: string;
+    fileExtension: string;
+    fileSizeBytes: number;
+    fileHash: string;
+    scanStatus: string;
+    verificationStatus: string;
+    uploadedBy: string;
+    createdAt: string;
+  } | null;
+};
+
+export type ApiDocumentAccessToken = {
+  accessToken: string;
+  expiresAt: string;
+  filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+};
+
